@@ -168,14 +168,15 @@ function syncAndUnpivotSchedule() {
           : "";
 
         normalizedItems.push({
-          rowNumber: normalizedItems.length + 2,
-          slotKey: `${dateStr}__${slotVal}`,
-          supportShiftKey: buildScheduleSupportShiftKey(dateStr, slotVal),
-          slotValue: slotVal,
-          hostId: "",
-          hostName: "",
-          supportId: normalizedSupportId,
-          supportName: normalizedSupportName,
+        rowNumber: normalizedItems.length + 2,
+        slotKey: `${dateStr}__${slotVal}`,
+        supportShiftKey: buildScheduleSupportShiftKey(dateStr, slotVal),
+        slotValue: slotVal,
+        pairIndex: 0,
+        hostId: "",
+        hostName: "",
+        supportId: normalizedSupportId,
+        supportName: normalizedSupportName,
           formatValue: "",
           values: [
             0,
@@ -226,6 +227,7 @@ function syncAndUnpivotSchedule() {
         slotKey: `${dateStr}__${slotVal}`,
         supportShiftKey,
         slotValue: slotVal,
+        pairIndex: hostEntry.sourceIndex,
         hostId: singleHostId,
         hostName: singleHostName,
         supportId: normalizedSupportId,
@@ -890,6 +892,20 @@ function compareHostPriorityCandidates(left, right) {
   return (left.id || "").localeCompare((right.id || ""), 'vi', { sensitivity: 'base' });
 }
 
+function compareScheduleShiftPairItems(left, right) {
+  const leftPairIndex = Number.isFinite(left && left.pairIndex) ? left.pairIndex : Number.MAX_SAFE_INTEGER;
+  const rightPairIndex = Number.isFinite(right && right.pairIndex) ? right.pairIndex : Number.MAX_SAFE_INTEGER;
+  if (leftPairIndex !== rightPairIndex) return leftPairIndex - rightPairIndex;
+
+  const leftStart = getScheduleSlotParts(left && left.slotValue ? left.slotValue : "") || { startMinutes: Number.MAX_SAFE_INTEGER };
+  const rightStart = getScheduleSlotParts(right && right.slotValue ? right.slotValue : "") || { startMinutes: Number.MAX_SAFE_INTEGER };
+  if (leftStart.startMinutes !== rightStart.startMinutes) {
+    return leftStart.startMinutes - rightStart.startMinutes;
+  }
+
+  return (left && left.rowNumber ? left.rowNumber : 0) - (right && right.rowNumber ? right.rowNumber : 0);
+}
+
 function applyHomeSupportRuleToScheduleItems(items, portfolioMap) {
   const slotMap = {};
   (items || []).forEach(item => {
@@ -953,7 +969,7 @@ function applyHomeSupportRuleToScheduleItems(items, portfolioMap) {
 }
 
 function alignSupportAssignmentsWithinShift(items, supportMap) {
-  const hostShiftMap = {};
+  const shiftMap = {};
   (items || []).forEach(item => {
     if (
       !item ||
@@ -964,47 +980,73 @@ function alignSupportAssignmentsWithinShift(items, supportMap) {
       return;
     }
 
-    const key = `${item.supportShiftKey}__${item.hostId}`;
-    if (!hostShiftMap[key]) hostShiftMap[key] = [];
-    hostShiftMap[key].push(item);
+    if (!shiftMap[item.supportShiftKey]) shiftMap[item.supportShiftKey] = [];
+    shiftMap[item.supportShiftKey].push(item);
   });
 
-  Object.keys(hostShiftMap).forEach(key => {
-    const groupItems = hostShiftMap[key].slice().sort((left, right) => {
-      const leftStart = getScheduleSlotParts(left.slotValue || "") || { startMinutes: Number.MAX_SAFE_INTEGER };
-      const rightStart = getScheduleSlotParts(right.slotValue || "") || { startMinutes: Number.MAX_SAFE_INTEGER };
+  Object.keys(shiftMap).forEach(shiftKey => {
+    const slotMap = {};
+    shiftMap[shiftKey].forEach(item => {
+      const slotKey = item.slotKey || `${item.supportShiftKey}__${item.slotValue || ""}`;
+      if (!slotMap[slotKey]) slotMap[slotKey] = [];
+      slotMap[slotKey].push(item);
+    });
+
+    const orderedSlotKeys = Object.keys(slotMap).sort((leftKey, rightKey) => {
+      const leftItem = slotMap[leftKey][0];
+      const rightItem = slotMap[rightKey][0];
+      const leftStart = getScheduleSlotParts(leftItem && leftItem.slotValue ? leftItem.slotValue : "") || { startMinutes: Number.MAX_SAFE_INTEGER };
+      const rightStart = getScheduleSlotParts(rightItem && rightItem.slotValue ? rightItem.slotValue : "") || { startMinutes: Number.MAX_SAFE_INTEGER };
       if (leftStart.startMinutes !== rightStart.startMinutes) {
         return leftStart.startMinutes - rightStart.startMinutes;
       }
-      return (left.rowNumber || 0) - (right.rowNumber || 0);
+      return (leftItem && leftItem.rowNumber ? leftItem.rowNumber : 0) - (rightItem && rightItem.rowNumber ? rightItem.rowNumber : 0);
     });
 
-    const supportCandidateMap = {};
-    groupItems.forEach(item => {
-      if (!isMeaningfulScheduleValue(item.supportId) || supportCandidateMap[item.supportId]) {
-        return;
-      }
-
-      supportCandidateMap[item.supportId] = buildSupportConflictCandidate(
-        item.supportId,
-        supportMap,
-        item.rowNumber
-      );
+    orderedSlotKeys.forEach(slotKey => {
+      slotMap[slotKey].sort(compareScheduleShiftPairItems);
     });
 
-    const supportCandidates = Object.keys(supportCandidateMap).map(candidateKey => supportCandidateMap[candidateKey]);
-    if (supportCandidates.length === 0) return;
+    const pairIndexMap = {};
+    orderedSlotKeys.forEach(slotKey => {
+      slotMap[slotKey].forEach((item, orderIndex) => {
+        const pairIndex = Number.isFinite(item.pairIndex) ? item.pairIndex : orderIndex;
+        if (!pairIndexMap[pairIndex]) pairIndexMap[pairIndex] = [];
+        pairIndexMap[pairIndex].push(item);
+      });
+    });
 
-    const supportSelection = supportCandidates.length > 1
-      ? chooseSingleBestConflictCandidate(supportCandidates, "score", "Support", { preferFirstOnTie: true })
-      : { selected: supportCandidates[0] || null };
-    const sharedSupportId = supportSelection.selected ? supportSelection.selected.id : "";
-    if (!sharedSupportId) return;
+    Object.keys(pairIndexMap).forEach(pairKey => {
+      const groupItems = pairIndexMap[pairKey].slice().sort(compareScheduleShiftPairItems);
+      if (groupItems.length <= 1) return;
 
-    const sharedSupportName = getSupportDisplayNameById(sharedSupportId, supportMap);
-    groupItems.forEach(item => {
-      item.supportId = sharedSupportId;
-      item.supportName = sharedSupportName;
+      const supportCandidateMap = {};
+      groupItems.forEach(item => {
+        if (!isMeaningfulScheduleValue(item.supportId) || supportCandidateMap[item.supportId]) {
+          return;
+        }
+
+        supportCandidateMap[item.supportId] = buildSupportConflictCandidate(
+          item.supportId,
+          supportMap,
+          item.rowNumber
+        );
+      });
+
+      const supportCandidates = Object.keys(supportCandidateMap).map(candidateKey => supportCandidateMap[candidateKey]);
+      if (supportCandidates.length === 0) return;
+
+      const supportSelection = supportCandidates.length > 1
+        ? chooseSingleBestConflictCandidate(supportCandidates, "score", "Support", { preferFirstOnTie: true })
+        : { selected: supportCandidates[0] || null };
+      const sharedSupportId = supportSelection.selected ? supportSelection.selected.id : "";
+      if (!sharedSupportId) return;
+
+      const sharedSupportName = getSupportDisplayNameById(sharedSupportId, supportMap);
+      groupItems.forEach(item => {
+        item.supportId = sharedSupportId;
+        item.supportName = sharedSupportName;
+      });
     });
   });
 
@@ -1379,6 +1421,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
   const unresolvedGroupKeys = {};
   const preparedItems = [];
   const outputHeaders = LIVE_SESSION_BASE_HEADERS.concat(LIVE_SESSION_TRACKING_HEADERS);
+  const slotPairCounter = {};
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i].slice();
@@ -1400,6 +1443,12 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       continue;
     }
 
+    const slotKey = getScheduleSlotKey(row, idx);
+    const pairIndex = slotKey ? (slotPairCounter[slotKey] || 0) : 0;
+    if (slotKey) {
+      slotPairCounter[slotKey] = pairIndex + 1;
+    }
+
     preparedItems.push({
       rowNumber: i + 1,
       rawRow: row,
@@ -1409,9 +1458,10 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       formatValue: normalizedHostId
         ? getPreferredScheduleFormatForHost(normalizedHostId, currentFormat, portfolioMap)
         : (currentFormat ? currentFormat.toString().trim() : ""),
-      slotKey: getScheduleSlotKey(row, idx),
+      slotKey,
       supportShiftKey: getScheduleSupportShiftKey(row, idx),
       slotValue: rowSlot,
+      pairIndex,
       sessionId: idx.sessionId !== undefined && row[idx.sessionId] ? row[idx.sessionId].toString().trim() : "",
       hostConfirm: idx.hostConfirm !== undefined ? row[idx.hostConfirm] : "",
       supportConfirm: idx.supportConfirm !== undefined ? row[idx.supportConfirm] : "",
