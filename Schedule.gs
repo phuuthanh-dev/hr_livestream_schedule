@@ -29,6 +29,11 @@ const LIVE_SESSION_TRACKING_HEADERS = [
   "Backup_Support_ID",
   "Backup_Support_Name"
 ];
+const LIVE_SESSION_INTERNAL_HEADERS = [
+  "Support_Candidate_Pool"
+];
+const LIVE_SESSION_SUPPORT_POOL_HEADER = LIVE_SESSION_INTERNAL_HEADERS[0];
+const LIVE_SESSION_SUPPORT_POOL_INDEX = LIVE_SESSION_BASE_COLUMN_COUNT + LIVE_SESSION_TRACKING_HEADERS.length;
 const REMOVED_LIVE_SESSION_HEADERS = [
   "Checklist Kỹ thuật (Remote)",
   "SCM_Ready",
@@ -141,6 +146,8 @@ function syncAndUnpivotSchedule() {
     let hostNameList = (rawHostNames && !rawHostNames.toLowerCase().includes("trống")) ? rawHostNames.split(',').map(s => s.trim()) : [];
     let suppIdList   = (rawSuppIds && !rawSuppIds.toLowerCase().includes("trống") && !rawSuppIds.toLowerCase().includes("no_support")) ? rawSuppIds.split(',').map(s => s.trim()) : [];
 
+    const supportCandidateIds = normalizeScheduleCandidatePool(suppIdList);
+
     const eligibleHosts = hostIdList
       .map((hostId, index) => ({
         hostId: hostId ? hostId.toString().trim() : "",
@@ -177,6 +184,7 @@ function syncAndUnpivotSchedule() {
         hostName: "",
         supportId: normalizedSupportId,
         supportName: normalizedSupportName,
+        supportCandidateIds,
           formatValue: "",
           values: [
             0,
@@ -232,6 +240,7 @@ function syncAndUnpivotSchedule() {
         hostName: singleHostName,
         supportId: normalizedSupportId,
         supportName: normalizedSupportName,
+        supportCandidateIds,
         formatValue: effectiveFormat,
         values: [
           0,               // Cột 1: STT
@@ -255,7 +264,8 @@ function syncAndUnpivotSchedule() {
 
   applyHomeSupportRuleToScheduleItems(normalizedItems, portfolioMap);
   alignSupportAssignmentsWithinShift(normalizedItems, supportMap);
-  const normalizedRows = normalizedItems
+  alignSupportOnlyRowsWithinShift(normalizedItems, supportMap);
+  const normalizedRowEntries = normalizedItems
     .filter(item => shouldKeepMasterScheduleRow(item.formatValue, item.supportId))
     .map((item, index) => {
       const row = item.values.slice();
@@ -267,8 +277,14 @@ function syncAndUnpivotSchedule() {
       if (!item.supportId) {
         row[LIVE_SESSION_BASE_COLUMN_COUNT + 1] = "";
       }
-      return row;
+      return {
+        row,
+        supportCandidatePool: serializeScheduleCandidatePool(
+          (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
+        )
+      };
     });
+  const normalizedRows = normalizedRowEntries.map(entry => entry.row);
 
   function buildRowKey(row) {
     const hostKey = buildScheduleHostIdentityKey(row[2], row[3], row[4]);
@@ -292,7 +308,7 @@ function syncAndUnpivotSchedule() {
            .setBackground("#1f497d")
            .setFontColor("#ffffff");
   destSheet.setFrozenRows(1);
-  ensureRealScheduleTrackingColumns(destSheet);
+  const trackingHeaderMap = ensureRealScheduleTrackingColumns(destSheet);
 
   // Định dạng độ rộng cột
   destSheet.setColumnWidth(1, 60);  // STT
@@ -383,6 +399,13 @@ function syncAndUnpivotSchedule() {
   const refreshedLastRow = destSheet.getLastRow();
   if (refreshedLastRow > 1) {
     const refreshedData = destSheet.getRange(2, 1, refreshedLastRow - 1, destHeaders.length).getValues();
+    const supportPoolByRowKey = {};
+    normalizedRowEntries.forEach(entry => {
+      const rowKey = buildRowKey(entry.row);
+      if (!rowKey) return;
+      supportPoolByRowKey[rowKey] = entry.supportCandidatePool || "";
+    });
+
     for (let i = 0; i < refreshedData.length; i++) {
       if (refreshedData[i][0] !== i + 1) {
         destSheet.getRange(i + 2, 1).setValue(i + 1);
@@ -393,6 +416,18 @@ function syncAndUnpivotSchedule() {
     destSheet.getRange(2, 2, refreshedLastRow - 1, 3).setHorizontalAlignment("center");
     destSheet.getRange(2, 5, refreshedLastRow - 1, 1).setHorizontalAlignment("center");
     destSheet.getRange(2, 8, refreshedLastRow - 1, 1).setHorizontalAlignment("center");
+
+    if (trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] !== undefined) {
+      const supportPoolValues = refreshedData.map(row => [
+        supportPoolByRowKey[buildRowKey(row)] || ""
+      ]);
+      destSheet.getRange(
+        2,
+        trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] + 1,
+        supportPoolValues.length,
+        1
+      ).setValues(supportPoolValues);
+    }
   }
 
   const conflictResult = resolveScheduleConflicts(false, { skipPostAutoFill: true });
@@ -435,6 +470,35 @@ function isMeaningfulScheduleValue(value) {
     !["trong", "no_support", "nohost", "unknown", "n/a"].includes(normalized);
 }
 
+function normalizeScheduleCandidatePool(values) {
+  const deduped = [];
+  const seen = {};
+
+  (values || []).forEach(value => {
+    if (!isMeaningfulScheduleValue(value)) return;
+    const candidateId = value.toString().trim();
+    const candidateKey = normalizeScheduleTrackingText(candidateId);
+    if (!candidateId || seen[candidateKey]) return;
+    seen[candidateKey] = true;
+    deduped.push(candidateId);
+  });
+
+  return deduped;
+}
+
+function parseScheduleCandidatePool(value) {
+  if (Array.isArray(value)) {
+    return normalizeScheduleCandidatePool(value);
+  }
+
+  if (!value) return [];
+  return normalizeScheduleCandidatePool(value.toString().split(',').map(item => item.trim()));
+}
+
+function serializeScheduleCandidatePool(values) {
+  return normalizeScheduleCandidatePool(values).join(", ");
+}
+
 function isConfirmedScheduleValue(value) {
   const normalized = normalizeScheduleTrackingText(value);
   return [
@@ -455,7 +519,7 @@ function ensureRealScheduleTrackingColumns(scheduleSheet) {
   if (!sheet) return {};
 
   const currentHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), LIVE_SESSION_BASE_COLUMN_COUNT)).getValues()[0];
-  LIVE_SESSION_TRACKING_HEADERS.forEach(header => {
+  LIVE_SESSION_TRACKING_HEADERS.concat(LIVE_SESSION_INTERNAL_HEADERS).forEach(header => {
     if (currentHeaders.indexOf(header) === -1) {
       const newCol = sheet.getLastColumn() + 1;
       sheet.getRange(1, newCol)
@@ -464,13 +528,14 @@ function ensureRealScheduleTrackingColumns(scheduleSheet) {
         .setBackground("#1f497d")
         .setFontColor("#ffffff")
         .setHorizontalAlignment("center");
-      sheet.setColumnWidth(newCol, header.includes("Name") ? 170 : (header.includes("Backup") ? 140 : 130));
+      sheet.setColumnWidth(newCol, header === LIVE_SESSION_SUPPORT_POOL_HEADER ? 220 : (header.includes("Name") ? 170 : (header.includes("Backup") ? 140 : 130)));
     }
   });
 
   const refreshedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const hostConfirmCol = refreshedHeaders.indexOf("Host_Live_Confirm") + 1;
   const supportConfirmCol = refreshedHeaders.indexOf("Support_Live_Confirm") + 1;
+  const supportPoolCol = refreshedHeaders.indexOf(LIVE_SESSION_SUPPORT_POOL_HEADER) + 1;
   const lastRow = Math.max(sheet.getLastRow(), 2);
 
   if (hostConfirmCol > 0) {
@@ -487,6 +552,10 @@ function ensureRealScheduleTrackingColumns(scheduleSheet) {
       .setAllowInvalid(true)
       .build();
     sheet.getRange(2, supportConfirmCol, lastRow - 1, 1).setDataValidation(confirmRule);
+  }
+
+  if (supportPoolCol > 0) {
+    sheet.hideColumns(supportPoolCol);
   }
 
   const headerMap = {};
@@ -1053,6 +1122,101 @@ function alignSupportAssignmentsWithinShift(items, supportMap) {
   return items;
 }
 
+function alignSupportOnlyRowsWithinShift(items, supportMap) {
+  const shiftMap = {};
+
+  (items || []).forEach(item => {
+    if (!item || !item.supportShiftKey || isHomeFormatValue(item.formatValue)) {
+      return;
+    }
+
+    const candidateIds = normalizeScheduleCandidatePool(
+      (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
+    );
+    if (candidateIds.length === 0) {
+      return;
+    }
+
+    if (!shiftMap[item.supportShiftKey]) {
+      shiftMap[item.supportShiftKey] = {
+        hostItems: [],
+        supportOnlyItems: []
+      };
+    }
+
+    if (isMeaningfulScheduleValue(item.hostId)) {
+      shiftMap[item.supportShiftKey].hostItems.push(item);
+      return;
+    }
+
+    shiftMap[item.supportShiftKey].supportOnlyItems.push(item);
+  });
+
+  Object.keys(shiftMap).forEach(shiftKey => {
+    const group = shiftMap[shiftKey];
+    if (!group.hostItems.length || !group.supportOnlyItems.length) {
+      return;
+    }
+
+    const assignedSupportMap = {};
+    group.hostItems.forEach(item => {
+      if (!isMeaningfulScheduleValue(item.supportId) || assignedSupportMap[item.supportId]) {
+        return;
+      }
+
+      assignedSupportMap[item.supportId] = buildSupportConflictCandidate(
+        item.supportId,
+        supportMap,
+        item.rowNumber
+      );
+    });
+
+    if (Object.keys(assignedSupportMap).length === 0) {
+      return;
+    }
+
+    group.supportOnlyItems
+      .slice()
+      .sort(compareScheduleShiftPairItems)
+      .forEach(item => {
+        const candidateIds = normalizeScheduleCandidatePool(
+          (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
+        );
+        const overlappingCandidates = candidateIds
+          .map(candidateId => assignedSupportMap[candidateId])
+          .filter(Boolean);
+        const fallbackCandidates = overlappingCandidates.length === 0
+          ? candidateIds.map(candidateId => buildSupportConflictCandidate(
+              candidateId,
+              supportMap,
+              item.rowNumber
+            ))
+          : [];
+        const candidatePool = overlappingCandidates.length > 0
+          ? overlappingCandidates
+          : fallbackCandidates;
+
+        if (candidatePool.length === 0) {
+          return;
+        }
+
+        const selection = candidatePool.length > 1
+          ? chooseSingleBestConflictCandidate(candidatePool, "score", "Support", { preferFirstOnTie: true })
+          : { selected: candidatePool[0] || null };
+        const selectedSupportId = selection.selected ? selection.selected.id : "";
+
+        if (!selectedSupportId) {
+          return;
+        }
+
+        item.supportId = selectedSupportId;
+        item.supportName = getSupportDisplayNameById(selectedSupportId, supportMap);
+      });
+  });
+
+  return items;
+}
+
 function isStudioConflictEligibleFormat(formatValue) {
   const normalized = normalizeScheduleTrackingText(formatValue);
   return !normalized || isStudioFormatValue(formatValue);
@@ -1124,7 +1288,8 @@ function getScheduleConflictIndexes(headerMap) {
     backupHost: headerMap["Backup_Host_ID"],
     backupHostName: headerMap["Backup_Host_Name"],
     backupSupport: headerMap["Backup_Support_ID"],
-    backupSupportName: headerMap["Backup_Support_Name"]
+    backupSupportName: headerMap["Backup_Support_Name"],
+    supportCandidatePool: headerMap[LIVE_SESSION_SUPPORT_POOL_HEADER]
   };
 }
 
@@ -1397,7 +1562,8 @@ function buildMasterFinalRow(rawRow, idx, headerMap) {
     idx.backupHost !== undefined ? rawRow[idx.backupHost] : "",
     idx.backupHostName !== undefined ? rawRow[idx.backupHostName] : "",
     idx.backupSupport !== undefined ? rawRow[idx.backupSupport] : "",
-    idx.backupSupportName !== undefined ? rawRow[idx.backupSupportName] : ""
+    idx.backupSupportName !== undefined ? rawRow[idx.backupSupportName] : "",
+    idx.supportCandidatePool !== undefined ? rawRow[idx.supportCandidatePool] : ""
   ]);
 }
 
@@ -1420,7 +1586,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
   const finalRows = [];
   const unresolvedGroupKeys = {};
   const preparedItems = [];
-  const outputHeaders = LIVE_SESSION_BASE_HEADERS.concat(LIVE_SESSION_TRACKING_HEADERS);
+  const outputHeaders = LIVE_SESSION_BASE_HEADERS.concat(LIVE_SESSION_TRACKING_HEADERS, LIVE_SESSION_INTERNAL_HEADERS);
   const slotPairCounter = {};
 
   for (let i = 1; i < data.length; i++) {
@@ -1431,6 +1597,10 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     const currentFormat = idx.format !== undefined ? row[idx.format] : "";
     const normalizedHostId = isMeaningfulScheduleValue(hostId) ? hostId : "";
     const normalizedSupportId = isMeaningfulScheduleValue(supportId) ? supportId : "";
+    const supportCandidateIds = normalizeScheduleCandidatePool(
+      parseScheduleCandidatePool(idx.supportCandidatePool !== undefined ? row[idx.supportCandidatePool] : "")
+        .concat(normalizedSupportId ? [normalizedSupportId] : [])
+    );
     const rowDate = idx.date !== undefined ? formatAppDateValue(row[idx.date]) : "";
     const rowSlot = idx.time !== undefined && row[idx.time] ? row[idx.time].toString().trim() : "";
     const hasScheduleContext = Boolean(rowDate || rowSlot || normalizedHostId || normalizedSupportId);
@@ -1465,6 +1635,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       sessionId: idx.sessionId !== undefined && row[idx.sessionId] ? row[idx.sessionId].toString().trim() : "",
       hostConfirm: idx.hostConfirm !== undefined ? row[idx.hostConfirm] : "",
       supportConfirm: idx.supportConfirm !== undefined ? row[idx.supportConfirm] : "",
+      supportCandidateIds,
       backupHost: idx.backupHost !== undefined ? row[idx.backupHost] : "",
       backupSupport: idx.backupSupport !== undefined ? row[idx.backupSupport] : ""
     });
@@ -1472,6 +1643,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
 
   applyHomeSupportRuleToScheduleItems(preparedItems, portfolioMap);
   alignSupportAssignmentsWithinShift(preparedItems, supportMap);
+  alignSupportOnlyRowsWithinShift(preparedItems, supportMap);
 
   preparedItems.forEach(item => {
     if (idx.format !== undefined) {
@@ -1482,6 +1654,11 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     }
     if (idx.supportName !== undefined) {
       item.rawRow[idx.supportName] = getSupportDisplayNameById(item.supportId, supportMap);
+    }
+    if (idx.supportCandidatePool !== undefined) {
+      item.rawRow[idx.supportCandidatePool] = serializeScheduleCandidatePool(
+        (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
+      );
     }
 
     if (!isMeaningfulScheduleValue(item.hostId)) {
@@ -1553,6 +1730,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
         sessionId: item.sessionId,
         hostConfirm: item.hostConfirm,
         supportConfirm: item.supportConfirm,
+        supportCandidateIds: item.supportCandidateIds,
         backupHost: item.backupHost,
       backupSupport: item.backupSupport
     });
@@ -1588,9 +1766,24 @@ function computeResolvedMasterRows(ss, data, headerMap) {
         );
       }
     });
+    const supportBackupCandidateMap = {};
+    rows.forEach(item => {
+      const candidateIds = normalizeScheduleCandidatePool(
+        (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
+      );
+      candidateIds.forEach(candidateId => {
+        if (supportBackupCandidateMap[candidateId]) return;
+        supportBackupCandidateMap[candidateId] = buildSupportConflictCandidate(
+          candidateId,
+          supportMap,
+          item.rowNumber
+        );
+      });
+    });
 
     const hostCandidates = Object.keys(hostCandidateMap).map(key => hostCandidateMap[key]);
     const supportCandidates = Object.keys(supportCandidateMap).map(key => supportCandidateMap[key]);
+    const supportBackupCandidates = Object.keys(supportBackupCandidateMap).map(key => supportBackupCandidateMap[key]);
     const hostConflict = hostCandidates.length > 1;
     const supportConflict = supportCandidates.length > 1;
 
@@ -1649,6 +1842,14 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     finalRow[LIVE_SESSION_BASE_COLUMN_COUNT + 5] = "";
     finalRow[LIVE_SESSION_SUPPORT_ID_INDEX] = selectedSupportId || "";
     finalRow[LIVE_SESSION_SUPPORT_NAME_INDEX] = getSupportDisplayNameById(selectedSupportId, supportMap);
+    finalRow[LIVE_SESSION_SUPPORT_POOL_INDEX] = serializeScheduleCandidatePool(
+      rows.reduce(
+        (allCandidateIds, rowItem) => allCandidateIds.concat(
+          (rowItem.supportCandidateIds || []).concat(rowItem.supportId ? [rowItem.supportId] : [])
+        ),
+        []
+      )
+    );
 
     if (supportSourceRow) {
       finalRow[LIVE_SESSION_BASE_COLUMN_COUNT + 1] = supportSourceRow.supportConfirm || "";
@@ -1668,7 +1869,8 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       primarySupportId: selectedSupportId,
       autoBackup: true,
       hostCandidates,
-      supportCandidates
+      supportCandidates,
+      supportBackupCandidates
     });
 
     if (rows.length > 1 || hostConflict || supportConflict) {
@@ -1697,7 +1899,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       candidate.id !== item.primaryHostId &&
       !isCandidateOccupied(occupiedHostBySlot, item.slotKey, candidate.id)
     );
-    const supportBackupCandidates = (item.supportCandidates || []).filter(candidate =>
+    const supportBackupCandidates = (item.supportBackupCandidates || item.supportCandidates || []).filter(candidate =>
       candidate.id !== item.primarySupportId
     );
 
