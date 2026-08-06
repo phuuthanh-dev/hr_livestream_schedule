@@ -41,8 +41,6 @@ const REMOVED_LIVE_SESSION_HEADERS = [
   "Ghi chú/Kết quả sơ bộ trong quá trình live",
   "Ops_Ready"
 ];
-const LIVE_CONFIRM_SOURCE_SPREADSHEET_ID = '1u8s12i91AHADAhtf2E9GSpsRiul2VPdJFl7sP-guWws';
-const LIVE_CONFIRM_SOURCE_SHEET_NAME = 'Live_Session_Master';
 const SUPPORT_SHIFT_WINDOWS = [
   { startMinutes: 6 * 60, endMinutes: 10 * 60, label: "06:00 - 10:00" },
   { startMinutes: 10 * 60, endMinutes: 14 * 60, label: "10:00 - 14:00" },
@@ -432,20 +430,12 @@ function syncAndUnpivotSchedule() {
 
   const conflictResult = resolveScheduleConflicts(false, { skipPostAutoFill: true });
   const locationResult = autoFillLocationToSchedule(false);
-  const confirmSyncResult = syncLiveConfirmStatusesFromExternal(false);
   let alertMessage = `Đã đồng bộ lịch live: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới và tự cập nhật Location + Kênh live.`;
   if (skippedByCast > 0) {
     alertMessage += `\nLoại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`;
   }
   if (conflictResult) {
     alertMessage += `\nResolve conflict: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
-  }
-  if (confirmSyncResult) {
-    if (confirmSyncResult.error) {
-      alertMessage += `\nSync confirm: ${confirmSyncResult.error}`;
-    } else {
-      alertMessage += `\nSync confirm theo Session_ID: match ${confirmSyncResult.matchedSessions} session, cập nhật Host ${confirmSyncResult.updatedHost}, Support ${confirmSyncResult.updatedSupport}.`;
-    }
   }
   if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
     alertMessage += `\n\n${formatLookupAlertMessage(locationResult.lookupSummary)}`;
@@ -564,114 +554,6 @@ function ensureRealScheduleTrackingColumns(scheduleSheet) {
   });
 
   return headerMap;
-}
-
-function syncLiveConfirmStatusesFromExternal(showAlert) {
-  const targetSs = SpreadsheetApp.getActiveSpreadsheet();
-  const targetSheet = targetSs.getSheetByName('Live_Session_Master');
-  if (!targetSheet || targetSheet.getLastRow() <= 1) {
-    const message = "Tab 'Live_Session_Master' chưa có dữ liệu để sync confirm.";
-    if (showAlert !== false) safeAlert(message);
-    return { matchedSessions: 0, updatedHost: 0, updatedSupport: 0, error: message };
-  }
-
-  let sourceSs;
-  try {
-    sourceSs = SpreadsheetApp.openById(LIVE_CONFIRM_SOURCE_SPREADSHEET_ID);
-  } catch (error) {
-    const message = "Không mở được file confirm host/support. Kiểm tra lại quyền truy cập hoặc File ID.";
-    if (showAlert !== false) safeAlert(message);
-    return { matchedSessions: 0, updatedHost: 0, updatedSupport: 0, error: message };
-  }
-
-  const sourceSheet = sourceSs.getSheetByName(LIVE_CONFIRM_SOURCE_SHEET_NAME) || sourceSs.getSheets()[0];
-  if (!sourceSheet || sourceSheet.getLastRow() <= 1) {
-    const message = "File confirm chưa có dữ liệu hợp lệ để sync.";
-    if (showAlert !== false) safeAlert(message);
-    return { matchedSessions: 0, updatedHost: 0, updatedSupport: 0, error: message };
-  }
-
-  const sourceData = sourceSheet.getDataRange().getValues();
-  const sourceHeaders = sourceData[0] || [];
-  const sourceSessionIdx = getFirstNormalizedHeaderIndex(sourceHeaders, ["session_id", "session id"]);
-  const sourceHostConfirmIdx = getFirstNormalizedHeaderIndex(sourceHeaders, ["host_live_confirm", "host live confirm"]);
-  const sourceSupportConfirmIdx = getFirstNormalizedHeaderIndex(sourceHeaders, ["support_live_confirm", "support live confirm"]);
-
-  if (sourceSessionIdx === -1 || sourceHostConfirmIdx === -1 || sourceSupportConfirmIdx === -1) {
-    const message = "File confirm thiếu cột Session_ID / Host_Live_Confirm / Support_Live_Confirm.";
-    if (showAlert !== false) safeAlert(message);
-    return { matchedSessions: 0, updatedHost: 0, updatedSupport: 0, error: message };
-  }
-
-  const confirmBySession = {};
-  for (let i = 1; i < sourceData.length; i++) {
-    const sessionId = sourceData[i][sourceSessionIdx] ? sourceData[i][sourceSessionIdx].toString().trim() : "";
-    if (!sessionId) continue;
-
-    confirmBySession[sessionId] = {
-      hostConfirm: sourceData[i][sourceHostConfirmIdx] || "",
-      supportConfirm: sourceData[i][sourceSupportConfirmIdx] || ""
-    };
-  }
-
-  const targetHeaderMap = ensureRealScheduleTrackingColumns(targetSheet);
-  const sessionIdx = targetHeaderMap["Session_ID"];
-  const hostConfirmIdx = targetHeaderMap["Host_Live_Confirm"];
-  const supportConfirmIdx = targetHeaderMap["Support_Live_Confirm"];
-
-  if (sessionIdx === undefined || hostConfirmIdx === undefined || supportConfirmIdx === undefined) {
-    const message = "Live_Session_Master thiếu cột Session_ID / Host_Live_Confirm / Support_Live_Confirm.";
-    if (showAlert !== false) safeAlert(message);
-    return { matchedSessions: 0, updatedHost: 0, updatedSupport: 0, error: message };
-  }
-
-  const targetData = targetSheet.getDataRange().getValues();
-  let matchedSessions = 0;
-  let updatedHost = 0;
-  let updatedSupport = 0;
-
-  for (let i = 1; i < targetData.length; i++) {
-    const sessionId = targetData[i][sessionIdx] ? targetData[i][sessionIdx].toString().trim() : "";
-    if (!sessionId || !confirmBySession[sessionId]) continue;
-
-    matchedSessions++;
-    const sourceConfirm = confirmBySession[sessionId];
-    const nextHostConfirm = sourceConfirm.hostConfirm || "";
-    const nextSupportConfirm = sourceConfirm.supportConfirm || "";
-
-    if ((targetData[i][hostConfirmIdx] || "") !== nextHostConfirm) {
-      targetData[i][hostConfirmIdx] = nextHostConfirm;
-      updatedHost++;
-    }
-
-    if ((targetData[i][supportConfirmIdx] || "") !== nextSupportConfirm) {
-      targetData[i][supportConfirmIdx] = nextSupportConfirm;
-      updatedSupport++;
-    }
-  }
-
-  if (targetData.length > 1) {
-    const numRows = targetData.length - 1;
-    targetSheet.getRange(2, hostConfirmIdx + 1, numRows, 1).setValues(
-      targetData.slice(1).map(row => [row[hostConfirmIdx] || ""])
-    );
-    targetSheet.getRange(2, supportConfirmIdx + 1, numRows, 1).setValues(
-      targetData.slice(1).map(row => [row[supportConfirmIdx] || ""])
-    );
-  }
-
-  const summary = { matchedSessions, updatedHost, updatedSupport, sourceSheetName: sourceSheet.getName() };
-  if (showAlert !== false) {
-    safeAlert(
-      `Đã sync confirm theo Session_ID từ file ngoài.\n` +
-      `Sheet nguồn: ${summary.sourceSheetName}\n` +
-      `Match session: ${summary.matchedSessions}\n` +
-      `Cập nhật Host: ${summary.updatedHost}\n` +
-      `Cập nhật Support: ${summary.updatedSupport}`
-    );
-  }
-
-  return summary;
 }
 
 function removeColumnsByHeaders(sheet, headersToRemove) {
