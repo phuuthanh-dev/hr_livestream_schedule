@@ -291,7 +291,7 @@ function syncAndUnpivotSchedule() {
       };
     });
   const normalizedRows = normalizedRowEntries.map(entry => entry.row);
-  const futureNormalizedRowEntries = normalizedRowEntries.filter(entry => isScheduleDateAfterToday(entry.row[2]));
+  const futureNormalizedRowEntries = normalizedRowEntries.filter(entry => isScheduleDateOnOrAfterToday(entry.row[2]));
   const futureNormalizedRows = futureNormalizedRowEntries.map(entry => entry.row);
 
   function buildRowKey(row) {
@@ -332,7 +332,7 @@ function syncAndUnpivotSchedule() {
   const existingData = existingLastRow > 1
     ? destSheet.getRange(2, 1, existingLastRow - 1, destHeaders.length).getValues()
     : [];
-  const existingFutureRows = existingData.filter(row => isScheduleDateAfterToday(row[2]));
+  const existingFutureRows = existingData.filter(row => isScheduleDateOnOrAfterToday(row[2]));
 
   if (normalizedRows.length <= 0 && existingData.length === 0) {
     SpreadsheetApp.getUi().alert("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.");
@@ -341,7 +341,7 @@ function syncAndUnpivotSchedule() {
 
   if (futureNormalizedRows.length === 0 && existingFutureRows.length === 0) {
     SpreadsheetApp.getUi().alert(
-      `Không có ca live ngày > ${todayLabel} để sync. Dữ liệu ngày <= ${todayLabel} được giữ nguyên.`
+      `Không có ca live ngày >= ${todayLabel} để sync. Dữ liệu ngày < ${todayLabel} được giữ nguyên.`
     );
     return;
   }
@@ -349,7 +349,7 @@ function syncAndUnpivotSchedule() {
   const existingRowMap = {};
   const existingRowDataMap = {};
   for (let i = 0; i < existingData.length; i++) {
-    if (!isScheduleDateAfterToday(existingData[i][2])) continue;
+    if (!isScheduleDateOnOrAfterToday(existingData[i][2])) continue;
     const key = buildRowKey(existingData[i]);
     if (key !== "__") {
       existingRowMap[key] = i + 2;
@@ -403,7 +403,7 @@ function syncAndUnpivotSchedule() {
 
     for (let i = finalData.length - 1; i >= 0; i--) {
       const key = buildRowKey(finalData[i]);
-      if (isScheduleDateAfterToday(finalData[i][2]) && !incomingKeySet.has(key)) {
+      if (isScheduleDateOnOrAfterToday(finalData[i][2]) && !incomingKeySet.has(key)) {
         rowsToDelete.push(i + 2);
       }
     }
@@ -439,7 +439,7 @@ function syncAndUnpivotSchedule() {
       const supportPoolCol = trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] + 1;
       const currentSupportPoolValues = destSheet.getRange(2, supportPoolCol, refreshedData.length, 1).getValues();
       const supportPoolValues = refreshedData.map((row, index) => [
-        isScheduleDateAfterToday(row[2])
+        isScheduleDateOnOrAfterToday(row[2])
           ? (supportPoolByRowKey[buildRowKey(row)] || "")
           : (currentSupportPoolValues[index][0] || "")
       ]);
@@ -453,25 +453,25 @@ function syncAndUnpivotSchedule() {
   }
 
   const hasFutureRowsRemaining = refreshedLastRow > 1 &&
-    destSheet.getRange(2, 3, refreshedLastRow - 1, 1).getValues().some(row => isScheduleDateAfterToday(row[0]));
+    destSheet.getRange(2, 3, refreshedLastRow - 1, 1).getValues().some(row => isScheduleDateOnOrAfterToday(row[0]));
   const conflictResult = hasFutureRowsRemaining
     ? resolveScheduleConflicts(false, { skipPostAutoFill: true, futureOnly: true })
     : null;
   const locationResult = hasFutureRowsRemaining
     ? autoFillLocationToSchedule(false, { futureOnly: true })
     : null;
-  let alertMessage = `Đã đồng bộ lịch live cho các ngày > ${todayLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`;
+  let alertMessage = `Đã đồng bộ lịch live cho các ngày >= ${todayLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`;
   if (sourceRefreshSummary) {
     alertMessage += `\nNguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`;
   }
   if (hasFutureRowsRemaining) {
-    alertMessage += `\nĐã tự cập nhật Location + Kênh live cho các ca tương lai.`;
+    alertMessage += `\nĐã tự cập nhật Location + Kênh live cho các ca từ hôm nay.`;
   }
   if (skippedByCast > 0) {
     alertMessage += `\nLoại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`;
   }
   if (conflictResult) {
-    alertMessage += `\nResolve conflict cho các ca > ${todayLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
+    alertMessage += `\nResolve conflict cho các ca >= ${todayLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
   }
   if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
     alertMessage += `\n\n${formatLookupAlertMessage(locationResult.lookupSummary)}`;
@@ -507,9 +507,13 @@ function getScheduleTodayComparisonKey() {
   return Utilities.formatDate(new Date(), getAppTimeZone(), "yyyyMMdd");
 }
 
-function isScheduleDateAfterToday(value) {
+function isScheduleDateOnOrAfterToday(value) {
   const dateKey = getScheduleDateComparisonKey(value);
-  return Boolean(dateKey) && dateKey > getScheduleTodayComparisonKey();
+  return Boolean(dateKey) && dateKey >= getScheduleTodayComparisonKey();
+}
+
+function isScheduleDateAfterToday(value) {
+  return isScheduleDateOnOrAfterToday(value);
 }
 
 function normalizeScheduleCandidatePool(values) {
@@ -1948,7 +1952,7 @@ function resolveScheduleConflicts(showAlert, options) {
     const preservedRows = [];
 
     for (let i = 1; i < data.length; i++) {
-      if (isScheduleDateAfterToday(idx.date !== undefined ? data[i][idx.date] : "")) {
+      if (isScheduleDateOnOrAfterToday(idx.date !== undefined ? data[i][idx.date] : "")) {
         targetData.push(data[i].slice());
       } else {
         preservedRows.push(buildMasterFinalRow(data[i], idx, headerMap));

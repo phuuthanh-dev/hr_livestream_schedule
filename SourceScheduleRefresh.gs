@@ -10,6 +10,10 @@ const SOURCE_SCHEDULE_SHEET_NAMES = {
   supportInfo: 'Thông tin Support Live',
   aggregateSchedule: ['LIVE STREAM/ SCHEDULE', 'LIVE STREAM SCHEDULE']
 };
+const SOURCE_SCHEDULE_STAFF_ID_ALIASES = {
+  HRSL01: 'HRSL01_6H',
+  HRSL02: 'HRSL02_6H'
+};
 
 function refreshSourceLiveStreamSchedule_() {
   const lock = LockService.getScriptLock();
@@ -176,7 +180,7 @@ function filterSourceStaffCellValue_(value, validIds) {
     return uniqueCodes.join(', ');
   }
 
-  return 'Trống';
+  return '';
 }
 
 function buildSourceAggregateScheduleRows_(hostData, supportData, hostNameMap, hostFormatMap, timezone) {
@@ -239,8 +243,10 @@ function buildSourceAggregateScheduleRows_(hostData, supportData, hostNameMap, h
 }
 
 function writeSourceAggregateSchedule_(sheet, rows) {
-  const existingRowCount = Math.max(sheet.getLastRow() - 1, 1);
-  sheet.getRange(2, 2, existingRowCount, 7).clearContent();
+  const rowCount = Math.max(Math.max(sheet.getLastRow() - 1, 1), rows.length);
+  const outputRange = sheet.getRange(2, 2, rowCount, 7);
+  outputRange.clearDataValidations();
+  outputRange.clearContent();
 
   if (rows.length === 0) return;
 
@@ -273,7 +279,8 @@ function normalizeSourceHeader_(value) {
 }
 
 function normalizeSourceStaffCode_(value) {
-  return getSourceText_(value).toUpperCase();
+  const normalized = getSourceText_(value).toUpperCase();
+  return SOURCE_SCHEDULE_STAFF_ID_ALIASES[normalized] || normalized;
 }
 
 function splitSourceStaffCodes_(value) {
