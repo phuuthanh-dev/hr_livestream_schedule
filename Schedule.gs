@@ -1024,7 +1024,7 @@ function buildHomeStudioSupportShadowItem(item, fieldIndexes) {
     rowNumber: (Number(item.rowNumber) || 0) + 0.1,
     hostId: "",
     hostName: "",
-    formatValue: "Studio",
+    formatValue: "",
     supportId,
     supportName: supportId ? (item.supportName || "") : "",
     supportCandidateIds: candidateIds,
@@ -1087,7 +1087,7 @@ function applyHomeSupportRuleToScheduleItems(items, portfolioMap, options) {
       if (matchedSupportOnlyIndex !== -1) {
         const supportOnlyItem = existingSupportOnlyItems[matchedSupportOnlyIndex];
         claimedSupportOnlyIndexes[matchedSupportOnlyIndex] = true;
-        supportOnlyItem.formatValue = "Studio";
+        supportOnlyItem.formatValue = "";
         supportOnlyItem.supportCandidateIds = normalizeScheduleCandidatePool(
           (supportOnlyItem.supportCandidateIds || []).concat(candidateIds)
         );
@@ -1510,6 +1510,115 @@ function getScheduleSlotHours(slotValue) {
 
 function createSupportQuotaLedger() {
   return { usedByDay: {}, reserved: {} };
+}
+
+function buildFinalRowSupportCandidateIds(item) {
+  if (!item || !item.values) return [];
+
+  return normalizeScheduleCandidatePool(
+    parseScheduleCandidatePool(item.values[LIVE_SESSION_SUPPORT_POOL_INDEX])
+      .concat(item.values[LIVE_SESSION_SUPPORT_ID_INDEX] ? [item.values[LIVE_SESSION_SUPPORT_ID_INDEX]] : [])
+      .concat((item.supportCandidates || []).map(candidate => candidate.id))
+      .concat((item.supportBackupCandidates || []).map(candidate => candidate.id))
+  );
+}
+
+function getSupportContinuityTier(continuityMap, dayKey, slotStartMinutes, supportId) {
+  if (!dayKey || !isMeaningfulScheduleValue(supportId)) return 0;
+
+  const state = continuityMap[`${dayKey}__${supportId}`];
+  if (!state) return 1;
+  if (state.lastEndMinutes === slotStartMinutes) return 2;
+  return 0;
+}
+
+function reserveSupportContinuityState(continuityMap, dayKey, slotParts, supportId) {
+  if (!dayKey || !slotParts || !isMeaningfulScheduleValue(supportId)) return;
+
+  continuityMap[`${dayKey}__${supportId}`] = {
+    lastEndMinutes: slotParts.endMinutes
+  };
+}
+
+function optimizeSupportContinuityOnFinalRows(finalRows, supportMap) {
+  const ledger = createSupportQuotaLedger();
+  const continuityMap = {};
+
+  const ordered = (finalRows || []).slice().sort((left, right) => {
+    const leftDate = typeof parseFlexibleDateValue === 'function' ? parseFlexibleDateValue(left.values[2]) : null;
+    const rightDate = typeof parseFlexibleDateValue === 'function' ? parseFlexibleDateValue(right.values[2]) : null;
+    const leftTime = leftDate ? leftDate.getTime() : -Infinity;
+    const rightTime = rightDate ? rightDate.getTime() : -Infinity;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    const leftParts = getScheduleSlotParts(left.values[3]);
+    const rightParts = getScheduleSlotParts(right.values[3]);
+    const leftStart = leftParts ? leftParts.startMinutes : Number.MAX_SAFE_INTEGER;
+    const rightStart = rightParts ? rightParts.startMinutes : Number.MAX_SAFE_INTEGER;
+    if (leftStart !== rightStart) return leftStart - rightStart;
+
+    return (left.sortOrder || 0) - (right.sortOrder || 0);
+  });
+
+  ordered.forEach(item => {
+    if (!item || !item.values || isHomeFormatValue(item.values[6])) {
+      return;
+    }
+
+    const row = item.values;
+    const currentSupportId = row[LIVE_SESSION_SUPPORT_ID_INDEX] ? row[LIVE_SESSION_SUPPORT_ID_INDEX].toString().trim() : "";
+    const candidateIds = buildFinalRowSupportCandidateIds(item);
+    if (candidateIds.length === 0) {
+      return;
+    }
+
+    const dateValue = row[2];
+    const slotValue = row[3];
+    const slotKey = item.slotKey || `${dateValue}__${slotValue}`;
+    const slotHours = getScheduleSlotHours(slotValue);
+    const slotParts = getScheduleSlotParts(slotValue);
+    const dayKey = getScheduleDateComparisonKey(dateValue);
+    const slotStartMinutes = slotParts ? slotParts.startMinutes : Number.MAX_SAFE_INTEGER;
+
+    const eligibleCandidates = candidateIds
+      .filter(candidateId => hasSupportQuotaForSlot(ledger, dateValue, slotKey, candidateId, slotHours))
+      .map(candidateId => {
+        const baseCandidate = buildSupportConflictCandidate(candidateId, supportMap, item.sortOrder || 0);
+        return {
+          id: candidateId,
+          sourceOrder: baseCandidate.sourceOrder,
+          score: [
+            getSupportContinuityTier(continuityMap, dayKey, slotStartMinutes, candidateId),
+            candidateId === currentSupportId ? 1 : 0
+          ].concat(baseCandidate.score)
+        };
+      });
+
+    if (eligibleCandidates.length === 0) {
+      return;
+    }
+
+    const selection = eligibleCandidates.length > 1
+      ? chooseSingleBestConflictCandidate(eligibleCandidates, "score", "Support", { preferFirstOnTie: true })
+      : { selected: eligibleCandidates[0] || null };
+    const selectedSupportId = selection.selected ? selection.selected.id : "";
+    if (!selectedSupportId) {
+      return;
+    }
+
+    row[LIVE_SESSION_SUPPORT_ID_INDEX] = selectedSupportId;
+    row[LIVE_SESSION_SUPPORT_NAME_INDEX] = getSupportDisplayNameById(selectedSupportId, supportMap);
+    if (item.primarySupportId !== undefined) item.primarySupportId = selectedSupportId;
+    if (row[LIVE_SESSION_BASE_COLUMN_COUNT + 4] === selectedSupportId) {
+      row[LIVE_SESSION_BASE_COLUMN_COUNT + 4] = "";
+      row[LIVE_SESSION_BASE_COLUMN_COUNT + 5] = "";
+    }
+
+    reserveSupportQuotaHours(ledger, dateValue, slotKey, selectedSupportId, slotHours);
+    reserveSupportContinuityState(continuityMap, dayKey, slotParts, selectedSupportId);
+  });
+
+  return finalRows;
 }
 
 function hasSupportQuotaForSlot(ledger, dateValue, slotKey, supportId, slotHours) {
@@ -2107,6 +2216,8 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     left.sortOrder,
     right.sortOrder
   ));
+
+  optimizeSupportContinuityOnFinalRows(finalRows, supportMap);
 
   const occupiedHostBySlot = {};
   finalRows.forEach(item => {
