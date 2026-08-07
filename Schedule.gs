@@ -1360,6 +1360,137 @@ function getSupportLevelWeight(levelValue) {
   return 0;
 }
 
+// ===========================================================================
+// QUOTA GIỜ SUPPORT THEO NGÀY (THEO HỢP ĐỒNG)
+// - Mã đuôi _6H: trong tuần (T2-T6) làm 4h/ngày, cuối tuần (T7-CN) làm 6h/ngày
+// - Mã không đuôi: 4h/ngày cho mọi ngày
+// - Quota là TRẦN CỨNG: không xếp vượt; ca không còn người đủ quota sẽ để trống
+// ===========================================================================
+const SUPPORT_DEFAULT_DAILY_QUOTA_HOURS = 4;
+const SUPPORT_DEFAULT_SLOT_HOURS = 2;
+
+function isWeekendScheduleDate(dateValue) {
+  const parsed = typeof parseFlexibleDateValue === 'function' ? parseFlexibleDateValue(dateValue) : null;
+  if (!parsed) return false;
+  const day = parsed.getDay();
+  return day === 0 || day === 6; // CN = 0, T7 = 6
+}
+
+function getSupportDailyQuotaHours(supportId, dateValue) {
+  if (!isWeekendScheduleDate(dateValue)) return SUPPORT_DEFAULT_DAILY_QUOTA_HOURS;
+  // Cuối tuần: số giờ trong đuôi mã (vd _6H = 6h); không đuôi = 4h
+  const match = normalizeScheduleTrackingText(supportId).match(/_(\d+)h$/);
+  return match ? parseInt(match[1], 10) : SUPPORT_DEFAULT_DAILY_QUOTA_HOURS;
+}
+
+function getScheduleSlotHours(slotValue) {
+  const parts = getScheduleSlotParts(slotValue);
+  if (!parts) return SUPPORT_DEFAULT_SLOT_HOURS;
+  const hours = (parts.endMinutes - parts.startMinutes) / 60;
+  return hours > 0 ? hours : SUPPORT_DEFAULT_SLOT_HOURS;
+}
+
+function createSupportQuotaLedger() {
+  return { usedByDay: {}, reserved: {} };
+}
+
+function hasSupportQuotaForSlot(ledger, dateValue, slotKey, supportId, slotHours) {
+  if (!isMeaningfulScheduleValue(supportId)) return false;
+  const dayKey = getScheduleDateComparisonKey(dateValue);
+  if (!dayKey) return true; // Không parse được ngày → không chặn
+  const dedupeKey = `${dayKey}__${slotKey || ""}__${supportId}`;
+  if (ledger.reserved[dedupeKey]) return true; // Cùng ca đã tính rồi (dòng trùng)
+  const quota = getSupportDailyQuotaHours(supportId, dateValue);
+  const used = ledger.usedByDay[`${dayKey}__${supportId}`] || 0;
+  return used + slotHours <= quota;
+}
+
+function reserveSupportQuotaHours(ledger, dateValue, slotKey, supportId, slotHours) {
+  const dayKey = getScheduleDateComparisonKey(dateValue);
+  if (!dayKey || !isMeaningfulScheduleValue(supportId)) return;
+  const dedupeKey = `${dayKey}__${slotKey || ""}__${supportId}`;
+  if (ledger.reserved[dedupeKey]) return; // Mỗi ca chỉ tính 1 lần
+  ledger.reserved[dedupeKey] = true;
+  const key = `${dayKey}__${supportId}`;
+  ledger.usedByDay[key] = (ledger.usedByDay[key] || 0) + slotHours;
+}
+
+// Pass cuối trong computeResolvedMasterRows: duyệt finalRows theo thời gian,
+// trừ quota từng ca; ca nào mà support đã hết quota thì thay bằng ứng viên
+// còn quota trong pool (theo score), không còn ai thì để trống.
+function enforceSupportQuotaOnFinalRows(finalRows, supportMap) {
+  const ledger = createSupportQuotaLedger();
+  const stats = { replaced: 0, cleared: 0 };
+
+  // Duyệt theo đúng thứ tự thời gian: ngày cũ trước, slot sớm trước
+  const ordered = (finalRows || []).slice().sort((left, right) => {
+    const leftDate = typeof parseFlexibleDateValue === 'function' ? parseFlexibleDateValue(left.values[2]) : null;
+    const rightDate = typeof parseFlexibleDateValue === 'function' ? parseFlexibleDateValue(right.values[2]) : null;
+    const leftTime = leftDate ? leftDate.getTime() : -Infinity;
+    const rightTime = rightDate ? rightDate.getTime() : -Infinity;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    const leftParts = getScheduleSlotParts(left.values[3]);
+    const rightParts = getScheduleSlotParts(right.values[3]);
+    const leftStart = leftParts ? leftParts.startMinutes : Number.MAX_SAFE_INTEGER;
+    const rightStart = rightParts ? rightParts.startMinutes : Number.MAX_SAFE_INTEGER;
+    if (leftStart !== rightStart) return leftStart - rightStart;
+
+    return (left.sortOrder || 0) - (right.sortOrder || 0);
+  });
+
+  ordered.forEach(item => {
+    const row = item.values;
+    const supportId = row[LIVE_SESSION_SUPPORT_ID_INDEX] ? row[LIVE_SESSION_SUPPORT_ID_INDEX].toString().trim() : "";
+    if (!isMeaningfulScheduleValue(supportId)) return;
+
+    const dateValue = row[2];
+    const slotValue = row[3];
+    const slotKey = item.slotKey || `${dateValue}__${slotValue}`;
+    const slotHours = getScheduleSlotHours(slotValue);
+
+    if (hasSupportQuotaForSlot(ledger, dateValue, slotKey, supportId, slotHours)) {
+      reserveSupportQuotaHours(ledger, dateValue, slotKey, supportId, slotHours);
+      return;
+    }
+
+    // Hết quota → tìm người thay từ pool ứng viên còn quota
+    const poolIds = normalizeScheduleCandidatePool(
+      parseScheduleCandidatePool(row[LIVE_SESSION_SUPPORT_POOL_INDEX])
+        .concat((item.supportCandidates || []).map(candidate => candidate.id))
+        .concat((item.supportBackupCandidates || []).map(candidate => candidate.id))
+    ).filter(candidateId => candidateId !== supportId);
+
+    const eligibleCandidates = poolIds
+      .filter(candidateId => hasSupportQuotaForSlot(ledger, dateValue, slotKey, candidateId, slotHours))
+      .map(candidateId => buildSupportConflictCandidate(candidateId, supportMap, 0));
+
+    if (eligibleCandidates.length > 0) {
+      const selection = chooseSingleBestConflictCandidate(eligibleCandidates, "score", "Support", { preferFirstOnTie: true });
+      const replacementId = selection.selected ? selection.selected.id : "";
+      if (replacementId) {
+        reserveSupportQuotaHours(ledger, dateValue, slotKey, replacementId, slotHours);
+        row[LIVE_SESSION_SUPPORT_ID_INDEX] = replacementId;
+        if (item.primarySupportId !== undefined) item.primarySupportId = replacementId;
+        // Backup trùng người mới thay thì xóa backup
+        if (row[LIVE_SESSION_BASE_COLUMN_COUNT + 4] === replacementId) {
+          row[LIVE_SESSION_BASE_COLUMN_COUNT + 4] = "";
+          row[LIVE_SESSION_BASE_COLUMN_COUNT + 5] = "";
+        }
+        stats.replaced++;
+        return;
+      }
+    }
+
+    // Không ai còn quota → để trống ca này
+    row[LIVE_SESSION_SUPPORT_ID_INDEX] = "";
+    if (item.primarySupportId !== undefined) item.primarySupportId = "";
+    stats.cleared++;
+  });
+
+  return stats;
+}
+
 function isPositiveScheduleFlag(value) {
   const normalized = normalizeScheduleTrackingText(value);
   if (!normalized) return false;
@@ -1893,6 +2024,8 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     markOccupiedCandidate(occupiedHostBySlot, item.slotKey, backupHostId);
   });
 
+  const quotaStats = enforceSupportQuotaOnFinalRows(finalRows, supportMap);
+
   const outputRows = finalRows.map((item, index) => {
     const row = item.values.slice();
     row[0] = index + 1;
@@ -1909,7 +2042,9 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       totalGroups: Object.keys(groups).length,
       finalRows: outputRows.length,
       autoResolvedGroups,
-      manualReviewGroups
+      manualReviewGroups,
+      quotaReplaced: quotaStats.replaced,
+      quotaCleared: quotaStats.cleared
     }
   };
 }
@@ -1968,7 +2103,9 @@ function resolveScheduleConflicts(showAlert, options) {
             totalGroups: 0,
             finalRows: 0,
             autoResolvedGroups: 0,
-            manualReviewGroups: 0
+            manualReviewGroups: 0,
+            quotaReplaced: 0,
+            quotaCleared: 0
           }
         };
     outputHeaders = resolution.outputHeaders;
@@ -2012,12 +2149,17 @@ function resolveScheduleConflicts(showAlert, options) {
   }
 
   if (showAlert !== false) {
-    safeAlert(
+    let alertMessage =
       `Đã resolve ${summary.totalGroups} nhóm conflict.\n` +
       `Final rows: ${summary.finalRows}\n` +
       `Auto-resolved groups: ${summary.autoResolvedGroups}\n` +
-      `Manual review groups: ${summary.manualReviewGroups}`
-    );
+      `Manual review groups: ${summary.manualReviewGroups}`;
+    if (summary.quotaReplaced || summary.quotaCleared) {
+      alertMessage +=
+        `\nQuota support: ${summary.quotaReplaced || 0} ca đổi người do hết giờ hợp đồng` +
+        `, ${summary.quotaCleared || 0} ca để trống do không còn người đủ giờ`;
+    }
+    safeAlert(alertMessage);
   }
 
   return summary;
