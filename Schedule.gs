@@ -49,11 +49,19 @@ const SUPPORT_SHIFT_WINDOWS = [
 ];
 
 function syncAndUnpivotSchedule() {
-  const SOURCE_SPREADSHEET_ID = '12WU5jM-KC9EngkA_xBS3U82KYnO-8RMwGwk9fwcGe3o';
+  const todayLabel = formatAppDateValue(new Date());
+  let sourceRefreshSummary = null;
+
+  try {
+    sourceRefreshSummary = refreshSourceLiveStreamSchedule_();
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(`Không thể làm mới schedule ở file nguồn: ${error.message}`);
+    return;
+  }
   
   let sourceSs;
   try {
-    sourceSs = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    sourceSs = SpreadsheetApp.openById(SOURCE_SCHEDULE_SPREADSHEET_ID);
   } catch (e) {
     SpreadsheetApp.getUi().alert("Không thể kết nối File Nguồn. Kiểm tra lại ID!");
     return;
@@ -283,6 +291,8 @@ function syncAndUnpivotSchedule() {
       };
     });
   const normalizedRows = normalizedRowEntries.map(entry => entry.row);
+  const futureNormalizedRowEntries = normalizedRowEntries.filter(entry => isScheduleDateAfterToday(entry.row[2]));
+  const futureNormalizedRows = futureNormalizedRowEntries.map(entry => entry.row);
 
   function buildRowKey(row) {
     const hostKey = buildScheduleHostIdentityKey(row[2], row[3], row[4]);
@@ -318,22 +328,28 @@ function syncAndUnpivotSchedule() {
   destSheet.setColumnWidth(9, 170); // Tên Support
   destSheet.setColumnWidth(12, 200); // Session_ID
 
-  if (normalizedRows.length <= 0) {
-    if (destSheet.getLastRow() > 1) {
-      destSheet.getRange(2, 1, destSheet.getLastRow() - 1, destSheet.getLastColumn()).clearContent();
-    }
-    SpreadsheetApp.getUi().alert("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.");
-    return;
-  }
-
   const existingLastRow = destSheet.getLastRow();
   const existingData = existingLastRow > 1
     ? destSheet.getRange(2, 1, existingLastRow - 1, destHeaders.length).getValues()
     : [];
+  const existingFutureRows = existingData.filter(row => isScheduleDateAfterToday(row[2]));
+
+  if (normalizedRows.length <= 0 && existingData.length === 0) {
+    SpreadsheetApp.getUi().alert("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.");
+    return;
+  }
+
+  if (futureNormalizedRows.length === 0 && existingFutureRows.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      `Không có ca live ngày > ${todayLabel} để sync. Dữ liệu ngày <= ${todayLabel} được giữ nguyên.`
+    );
+    return;
+  }
 
   const existingRowMap = {};
   const existingRowDataMap = {};
   for (let i = 0; i < existingData.length; i++) {
+    if (!isScheduleDateAfterToday(existingData[i][2])) continue;
     const key = buildRowKey(existingData[i]);
     if (key !== "__") {
       existingRowMap[key] = i + 2;
@@ -344,25 +360,28 @@ function syncAndUnpivotSchedule() {
   const incomingKeySet = new Set();
   const appendRows = [];
   let updatedCount = 0;
+  let removedCount = 0;
 
-  for (let i = 0; i < normalizedRows.length; i++) {
-      const row = normalizedRows[i];
-      row[0] = i + 1;
-      const sheetRow = row.slice(0, LIVE_SESSION_BASE_COLUMN_COUNT);
+  for (let i = 0; i < futureNormalizedRows.length; i++) {
+    const row = futureNormalizedRows[i];
+    row[0] = i + 1;
+    const sheetRow = row.slice(0, LIVE_SESSION_BASE_COLUMN_COUNT);
 
-      const key = buildRowKey(sheetRow);
-      incomingKeySet.add(key);
+    const key = buildRowKey(sheetRow);
+    incomingKeySet.add(key);
 
-      if (existingRowMap[key]) {
-        const existingRow = existingRowDataMap[key];
+    if (existingRowMap[key]) {
+      const existingRow = existingRowDataMap[key];
 
-      // Giữ lại các ô người dùng thường chỉnh tay nếu đang có giá trị hợp lệ
       if (existingRow) {
         if (!sheetRow[6] && existingRow[6]) sheetRow[6] = existingRow[6]; // Hình thức
         if (existingRow[LIVE_SESSION_CHANNEL_INDEX]) sheetRow[LIVE_SESSION_CHANNEL_INDEX] = existingRow[LIVE_SESSION_CHANNEL_INDEX]; // Live_Channel_Id
       }
 
       destSheet.getRange(existingRowMap[key], 1, 1, destHeaders.length).setValues([sheetRow]);
+      if (shouldResetSupportTracking(existingRow, sheetRow)) {
+        clearSupportTrackingForRow(destSheet, existingRowMap[key], trackingHeaderMap);
+      }
       updatedCount++;
     } else {
       appendRows.push({
@@ -384,7 +403,7 @@ function syncAndUnpivotSchedule() {
 
     for (let i = finalData.length - 1; i >= 0; i--) {
       const key = buildRowKey(finalData[i]);
-      if (!incomingKeySet.has(key)) {
+      if (isScheduleDateAfterToday(finalData[i][2]) && !incomingKeySet.has(key)) {
         rowsToDelete.push(i + 2);
       }
     }
@@ -392,13 +411,14 @@ function syncAndUnpivotSchedule() {
     for (let i = 0; i < rowsToDelete.length; i++) {
       destSheet.deleteRow(rowsToDelete[i]);
     }
+    removedCount = rowsToDelete.length;
   }
 
   const refreshedLastRow = destSheet.getLastRow();
   if (refreshedLastRow > 1) {
     const refreshedData = destSheet.getRange(2, 1, refreshedLastRow - 1, destHeaders.length).getValues();
     const supportPoolByRowKey = {};
-    normalizedRowEntries.forEach(entry => {
+    futureNormalizedRowEntries.forEach(entry => {
       const rowKey = buildRowKey(entry.row);
       if (!rowKey) return;
       supportPoolByRowKey[rowKey] = entry.supportCandidatePool || "";
@@ -416,26 +436,42 @@ function syncAndUnpivotSchedule() {
     destSheet.getRange(2, 8, refreshedLastRow - 1, 1).setHorizontalAlignment("center");
 
     if (trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] !== undefined) {
-      const supportPoolValues = refreshedData.map(row => [
-        supportPoolByRowKey[buildRowKey(row)] || ""
+      const supportPoolCol = trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] + 1;
+      const currentSupportPoolValues = destSheet.getRange(2, supportPoolCol, refreshedData.length, 1).getValues();
+      const supportPoolValues = refreshedData.map((row, index) => [
+        isScheduleDateAfterToday(row[2])
+          ? (supportPoolByRowKey[buildRowKey(row)] || "")
+          : (currentSupportPoolValues[index][0] || "")
       ]);
       destSheet.getRange(
         2,
-        trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] + 1,
+        supportPoolCol,
         supportPoolValues.length,
         1
       ).setValues(supportPoolValues);
     }
   }
 
-  const conflictResult = resolveScheduleConflicts(false, { skipPostAutoFill: true });
-  const locationResult = autoFillLocationToSchedule(false);
-  let alertMessage = `Đã đồng bộ lịch live: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới và tự cập nhật Location + Kênh live.`;
+  const hasFutureRowsRemaining = refreshedLastRow > 1 &&
+    destSheet.getRange(2, 3, refreshedLastRow - 1, 1).getValues().some(row => isScheduleDateAfterToday(row[0]));
+  const conflictResult = hasFutureRowsRemaining
+    ? resolveScheduleConflicts(false, { skipPostAutoFill: true, futureOnly: true })
+    : null;
+  const locationResult = hasFutureRowsRemaining
+    ? autoFillLocationToSchedule(false, { futureOnly: true })
+    : null;
+  let alertMessage = `Đã đồng bộ lịch live cho các ngày > ${todayLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`;
+  if (sourceRefreshSummary) {
+    alertMessage += `\nNguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`;
+  }
+  if (hasFutureRowsRemaining) {
+    alertMessage += `\nĐã tự cập nhật Location + Kênh live cho các ca tương lai.`;
+  }
   if (skippedByCast > 0) {
     alertMessage += `\nLoại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`;
   }
   if (conflictResult) {
-    alertMessage += `\nResolve conflict: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
+    alertMessage += `\nResolve conflict cho các ca > ${todayLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
   }
   if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
     alertMessage += `\n\n${formatLookupAlertMessage(locationResult.lookupSummary)}`;
@@ -458,6 +494,22 @@ function isMeaningfulScheduleValue(value) {
   const normalized = normalizeScheduleTrackingText(value);
   return Boolean(normalized) &&
     !["trong", "no_support", "nohost", "unknown", "n/a"].includes(normalized);
+}
+
+function getScheduleDateComparisonKey(value) {
+  const parsed = parseFlexibleDateValue(value);
+  return parsed
+    ? Utilities.formatDate(parsed, getAppTimeZone(), "yyyyMMdd")
+    : "";
+}
+
+function getScheduleTodayComparisonKey() {
+  return Utilities.formatDate(new Date(), getAppTimeZone(), "yyyyMMdd");
+}
+
+function isScheduleDateAfterToday(value) {
+  const dateKey = getScheduleDateComparisonKey(value);
+  return Boolean(dateKey) && dateKey > getScheduleTodayComparisonKey();
 }
 
 function normalizeScheduleCandidatePool(values) {
@@ -554,6 +606,40 @@ function ensureRealScheduleTrackingColumns(scheduleSheet) {
   });
 
   return headerMap;
+}
+
+function getNormalizedScheduleSupportId(value) {
+  return isMeaningfulScheduleValue(value) ? value.toString().trim() : "";
+}
+
+function shouldResetSupportTracking(existingRow, nextRow) {
+  if (!existingRow || !nextRow) return false;
+
+  const existingSupportId = getNormalizedScheduleSupportId(existingRow[LIVE_SESSION_SUPPORT_ID_INDEX]);
+  const nextSupportId = getNormalizedScheduleSupportId(nextRow[LIVE_SESSION_SUPPORT_ID_INDEX]);
+  const nextFormatValue = nextRow[6] || "";
+  const supportRequired = !isHomeFormatValue(nextFormatValue);
+
+  if (!supportRequired) {
+    return Boolean(existingSupportId);
+  }
+
+  return existingSupportId !== nextSupportId;
+}
+
+function clearSupportTrackingForRow(sheet, rowNumber, headerMap) {
+  if (!sheet || !rowNumber || !headerMap) return;
+
+  [
+    "Support_Live_Confirm",
+    "Backup_Support_ID",
+    "Backup_Support_Name"
+  ].forEach(header => {
+    const colIndex = headerMap[header];
+    if (colIndex !== undefined) {
+      sheet.getRange(rowNumber, colIndex + 1).clearContent();
+    }
+  });
 }
 
 function removeColumnsByHeaders(sheet, headersToRemove) {
@@ -1826,6 +1912,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
 
 function resolveScheduleConflicts(showAlert, options) {
   const config = options || {};
+  const futureOnly = Boolean(config.futureOnly);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Live_Session_Master');
   if (!sheet || sheet.getLastRow() <= 1) {
@@ -1843,17 +1930,60 @@ function resolveScheduleConflicts(showAlert, options) {
     autoFillLocationToSchedule(false, {
       skipChannelUpdate: true,
       skipDropdownRefresh: true,
-      skipLookupValidation: true
+      skipLookupValidation: true,
+      futureOnly
     });
   }
 
   removeConflictTrackingColumns(sheet);
   const headerMap = ensureRealScheduleTrackingColumns(sheet);
   const data = sheet.getDataRange().getValues();
-  const resolution = computeResolvedMasterRows(ss, data, headerMap);
-  const outputHeaders = resolution.outputHeaders;
-  const outputRows = resolution.outputRows;
-  const summary = resolution.summary;
+  let resolution;
+  let outputHeaders;
+  let outputRows;
+
+  if (futureOnly) {
+    const idx = getScheduleConflictIndexes(headerMap);
+    const targetData = [data[0]];
+    const preservedRows = [];
+
+    for (let i = 1; i < data.length; i++) {
+      if (isScheduleDateAfterToday(idx.date !== undefined ? data[i][idx.date] : "")) {
+        targetData.push(data[i].slice());
+      } else {
+        preservedRows.push(buildMasterFinalRow(data[i], idx, headerMap));
+      }
+    }
+
+    resolution = targetData.length > 1
+      ? computeResolvedMasterRows(ss, targetData, headerMap)
+      : {
+          outputHeaders: LIVE_SESSION_BASE_HEADERS.concat(LIVE_SESSION_TRACKING_HEADERS, LIVE_SESSION_INTERNAL_HEADERS),
+          outputRows: [],
+          summary: {
+            totalGroups: 0,
+            finalRows: 0,
+            autoResolvedGroups: 0,
+            manualReviewGroups: 0
+          }
+        };
+    outputHeaders = resolution.outputHeaders;
+    outputRows = resolution.outputRows.concat(preservedRows);
+  } else {
+    resolution = computeResolvedMasterRows(ss, data, headerMap);
+    outputHeaders = resolution.outputHeaders;
+    outputRows = resolution.outputRows;
+  }
+
+  outputRows = outputRows.map((row, index) => {
+    const nextRow = row.slice();
+    nextRow[0] = index + 1;
+    return nextRow;
+  });
+
+  const summary = Object.assign({}, resolution.summary, {
+    finalRows: outputRows.length
+  });
 
   sheet.clearContents();
   sheet.getRange(1, 1, 1, outputHeaders.length)
@@ -1874,7 +2004,7 @@ function resolveScheduleConflicts(showAlert, options) {
   trimTrailingGeneratedColumns(sheet, outputHeaders.length);
 
   if (!config.skipPostAutoFill && typeof autoFillLocationToSchedule === 'function') {
-    autoFillLocationToSchedule(false);
+    autoFillLocationToSchedule(false, futureOnly ? { futureOnly: true } : undefined);
   }
 
   if (showAlert !== false) {

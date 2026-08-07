@@ -3,6 +3,7 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   const skipChannelUpdate = Boolean(config.skipChannelUpdate);
   const skipDropdownRefresh = Boolean(config.skipDropdownRefresh);
   const skipLookupValidation = Boolean(config.skipLookupValidation);
+  const futureOnly = Boolean(config.futureOnly);
 
   // Vì chạy trong cùng 1 file, ta dùng getActiveSpreadsheet()
   const masterSs = SpreadsheetApp.getActiveSpreadsheet(); 
@@ -75,20 +76,32 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   if (schFormatColIndex === -1) schFormatColIndex = schHeaders.indexOf("Location_Required");
   let schChannelColIndex = schHeaders.indexOf("Live_Channel_Id");
   if (schChannelColIndex === -1) schChannelColIndex = schHeaders.indexOf("Kênh Live");
+  const schDateColIndex = schHeaders.indexOf("Ngày");
 
   if (schIdColIndex === -1 || schFormatColIndex === -1 || schChannelColIndex === -1) {
     Logger.log("Lỗi: Không tìm thấy cột Mã nhân sự/Streamer_ID, Hình thức/Location_Required hoặc Live_Channel_Id trong Live_Session_Master.");
     return;
   }
+
+  if (futureOnly && schDateColIndex === -1) {
+    Logger.log("Không thể giới hạn sync theo ngày vì thiếu cột Ngày trong Live_Session_Master.");
+    return;
+  }
   
   let updatedLocationCount = 0;
   let updatedChannelCount = 0;
+  const targetRows = [];
 
-  if (!skipChannelUpdate && scheduleData.length > 1) {
+  if (!skipChannelUpdate && scheduleData.length > 1 && !futureOnly) {
     scheduleSheet.getRange(2, schChannelColIndex + 1, scheduleData.length - 1, 1).clearDataValidations();
   }
   
   for (let i = 1; i < scheduleData.length; i++) {
+    if (futureOnly && !isScheduleDateAfterToday(scheduleData[i][schDateColIndex])) {
+      continue;
+    }
+
+    targetRows.push(i + 1);
     let hostIdString = scheduleData[i][schIdColIndex]; 
     let currentFormat = scheduleData[i][schFormatColIndex]; 
     let currentChannel = scheduleData[i][schChannelColIndex];
@@ -133,13 +146,15 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   }
 
   if (!skipDropdownRefresh) {
-    ensurePlainLiveChannelColumn(scheduleSheet);
-    refreshLiveChannelDropdowns();
+    if (!futureOnly) {
+      ensurePlainLiveChannelColumn(scheduleSheet);
+    }
+    refreshLiveChannelDropdowns(futureOnly ? { futureOnly: true } : undefined);
   }
 
   const lookupSummary = skipLookupValidation
     ? null
-    : validateLiveSessionLookups(showLookupAlert !== false);
+    : validateLiveSessionLookups(showLookupAlert !== false, futureOnly ? targetRows : undefined);
   
   Logger.log(`Tuyệt vời! Đã cập nhật Location cho ${updatedLocationCount} ca và Live_Channel_Id cho ${updatedChannelCount} ca trong tab Live_Session_Master.`);
   return {
@@ -172,7 +187,9 @@ function ensurePlainLiveChannelColumn(scheduleSheet) {
   sheet.getRange(1, col, lastRow, 1).setValues(colValues);
 }
 
-function refreshLiveChannelDropdowns() {
+function refreshLiveChannelDropdowns(options) {
+  const config = options || {};
+  const futureOnly = Boolean(config.futureOnly);
   const masterSs = SpreadsheetApp.getActiveSpreadsheet();
   const portfolioSheet = masterSs.getSheetByName('Portfolio_Master');
   const scheduleSheet = masterSs.getSheetByName('Live_Session_Master');
@@ -193,6 +210,7 @@ function refreshLiveChannelDropdowns() {
   let pfChannelColIndex = pfHeaders.indexOf("Live_Channel_Id");
   if (pfChannelColIndex === -1) pfChannelColIndex = pfHeaders.indexOf("Live_Channel");
   const schIdColIndex = schHeaders.indexOf("Mã nhân sự") !== -1 ? schHeaders.indexOf("Mã nhân sự") : schHeaders.indexOf("Streamer_ID");
+  const schDateColIndex = schHeaders.indexOf("Ngày");
   let schChannelColIndex = schHeaders.indexOf("Live_Channel_Id");
   if (schChannelColIndex === -1) schChannelColIndex = schHeaders.indexOf("Kênh Live");
 
@@ -201,8 +219,15 @@ function refreshLiveChannelDropdowns() {
     return;
   }
 
-  const channelRange = scheduleSheet.getRange(2, schChannelColIndex + 1, scheduleData.length - 1, 1);
-  channelRange.clearDataValidations();
+  if (futureOnly && schDateColIndex === -1) {
+    Logger.log("Không thể giới hạn dropdown theo ngày vì thiếu cột Ngày trong Live_Session_Master.");
+    return;
+  }
+
+  if (!futureOnly) {
+    const channelRange = scheduleSheet.getRange(2, schChannelColIndex + 1, scheduleData.length - 1, 1);
+    channelRange.clearDataValidations();
+  }
 
   const hostChannelMap = {};
   for (let i = 1; i < portfolioData.length; i++) {
@@ -224,9 +249,14 @@ function refreshLiveChannelDropdowns() {
   }
 
   for (let i = 1; i < scheduleData.length; i++) {
+    if (futureOnly && !isScheduleDateAfterToday(scheduleData[i][schDateColIndex])) {
+      continue;
+    }
+
     const hostId = scheduleData[i][schIdColIndex] ? scheduleData[i][schIdColIndex].toString().trim() : "";
     const currentChannel = scheduleData[i][schChannelColIndex] ? scheduleData[i][schChannelColIndex].toString().trim() : "";
     const channelCell = scheduleSheet.getRange(i + 1, schChannelColIndex + 1);
+    channelCell.clearDataValidations();
 
     if (!hostId || hostId.includes(',')) {
       channelCell.clearDataValidations();
@@ -362,9 +392,8 @@ function validateLiveSessionLookups(showAlert, targetRows) {
     }
   }
 
-  const targetRowSet = Array.isArray(targetRows) && targetRows.length > 0
-    ? new Set(targetRows)
-    : null;
+  const hasTargetRowFilter = Array.isArray(targetRows);
+  const targetRowSet = hasTargetRowFilter ? new Set(targetRows) : null;
 
   const numRows = scheduleData.length - 1;
   const hostIdRange = scheduleSheet.getRange(2, hostIdColIndex + 1, numRows, 1);
@@ -413,7 +442,7 @@ function validateLiveSessionLookups(showAlert, targetRows) {
 
   for (let i = 1; i < scheduleData.length; i++) {
     const sheetRow = i + 1;
-    if (targetRowSet && !targetRowSet.has(sheetRow)) continue;
+    if (hasTargetRowFilter && !targetRowSet.has(sheetRow)) continue;
 
     const rowIndex = i - 1;
     const hostId = scheduleData[i][hostIdColIndex] ? scheduleData[i][hostIdColIndex].toString().trim() : "";
