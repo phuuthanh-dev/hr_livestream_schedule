@@ -947,63 +947,176 @@ function compareScheduleShiftPairItems(left, right) {
   return (left && left.rowNumber ? left.rowNumber : 0) - (right && right.rowNumber ? right.rowNumber : 0);
 }
 
-function applyHomeSupportRuleToScheduleItems(items, portfolioMap) {
+function getScheduleItemSupportCandidateIds(item) {
+  if (!item) return [];
+
+  return normalizeScheduleCandidatePool(
+    (item.supportCandidateIds || []).concat(
+      isMeaningfulScheduleValue(item.supportId) ? [item.supportId] : []
+    )
+  );
+}
+
+function hasOverlappingScheduleCandidateIds(leftIds, rightIds) {
+  if (!leftIds || !rightIds || leftIds.length === 0 || rightIds.length === 0) {
+    return false;
+  }
+
+  const candidateMap = {};
+  leftIds.forEach(candidateId => {
+    if (!isMeaningfulScheduleValue(candidateId)) return;
+    candidateMap[candidateId.toString().trim()] = true;
+  });
+
+  return rightIds.some(candidateId =>
+    isMeaningfulScheduleValue(candidateId) &&
+    candidateMap[candidateId.toString().trim()]
+  );
+}
+
+function syncScheduleItemPayloadFields(item, fieldIndexes) {
+  if (!item) return item;
+
+  if (item.values) {
+    item.values[4] = item.hostId || "";
+    item.values[5] = item.hostName || "";
+    item.values[6] = item.formatValue || "";
+    item.values[7] = item.supportId || "";
+    item.values[8] = item.supportName || "";
+    if (!isMeaningfulScheduleValue(item.hostId)) {
+      item.values[9] = "";
+    }
+    item.values[11] = buildScheduleSessionId(item.values[2], item.values[3], item.hostId, item.supportId);
+  }
+
+  if (item.rawRow && fieldIndexes) {
+    if (fieldIndexes.hostId !== undefined) item.rawRow[fieldIndexes.hostId] = item.hostId || "";
+    if (fieldIndexes.hostName !== undefined) item.rawRow[fieldIndexes.hostName] = item.hostName || "";
+    if (fieldIndexes.format !== undefined) item.rawRow[fieldIndexes.format] = item.formatValue || "";
+    if (fieldIndexes.supportId !== undefined) item.rawRow[fieldIndexes.supportId] = item.supportId || "";
+    if (fieldIndexes.supportName !== undefined) item.rawRow[fieldIndexes.supportName] = item.supportName || "";
+    if (!isMeaningfulScheduleValue(item.hostId) && fieldIndexes.channel !== undefined) {
+      item.rawRow[fieldIndexes.channel] = "";
+    }
+    if (fieldIndexes.sessionId !== undefined) {
+      item.rawRow[fieldIndexes.sessionId] = buildScheduleSessionId(
+        item.dateValue || (fieldIndexes.date !== undefined ? item.rawRow[fieldIndexes.date] : ""),
+        item.slotValue || (fieldIndexes.time !== undefined ? item.rawRow[fieldIndexes.time] : ""),
+        item.hostId,
+        item.supportId
+      );
+    }
+  }
+
+  return item;
+}
+
+function buildHomeStudioSupportShadowItem(item, fieldIndexes) {
+  if (!item) return null;
+
+  const candidateIds = getScheduleItemSupportCandidateIds(item);
+  const supportId = isMeaningfulScheduleValue(item.supportId) ? item.supportId.toString().trim() : "";
+  if (!supportId && candidateIds.length === 0) {
+    return null;
+  }
+
+  const shadowItem = Object.assign({}, item, {
+    rowNumber: (Number(item.rowNumber) || 0) + 0.1,
+    hostId: "",
+    hostName: "",
+    formatValue: "Studio",
+    supportId,
+    supportName: supportId ? (item.supportName || "") : "",
+    supportCandidateIds: candidateIds,
+    homeStudioShadow: true
+  });
+
+  if (item.values) {
+    shadowItem.values = item.values.slice();
+  }
+
+  if (item.rawRow) {
+    shadowItem.rawRow = item.rawRow.slice();
+  }
+
+  return syncScheduleItemPayloadFields(shadowItem, fieldIndexes);
+}
+
+function applyHomeSupportRuleToScheduleItems(items, portfolioMap, options) {
+  const config = options || {};
+  const fieldIndexes = config.fieldIndexes || null;
   const slotMap = {};
   (items || []).forEach(item => {
-    const groupingKey = item && (item.supportShiftKey || item.slotKey);
+    const groupingKey = item && (item.slotKey || item.supportShiftKey);
     if (!item || !groupingKey) return;
     if (!slotMap[groupingKey]) slotMap[groupingKey] = [];
     slotMap[groupingKey].push(item);
   });
 
+  const pendingShadowItems = [];
+
   Object.keys(slotMap).forEach(slotKey => {
     const slotItems = slotMap[slotKey].slice().sort((a, b) => (a.rowNumber || 0) - (b.rowNumber || 0));
-    const freedSupportIds = [];
+    const existingSupportOnlyItems = slotItems.filter(item =>
+      !isMeaningfulScheduleValue(item.hostId) && !isHomeFormatValue(item.formatValue)
+    );
+    const claimedSupportOnlyIndexes = {};
 
     slotItems.forEach(item => {
       if (!isHomeFormatValue(item.formatValue)) return;
-      if (isMeaningfulScheduleValue(item.supportId)) {
-        freedSupportIds.push(item.supportId);
-      }
-      item.supportId = "";
-    });
 
-    if (freedSupportIds.length === 0) return;
+      const candidateIds = getScheduleItemSupportCandidateIds(item);
+      const currentSupportId = isMeaningfulScheduleValue(item.supportId) ? item.supportId.toString().trim() : "";
+      const matchedSupportOnlyIndex = existingSupportOnlyItems.findIndex((supportOnlyItem, index) => {
+        if (claimedSupportOnlyIndexes[index]) return false;
 
-    const targetGroupMap = {};
-    slotItems.forEach(item => {
-      if (
-        isHomeFormatValue(item.formatValue) ||
-        isMeaningfulScheduleValue(item.supportId) ||
-        !isMeaningfulScheduleValue(item.hostId)
-      ) {
-        return;
-      }
+        const supportOnlyCandidateIds = getScheduleItemSupportCandidateIds(supportOnlyItem);
+        if (currentSupportId && supportOnlyItem.supportId === currentSupportId) {
+          return true;
+        }
 
-      const targetKey = item.supportShiftKey
-        ? `${item.supportShiftKey}__${item.hostId}`
-        : `${slotKey}__${item.hostId}`;
+        if (hasOverlappingScheduleCandidateIds(candidateIds, supportOnlyCandidateIds)) {
+          return true;
+        }
 
-      if (!targetGroupMap[targetKey]) {
-        targetGroupMap[targetKey] = {
-          items: [],
-          candidate: buildHostConflictCandidate(item.hostId, item.hostName, portfolioMap, item.rowNumber)
-        };
-      }
-
-      targetGroupMap[targetKey].items.push(item);
-    });
-
-    const targetItems = Object.keys(targetGroupMap)
-      .map(key => targetGroupMap[key])
-      .sort((left, right) => compareHostPriorityCandidates(left.candidate, right.candidate));
-
-    for (let i = 0; i < targetItems.length && i < freedSupportIds.length; i++) {
-      targetItems[i].items.forEach(item => {
-        item.supportId = freedSupportIds[i];
-        item.supportName = "";
+        return Number.isFinite(item.pairIndex) &&
+          Number.isFinite(supportOnlyItem.pairIndex) &&
+          item.pairIndex === supportOnlyItem.pairIndex;
       });
-    }
+
+      if (matchedSupportOnlyIndex !== -1) {
+        const supportOnlyItem = existingSupportOnlyItems[matchedSupportOnlyIndex];
+        claimedSupportOnlyIndexes[matchedSupportOnlyIndex] = true;
+        supportOnlyItem.formatValue = "Studio";
+        supportOnlyItem.supportCandidateIds = normalizeScheduleCandidatePool(
+          (supportOnlyItem.supportCandidateIds || []).concat(candidateIds)
+        );
+        if (!isMeaningfulScheduleValue(supportOnlyItem.supportId) && currentSupportId) {
+          supportOnlyItem.supportId = currentSupportId;
+          supportOnlyItem.supportName = item.supportName || "";
+        }
+        syncScheduleItemPayloadFields(supportOnlyItem, fieldIndexes);
+      } else {
+        const shadowItem = buildHomeStudioSupportShadowItem(item, fieldIndexes);
+        if (shadowItem) {
+          pendingShadowItems.push(shadowItem);
+        }
+      }
+
+      item.supportId = "";
+      item.supportName = "";
+      syncScheduleItemPayloadFields(item, fieldIndexes);
+    });
+  });
+
+  if (pendingShadowItems.length > 0) {
+    Array.prototype.push.apply(items, pendingShadowItems);
+  }
+
+  items.sort((left, right) => {
+    const leftOrder = Number(left && left.rowNumber) || 0;
+    const rightOrder = Number(right && right.rowNumber) || 0;
+    return leftOrder - rightOrder;
   });
 
   return items;
@@ -1126,11 +1239,12 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
 
   Object.keys(shiftMap).forEach(shiftKey => {
     const group = shiftMap[shiftKey];
-    if (!group.hostItems.length || !group.supportOnlyItems.length) {
+    if (!group.supportOnlyItems.length) {
       return;
     }
 
     const assignedSupportMap = {};
+    const occupiedSupportBySlot = {};
     group.hostItems.forEach(item => {
       if (!isMeaningfulScheduleValue(item.supportId) || assignedSupportMap[item.supportId]) {
         return;
@@ -1141,11 +1255,8 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
         supportMap,
         item.rowNumber
       );
+      markOccupiedCandidate(occupiedSupportBySlot, item.slotKey, item.supportId);
     });
-
-    if (Object.keys(assignedSupportMap).length === 0) {
-      return;
-    }
 
     group.supportOnlyItems
       .slice()
@@ -1172,9 +1283,14 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
           return;
         }
 
-        const selection = candidatePool.length > 1
-          ? chooseSingleBestConflictCandidate(candidatePool, "score", "Support", { preferFirstOnTie: true })
-          : { selected: candidatePool[0] || null };
+        const availableCandidates = item.slotKey
+          ? candidatePool.filter(candidate => !isCandidateOccupied(occupiedSupportBySlot, item.slotKey, candidate.id))
+          : candidatePool;
+        const effectivePool = availableCandidates.length > 0 ? availableCandidates : candidatePool;
+
+        const selection = effectivePool.length > 1
+          ? chooseSingleBestConflictCandidate(effectivePool, "score", "Support", { preferFirstOnTie: true })
+          : { selected: effectivePool[0] || null };
         const selectedSupportId = selection.selected ? selection.selected.id : "";
 
         if (!selectedSupportId) {
@@ -1183,6 +1299,7 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
 
         item.supportId = selectedSupportId;
         item.supportName = getSupportDisplayNameById(selectedSupportId, supportMap);
+        markOccupiedCandidate(occupiedSupportBySlot, item.slotKey, selectedSupportId);
       });
   });
 
@@ -1252,6 +1369,7 @@ function getScheduleConflictIndexes(headerMap) {
     hostId: headerMap["Mã nhân sự"],
     hostName: headerMap["Tên Host"],
     format: headerMap["Hình thức"],
+    channel: headerMap["Live_Channel_Id"],
     supportId: headerMap["Mã Nhân sự Support live"],
     supportName: headerMap["Tên Support live"],
     sessionId: headerMap["Session_ID"],
@@ -1744,7 +1862,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     });
   }
 
-  applyHomeSupportRuleToScheduleItems(preparedItems, portfolioMap);
+  applyHomeSupportRuleToScheduleItems(preparedItems, portfolioMap, { fieldIndexes: idx });
   alignSupportAssignmentsWithinShift(preparedItems, supportMap);
   alignSupportOnlyRowsWithinShift(preparedItems, supportMap);
 
