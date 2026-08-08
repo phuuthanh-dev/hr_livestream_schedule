@@ -1,4 +1,4 @@
-import type { ConfirmRole, SchedulePayload } from "@/lib/types";
+import type { ConfirmRole, PeoplePayload, SchedulePayload, SchedulePerson } from "@/lib/types";
 
 type ScheduleRange = {
   from?: string;
@@ -9,6 +9,15 @@ type ConfirmScheduleInput = ScheduleRange & {
   sessionId: string;
   role: ConfirmRole;
   confirmed: boolean;
+  actorType: "admin" | "employee";
+  actorRole?: "host" | "support";
+  actorEmployeeId?: string;
+};
+
+type GoogleApiPayload = {
+  success: boolean;
+  error?: string;
+  message?: string;
 };
 
 function getGoogleScheduleConfig() {
@@ -22,12 +31,12 @@ function getGoogleScheduleConfig() {
   return { apiUrl, token };
 }
 
-async function parseScheduleResponse(response: Response) {
+async function parseGoogleResponse<T extends GoogleApiPayload>(response: Response) {
   const text = await response.text();
-  let payload: SchedulePayload;
+  let payload: T;
 
   try {
-    payload = JSON.parse(text) as SchedulePayload;
+    payload = JSON.parse(text) as T;
   } catch {
     const looksLikeHtml = text.trim().startsWith("<!doctype html") || text.includes("accounts.google.com");
     if (looksLikeHtml) {
@@ -46,6 +55,37 @@ async function parseScheduleResponse(response: Response) {
   return payload;
 }
 
+function buildPeopleFromSchedule(rows: SchedulePayload["rows"]): PeoplePayload {
+  const hosts = new Map<string, SchedulePerson>();
+  const supports = new Map<string, SchedulePerson>();
+  (rows || []).forEach((row) => {
+    if (row.hostId) {
+      hosts.set(row.hostId.toLowerCase(), {
+        id: row.hostId,
+        name: row.hostName || row.hostId,
+        role: "host"
+      });
+    }
+    if (row.supportId) {
+      supports.set(row.supportId.toLowerCase(), {
+        id: row.supportId,
+        name: row.supportName || row.supportId,
+        role: "support"
+      });
+    }
+  });
+  const byName = (left: SchedulePerson, right: SchedulePerson) => left.name.localeCompare(right.name, "vi");
+  return {
+    success: true,
+    source: "Live_Session_Master fallback",
+    fallback: true,
+    hosts: Array.from(hosts.values()).sort(byName),
+    supports: Array.from(supports.values()).sort(byName)
+  };
+}
+
+let peopleCache: { expiresAt: number; payload: PeoplePayload } | null = null;
+
 export async function fetchSchedule(range: ScheduleRange = {}) {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const url = new URL(apiUrl);
@@ -59,7 +99,25 @@ export async function fetchSchedule(range: ScheduleRange = {}) {
     cache: "no-store"
   });
 
-  return parseScheduleResponse(response);
+  return parseGoogleResponse<SchedulePayload>(response);
+}
+
+export async function fetchSchedulePeople() {
+  if (peopleCache && peopleCache.expiresAt > Date.now()) {
+    return peopleCache.payload;
+  }
+
+  const { apiUrl, token } = getGoogleScheduleConfig();
+  const url = new URL(apiUrl);
+  url.searchParams.set("action", "people");
+  url.searchParams.set("token", token);
+  const response = await fetch(url, { method: "GET", cache: "no-store" });
+  const payload = await parseGoogleResponse<PeoplePayload & SchedulePayload>(response);
+  const peoplePayload = payload.hosts && payload.supports
+    ? payload
+    : buildPeopleFromSchedule(payload.rows);
+  peopleCache = { expiresAt: Date.now() + 5 * 60 * 1000, payload: peoplePayload };
+  return peoplePayload;
 }
 
 export async function refreshSchedule(range: ScheduleRange = {}) {
@@ -78,7 +136,9 @@ export async function refreshSchedule(range: ScheduleRange = {}) {
     })
   });
 
-  return parseScheduleResponse(response);
+  const payload = await parseGoogleResponse<SchedulePayload>(response);
+  peopleCache = null;
+  return payload;
 }
 
 export async function confirmSchedule(input: ConfirmScheduleInput) {
@@ -95,10 +155,13 @@ export async function confirmSchedule(input: ConfirmScheduleInput) {
       sessionId: input.sessionId,
       role: input.role,
       confirmed: input.confirmed,
+      actorType: input.actorType,
+      actorRole: input.actorRole,
+      actorEmployeeId: input.actorEmployeeId,
       from: input.from,
       to: input.to
     })
   });
 
-  return parseScheduleResponse(response);
+  return parseGoogleResponse<SchedulePayload>(response);
 }

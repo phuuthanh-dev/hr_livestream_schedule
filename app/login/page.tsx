@@ -14,10 +14,9 @@ export default async function LoginPage() {
   return (
     <main className="loginShell">
       <section className="loginCard">
-        <p className="eyebrow">HR Streaming Ops</p>
-        <h1>Lịch live trong một tuần, rõ người rõ ca.</h1>
+        <p className="eyebrow">Live Streaming Schedule</p>
         <p className="loginIntro">
-          Đăng nhập để xem lịch từ Live_Session_Master, cập nhật dữ liệu mới và xác nhận host/support.
+          Nhân viên đăng nhập theo mã Host hoặc Support Live để xem và xác nhận đúng ca được phân công.
         </p>
         <LoginForm />
       </section>

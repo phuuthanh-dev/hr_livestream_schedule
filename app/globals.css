@@ -38,7 +38,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -138,7 +139,8 @@ a:hover {
   font-weight: 700;
 }
 
-.loginForm input {
+.loginForm input,
+.loginForm select {
   width: 100%;
   padding: 0.95rem 1rem;
   border: 1px solid var(--line);
@@ -148,18 +150,91 @@ a:hover {
   outline: none;
 }
 
-.loginForm input:focus {
+.loginForm select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #6d7379 50%),
+    linear-gradient(135deg, #6d7379 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 13px) calc(50% - 2px);
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+}
+
+.loginForm input:focus,
+.loginForm select:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 4px rgba(11, 87, 208, 0.11);
 }
 
-.loginForm button {
+.loginSubmit {
   padding: 1rem 1.15rem;
   border-radius: 999px;
   color: #fff;
   background: var(--blue);
   font-weight: 800;
   box-shadow: 0 12px 28px rgba(11, 87, 208, 0.22);
+}
+
+.loginTypeTabs {
+  display: grid;
+  padding: 4px;
+  border-radius: 14px;
+  background: #edf1f7;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.loginTypeTabs button {
+  min-height: 40px;
+  border-radius: 11px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.loginTypeTabs button.active {
+  color: var(--blue);
+  background: #fff;
+  box-shadow: 0 2px 9px rgba(60, 64, 67, 0.12);
+}
+
+.accountModeHint {
+  display: grid;
+  padding: 12px 14px;
+  border: 1px solid #c6dafc;
+  border-radius: 13px;
+  color: #174ea6;
+  background: #edf4ff;
+  gap: 3px;
+}
+
+.accountModeHint strong {
+  font-size: 0.76rem;
+}
+
+.accountModeHint span,
+.formStatus {
+  font-size: 0.66rem;
+  font-weight: 650;
+}
+
+.accountModeHint.newAccount {
+  color: #7a4d00;
+  border-color: #f5d98a;
+  background: #fff8df;
+}
+
+.accountModeHint.adminAccount {
+  color: #5f3b91;
+  border-color: #ddcafa;
+  background: #f7f0ff;
+}
+
+.formStatus {
+  margin: 0;
+  color: var(--muted);
 }
 
 .formError {
@@ -1189,6 +1264,17 @@ a:hover {
   color: #fff;
   border-color: var(--green);
   background: var(--green);
+}
+
+.confirmRestriction {
+  margin: 0;
+  padding: 12px 13px;
+  border-radius: 12px;
+  color: #5f6368;
+  background: #f1f3f4;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.55;
 }
 
 @keyframes spin {

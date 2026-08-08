@@ -1,4 +1,24 @@
 export type ConfirmRole = "host" | "support" | "both";
+export type EmployeeRole = "host" | "support";
+export type AccountType = "admin" | "employee";
+
+export type SchedulePerson = {
+  id: string;
+  name: string;
+  role: EmployeeRole;
+  level?: string;
+};
+
+export type PeoplePayload = {
+  success: boolean;
+  generatedAt?: string;
+  source?: string;
+  fallback?: boolean;
+  hosts?: SchedulePerson[];
+  supports?: SchedulePerson[];
+  error?: string;
+  message?: string;
+};
 
 export type ScheduleSession = {
   rowNumber: number;

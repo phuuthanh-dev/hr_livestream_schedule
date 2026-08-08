@@ -1,13 +1,20 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import type { AccountType, EmployeeRole } from "@/lib/types";
 
 const SESSION_COOKIE = "hr_schedule_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-type DashboardSession = {
+export type DashboardSession = {
   user: string;
+  displayName: string;
+  accountType: AccountType;
+  role?: EmployeeRole;
+  employeeId?: string;
   expiresAt: number;
 };
+
+export type DashboardSessionIdentity = Omit<DashboardSession, "expiresAt">;
 
 function getAuthSecret() {
   const secret = process.env.DASHBOARD_AUTH_SECRET;
@@ -31,20 +38,9 @@ function safeEqual(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-export function verifyDashboardLogin(username: string, password: string) {
-  const expectedUsername = process.env.DASHBOARD_USERNAME;
-  const expectedPassword = process.env.DASHBOARD_PASSWORD;
-
-  if (!expectedUsername || !expectedPassword) {
-    throw new Error("Missing DASHBOARD_USERNAME or DASHBOARD_PASSWORD.");
-  }
-
-  return safeEqual(username, expectedUsername) && safeEqual(password, expectedPassword);
-}
-
-export function createSessionToken(username: string) {
+export function createSessionToken(identity: DashboardSessionIdentity) {
   const payload: DashboardSession = {
-    user: username,
+    ...identity,
     expiresAt: Date.now() + SESSION_TTL_SECONDS * 1000
   };
   const encodedPayload = toBase64Url(JSON.stringify(payload));
@@ -61,7 +57,7 @@ export function verifySessionToken(token?: string) {
 
   try {
     const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as DashboardSession;
-    if (!payload.user || !payload.expiresAt || payload.expiresAt < Date.now()) {
+    if (!payload.user || !payload.displayName || !payload.accountType || !payload.expiresAt || payload.expiresAt < Date.now()) {
       return null;
     }
     return payload;
@@ -75,9 +71,9 @@ export async function getDashboardSession() {
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
 }
 
-export async function setDashboardSession(username: string) {
+export async function setDashboardSession(identity: DashboardSessionIdentity) {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, createSessionToken(username), {
+  cookieStore.set(SESSION_COOKIE, createSessionToken(identity), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

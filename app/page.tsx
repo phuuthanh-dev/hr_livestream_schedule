@@ -11,5 +11,12 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  return <ScheduleDashboard username={session.user} />;
+  return (
+    <ScheduleDashboard
+      username={session.displayName}
+      isAdmin={session.accountType === "admin"}
+      employeeRole={session.role}
+      employeeId={session.employeeId}
+    />
+  );
 }

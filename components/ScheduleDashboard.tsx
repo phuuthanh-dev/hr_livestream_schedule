@@ -5,6 +5,9 @@ import type { ConfirmRole, SchedulePayload, ScheduleSession, ScheduleSummary } f
 
 type ScheduleDashboardProps = {
   username: string;
+  isAdmin: boolean;
+  employeeRole?: "host" | "support";
+  employeeId?: string;
 };
 
 type FilterMode = "all" | "warnings" | "pending";
@@ -245,7 +248,7 @@ async function requestWeekSchedule(from: string, to: string) {
   return payload;
 }
 
-export default function ScheduleDashboard({ username }: ScheduleDashboardProps) {
+export default function ScheduleDashboard({ username, isAdmin, employeeRole, employeeId }: ScheduleDashboardProps) {
   const [weekStartKey, setWeekStartKey] = useState(getCurrentWeekStartKey);
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
   const [generatedAt, setGeneratedAt] = useState("");
@@ -271,6 +274,17 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
+  const normalizedEmployeeId = employeeId?.trim().toLowerCase() || "";
+  const canConfirmSelectedHost = Boolean(
+    selectedSession && (
+      isAdmin || (employeeRole === "host" && selectedSession.hostId.trim().toLowerCase() === normalizedEmployeeId)
+    )
+  );
+  const canConfirmSelectedSupport = Boolean(
+    selectedSession && (
+      isAdmin || (employeeRole === "support" && selectedSession.supportId.trim().toLowerCase() === normalizedEmployeeId)
+    )
+  );
   const miniMonth = buildMiniMonth(weekStartKey);
   const coverage = formatWeekRange(weekStartKey);
   const slotSet = new Set(DEFAULT_SLOTS);
@@ -336,7 +350,14 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
         throw new Error(payload.message || payload.error || "Không xác nhận được ca.");
       }
       applyPayload(payload);
-      setMessage(`${confirmed ? "Đã xác nhận" : "Đã huỷ xác nhận"} ${role} cho ${session.sessionId}.`);
+      const roleLabel = role === "host" ? "Host" : role === "support" ? "Support Live" : "Host và Support Live";
+      const personLabel = role === "host"
+        ? getPersonLabel(session.hostId, session.hostName, "Host")
+        : getPersonLabel(session.supportId, session.supportName, "Support Live");
+      setMessage(
+        `${confirmed ? "Đã xác nhận" : "Đã huỷ xác nhận"} ${roleLabel} cho ca ${session.slot} ngày ${session.dateLabel}` +
+        `${role === "both" ? "" : ` · ${personLabel}`}.`
+      );
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "Không xác nhận được ca.");
     } finally {
@@ -408,10 +429,12 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
         </div>
 
         <div className="headerActions">
-          <button className="syncButton" onClick={refreshFromSheet} disabled={refreshing} type="button">
-            <Icon name="refresh" />
-            <span>{refreshing ? "Đang cập nhật..." : "Cập nhật Sheet"}</span>
-          </button>
+          {isAdmin ? (
+            <button className="syncButton" onClick={refreshFromSheet} disabled={refreshing} type="button">
+              <Icon name="refresh" />
+              <span>{refreshing ? "Đang cập nhật..." : "Cập nhật Sheet"}</span>
+            </button>
+          ) : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
         </div>
@@ -583,7 +606,7 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
 
             <div className="confirmPanel">
               <div className="confirmPanelTitle"><strong>Xác nhận tham gia</strong><span>Cập nhật trực tiếp vào master</span></div>
-              {selectedSession.canConfirmHost ? (
+              {selectedSession.canConfirmHost && canConfirmSelectedHost ? (
                 <button
                   className={`confirmAction ${selectedSession.isHostConfirmed ? "confirmed" : ""}`}
                   disabled={busyConfirm === `${selectedSession.sessionId}:host`}
@@ -591,10 +614,10 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
                   type="button"
                 >
                   <span><Icon name="check" /></span>
-                  <div><strong>{selectedSession.isHostConfirmed ? "Host đã xác nhận" : "Xác nhận host"}</strong><small>{selectedSession.isHostConfirmed ? "Bấm để huỷ xác nhận" : getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
+                  <div><strong>{selectedSession.isHostConfirmed ? (isAdmin ? "Host đã xác nhận" : "Bạn đã xác nhận ca này") : (isAdmin ? "Xác nhận host" : "Xác nhận ca host của tôi")}</strong><small>{selectedSession.isHostConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
                 </button>
               ) : null}
-              {selectedSession.canConfirmSupport ? (
+              {selectedSession.canConfirmSupport && canConfirmSelectedSupport ? (
                 <button
                   className={`confirmAction ${selectedSession.isSupportConfirmed ? "confirmed" : ""}`}
                   disabled={busyConfirm === `${selectedSession.sessionId}:support`}
@@ -602,8 +625,11 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
                   type="button"
                 >
                   <span><Icon name="check" /></span>
-                  <div><strong>{selectedSession.isSupportConfirmed ? "Support đã xác nhận" : "Xác nhận support"}</strong><small>{selectedSession.isSupportConfirmed ? "Bấm để huỷ xác nhận" : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
+                  <div><strong>{selectedSession.isSupportConfirmed ? (isAdmin ? "Support đã xác nhận" : "Bạn đã xác nhận ca này") : (isAdmin ? "Xác nhận support" : "Xác nhận ca support của tôi")}</strong><small>{selectedSession.isSupportConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
                 </button>
+              ) : null}
+              {!isAdmin && !canConfirmSelectedHost && !canConfirmSelectedSupport ? (
+                <p className="confirmRestriction">Ca này không được phân công cho tài khoản của bạn. Bạn chỉ có thể xác nhận hoặc huỷ xác nhận đúng ca, đúng vai trò và đúng mã nhân viên của mình.</p>
               ) : null}
             </div>
           </aside>

@@ -9,6 +9,9 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
+  if (session.accountType !== "admin") {
+    return NextResponse.json({ success: false, message: "Chỉ admin được cập nhật lịch từ Google Sheet." }, { status: 403 });
+  }
 
   try {
     const body = (await request.json().catch(() => ({}))) as { from?: string; to?: string };
