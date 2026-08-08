@@ -183,6 +183,23 @@ function resolveHostCompensation(grade, eligibleGMV, rateCard) {
     commRate: shouldUseTierRate ? tierRate : (hostConfig.commRate || 0)
   };
 }
+
+function extractUnmatchedMinutesFromPayrollNote(noteValue) {
+  const raw = noteValue ? noteValue.toString() : "";
+  if (!raw) return 0;
+
+  const match = raw.match(/unmatched\s+(\d+(?:\.\d+)?)m/i);
+  return match ? (parseFloat(match[1]) || 0) : 0;
+}
+
+function buildPayrollAggregationSessionId(liveId, sessionIds, roleTag) {
+  const uniqueSessionIds = (sessionIds || []).filter(Boolean);
+  if (uniqueSessionIds.length === 1) return uniqueSessionIds[0];
+
+  const safeLiveId = liveId ? liveId.toString().trim() : "";
+  const shortLiveId = safeLiveId ? safeLiveId.slice(-8) : "UNKNOWN";
+  return `LIVE-${shortLiveId}-${roleTag}`;
+}
 // ===========================================================================
 // HÀM TÍNH LƯƠNG HOÀN CHỈNH: ÉP CỘT TRỐNG VỀ 0.00% CHUẨN XÁC
 // ===========================================================================
@@ -279,6 +296,8 @@ function runFullPayrollEngine() {
   const tkHeaders = tkData[0].map(h => h ? h.toString().trim().toLowerCase() : "");
 
   let sessIdx   = tkHeaders.indexOf("session_id");
+  let liveIdIdx = tkHeaders.indexOf("tiktok_live_id");
+  let noteIdx   = tkHeaders.indexOf("note");
   let startIdx  = tkHeaders.indexOf("start_time");
   let endIdx    = tkHeaders.indexOf("end_time");
   let grossIdx  = tkHeaders.indexOf("gross_gmv");
@@ -287,6 +306,8 @@ function runFullPayrollEngine() {
   let suppIdx   = tkHeaders.indexOf("support_id");
 
   if (sessIdx === -1) sessIdx = 0;
+  if (liveIdIdx === -1) liveIdIdx = 1;
+  if (noteIdx === -1) noteIdx = 9;
   if (startIdx === -1) startIdx = 3;
   if (endIdx === -1) endIdx = 4;
   if (retIdx === -1) retIdx = 5;
@@ -295,9 +316,43 @@ function runFullPayrollEngine() {
   if (suppIdx === -1) suppIdx = 11;
 
   let payrollRows = [];
+  const hostAggregateMap = {};
+  const supportAggregateMap = {};
+  const hostLiveMetaMap = {};
+  const supportLiveMetaMap = {};
+
+  function touchLiveMeta(metaMap, liveKey, staffId, unmatchedMinutes) {
+    if (!metaMap[liveKey]) {
+      metaMap[liveKey] = {
+        staffFlags: {},
+        unmatchedMinutes: 0
+      };
+    }
+
+    if (staffId) metaMap[liveKey].staffFlags[staffId] = true;
+    metaMap[liveKey].unmatchedMinutes = Math.max(metaMap[liveKey].unmatchedMinutes, unmatchedMinutes || 0);
+  }
+
+  function touchAggregate(map, aggregateKey, seed) {
+    if (!map[aggregateKey]) {
+      map[aggregateKey] = {
+        liveId: seed.liveId,
+        role: seed.role,
+        staffId: seed.staffId,
+        dateStr: seed.dateStr,
+        totalHoursRaw: 0,
+        totalEligibleGMV: 0,
+        sessionFlags: {}
+      };
+    }
+
+    return map[aggregateKey];
+  }
 
   for (let i = 1; i < tkData.length; i++) {
     let sessId     = tkData[i][sessIdx] ? tkData[i][sessIdx].toString().trim() : "";
+    let liveId     = tkData[i][liveIdIdx] ? tkData[i][liveIdIdx].toString().trim() : "";
+    let noteVal    = tkData[i][noteIdx];
     let rawHostIds = tkData[i][hostIdx] ? tkData[i][hostIdx].toString().trim() : "";
     let rawSuppIds = tkData[i][suppIdx] ? tkData[i][suppIdx].toString().trim() : "";
 
@@ -308,13 +363,15 @@ function runFullPayrollEngine() {
     let startTimeVal = tkData[i][startIdx];
     let endTimeVal   = tkData[i][endIdx];
     let dateStr = "";
-    let hoursWorked = 2.0;
+    let hoursWorkedRaw = 2.0;
 
     if (startTimeVal instanceof Date) {
       dateStr = Utilities.formatDate(startTimeVal, ss.getSpreadsheetTimeZone(), "dd/MM/yyyy");
       if (endTimeVal instanceof Date) {
         let diffMs = endTimeVal.getTime() - startTimeVal.getTime();
-        hoursWorked = Math.max(0.5, Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10);
+        if (diffMs > 0) {
+          hoursWorkedRaw = diffMs / (1000 * 60 * 60);
+        }
       }
     } else if (startTimeVal) {
       dateStr = startTimeVal.toString().split(" ")[0];
@@ -323,66 +380,115 @@ function runFullPayrollEngine() {
     let grossGMV = parseCurrencyNumber(tkData[i][grossIdx]);
     let returnedGMV = parseCurrencyNumber(tkData[i][retIdx]);
     let eligibleGMV = Math.max(0, grossGMV - returnedGMV);
+    let unmatchedMinutes = extractUnmatchedMinutesFromPayrollNote(noteVal);
 
     let hostIds = (rawHostIds && !rawHostIds.toLowerCase().includes("trống")) ? rawHostIds.split(',').map(s => s.trim()) : [];
     let suppIds = (rawSuppIds && !rawSuppIds.toLowerCase().includes("trống") && !rawSuppIds.toLowerCase().includes("no_support")) ? rawSuppIds.split(',').map(s => s.trim()) : [];
 
+    const aggregationLiveKey = liveId || (sessId ? `SESSION-${sessId}` : `ROW-${i}`);
     let gmvPerHost = hostIds.length > 0 ? eligibleGMV / hostIds.length : eligibleGMV;
 
-    // A. TÍNH LƯƠNG HOST
     for (let hostId of hostIds) {
       if (!hostId) continue;
 
-      let fullName = hostNameMap[hostId] || hostId;
-      let grade = hostGradeMap[hostId] || hostPfGradeMap[hostId] || "Thử việc";
-      const hostComp = resolveHostCompensation(grade, gmvPerHost, rateCard);
-      let hourlyRate = hostComp.hourlyRate;
-      let commRate   = hostComp.commRate;
+      touchLiveMeta(hostLiveMetaMap, aggregationLiveKey, hostId, unmatchedMinutes);
+      const aggregateKey = `${aggregationLiveKey}__HOST__${hostId}`;
+      const aggregate = touchAggregate(hostAggregateMap, aggregateKey, {
+        liveId: aggregationLiveKey,
+        role: "HOST",
+        staffId: hostId,
+        dateStr
+      });
 
-      let basePay    = hoursWorked * hourlyRate;
-      let commPay    = gmvPerHost * commRate;
-      let bonusPay   = 0;
-      let totalPayout = basePay + commPay;
-
-      let cleanSessId = sessId ? sessId : `SS-${i}-${hostId}`;
-
-      payrollRows.push([
-        cleanSessId, dateStr, hostId, fullName, "Host (Chính)", 
-        grade, hoursWorked, hourlyRate, basePay, 
-        gmvPerHost, commRate, commPay, 
-        bonusPay, totalPayout
-      ]);
+      aggregate.totalHoursRaw += hoursWorkedRaw;
+      aggregate.totalEligibleGMV += gmvPerHost;
+      if (sessId) aggregate.sessionFlags[sessId] = true;
     }
 
-    // B. TÍNH LƯƠNG SUPPORT
     for (let sId of suppIds) {
       if (!sId) continue;
 
-      let suppName  = suppNameMap[sId] || hostNameMap[sId] || sId;
-      let suppGrade = suppLevelMap[sId] || "Cấp 2";
+      touchLiveMeta(supportLiveMetaMap, aggregationLiveKey, sId, unmatchedMinutes);
+      const aggregateKey = `${aggregationLiveKey}__SUPPORT__${sId}`;
+      const aggregate = touchAggregate(supportAggregateMap, aggregateKey, {
+        liveId: aggregationLiveKey,
+        role: "SUPPORT",
+        staffId: sId,
+        dateStr
+      });
 
-      let hourlyRate = 0;
-      let commRate   = 0;
-
-      if (rateCard.SUPPORT[suppGrade]) {
-        hourlyRate = rateCard.SUPPORT[suppGrade].hourlyRate;
-        commRate   = rateCard.SUPPORT[suppGrade].commRate;
-      }
-
-      let basePay    = hoursWorked * hourlyRate;
-      let commPay    = eligibleGMV * commRate;
-      let totalPayout = basePay + commPay;
-
-      let cleanSessId = sessId ? sessId : `SS-${i}-${sId}`;
-
-      payrollRows.push([
-        cleanSessId, dateStr, sId, suppName, "Support", 
-        suppGrade, hoursWorked, hourlyRate, basePay, 
-        eligibleGMV, commRate, commPay, 
-        0, totalPayout
-      ]);
+      aggregate.totalHoursRaw += hoursWorkedRaw;
+      aggregate.totalEligibleGMV += eligibleGMV;
+      if (sessId) aggregate.sessionFlags[sessId] = true;
     }
   }
+
+  function buildRoundedHours(totalHoursRaw, extraMinutes) {
+    const totalHours = totalHoursRaw + ((extraMinutes || 0) / 60);
+    if (totalHours <= 0) return 0;
+    return Math.max(0.5, Math.round(totalHours * 10) / 10);
+  }
+
+  Object.keys(hostAggregateMap).forEach(key => {
+    const aggregate = hostAggregateMap[key];
+    const liveMeta = hostLiveMetaMap[aggregate.liveId];
+    const uniqueHostIds = liveMeta ? Object.keys(liveMeta.staffFlags) : [];
+    const extraMinutes = (liveMeta && uniqueHostIds.length === 1 && uniqueHostIds[0] === aggregate.staffId)
+      ? (liveMeta.unmatchedMinutes || 0)
+      : 0;
+    const hoursWorked = buildRoundedHours(aggregate.totalHoursRaw, extraMinutes);
+
+    let fullName = hostNameMap[aggregate.staffId] || aggregate.staffId;
+    let grade = hostGradeMap[aggregate.staffId] || hostPfGradeMap[aggregate.staffId] || "Thử việc";
+    const hostComp = resolveHostCompensation(grade, aggregate.totalEligibleGMV, rateCard);
+    let hourlyRate = hostComp.hourlyRate;
+    let commRate   = hostComp.commRate;
+
+    let basePay    = hoursWorked * hourlyRate;
+    let commPay    = aggregate.totalEligibleGMV * commRate;
+    let bonusPay   = 0;
+    let totalPayout = basePay + commPay;
+    let cleanSessId = buildPayrollAggregationSessionId(aggregate.liveId, Object.keys(aggregate.sessionFlags), "HOST");
+
+    payrollRows.push([
+      cleanSessId, aggregate.dateStr, aggregate.staffId, fullName, "Host (Chính)",
+      grade, hoursWorked, hourlyRate, basePay,
+      aggregate.totalEligibleGMV, commRate, commPay,
+      bonusPay, totalPayout
+    ]);
+  });
+
+  Object.keys(supportAggregateMap).forEach(key => {
+    const aggregate = supportAggregateMap[key];
+    const liveMeta = supportLiveMetaMap[aggregate.liveId];
+    const uniqueSupportIds = liveMeta ? Object.keys(liveMeta.staffFlags) : [];
+    const extraMinutes = (liveMeta && uniqueSupportIds.length === 1 && uniqueSupportIds[0] === aggregate.staffId)
+      ? (liveMeta.unmatchedMinutes || 0)
+      : 0;
+    const hoursWorked = buildRoundedHours(aggregate.totalHoursRaw, extraMinutes);
+
+    let suppName  = suppNameMap[aggregate.staffId] || hostNameMap[aggregate.staffId] || aggregate.staffId;
+    let suppGrade = suppLevelMap[aggregate.staffId] || "Cấp 2";
+    let hourlyRate = 0;
+    let commRate   = 0;
+
+    if (rateCard.SUPPORT[suppGrade]) {
+      hourlyRate = rateCard.SUPPORT[suppGrade].hourlyRate;
+      commRate   = rateCard.SUPPORT[suppGrade].commRate;
+    }
+
+    let basePay    = hoursWorked * hourlyRate;
+    let commPay    = aggregate.totalEligibleGMV * commRate;
+    let totalPayout = basePay + commPay;
+    let cleanSessId = buildPayrollAggregationSessionId(aggregate.liveId, Object.keys(aggregate.sessionFlags), "SUPPORT");
+
+    payrollRows.push([
+      cleanSessId, aggregate.dateStr, aggregate.staffId, suppName, "Support",
+      suppGrade, hoursWorked, hourlyRate, basePay,
+      aggregate.totalEligibleGMV, commRate, commPay,
+      0, totalPayout
+    ]);
+  });
 
   // 4. GHI RA PAYROLL_SHEET
   const headers = [

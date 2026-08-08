@@ -115,6 +115,139 @@ function getAppDateParts(value) {
   };
 }
 
+function buildDatePartsFromDate_(date, timezone) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return null;
+
+  return {
+    dateStr: Utilities.formatDate(date, timezone, 'dd/MM/yyyy'),
+    dateKey: Utilities.formatDate(date, timezone, 'yyyy-MM-dd'),
+    minutes: parseInt(Utilities.formatDate(date, timezone, 'H'), 10) * 60 +
+             parseInt(Utilities.formatDate(date, timezone, 'm'), 10)
+  };
+}
+
+function parseReportPeriodFromFileName_(fileName) {
+  const raw = fileName ? fileName.toString().trim() : '';
+  if (!raw) return null;
+
+  const match = raw.match(/(\d{4})(\d{2})(\d{2})-(\d{4})(\d{2})(\d{2})/);
+  if (!match) return null;
+
+  const startDate = buildValidatedDate(
+    parseInt(match[1], 10),
+    parseInt(match[2], 10),
+    parseInt(match[3], 10),
+    0,
+    0
+  );
+  const endDate = buildValidatedDate(
+    parseInt(match[4], 10),
+    parseInt(match[5], 10),
+    parseInt(match[6], 10),
+    23,
+    59
+  );
+
+  if (!startDate || !endDate) return null;
+
+  return {
+    startKey: Utilities.formatDate(startDate, getAppTimeZone(), 'yyyy-MM-dd'),
+    endKey: Utilities.formatDate(endDate, getAppTimeZone(), 'yyyy-MM-dd')
+  };
+}
+
+function isDateWithinReportPeriod_(date, reportPeriod) {
+  if (!(date instanceof Date) || isNaN(date.getTime()) || !reportPeriod) return false;
+
+  const dateKey = Utilities.formatDate(date, getAppTimeZone(), 'yyyy-MM-dd');
+  return dateKey >= reportPeriod.startKey && dateKey <= reportPeriod.endKey;
+}
+
+function findHeaderIndexByCandidates_(headers, candidates) {
+  if (!headers || !headers.length || !candidates || !candidates.length) return -1;
+
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i];
+    if (!header) continue;
+
+    for (let j = 0; j < candidates.length; j++) {
+      if (header.includes(candidates[j])) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function parseReportDateTimeValue_(value, reportPeriod) {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return new Date(value.getTime());
+  }
+
+  const raw = value.toString().trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\u200b/g, '').replace(/\./g, '/').replace(/\s+/g, ' ');
+
+  let match = normalized.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})(?:[T\s]+(\d{1,2})(?::(\d{2}))?)?/);
+  if (match) {
+    return buildValidatedDate(
+      parseInt(match[1], 10),
+      parseInt(match[2], 10),
+      parseInt(match[3], 10),
+      parseInt(match[4] || '0', 10),
+      parseInt(match[5] || '0', 10)
+    );
+  }
+
+  match = normalized.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[T\s]+(\d{1,2})(?::(\d{2}))?)?/);
+  if (match) {
+    const first = parseInt(match[1], 10);
+    const second = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    const hour = parseInt(match[4] || '0', 10);
+    const minute = parseInt(match[5] || '0', 10);
+    const candidates = [];
+
+    if (first > 12 && second <= 12) {
+      candidates.push({ month: second, day: first });
+    } else if (second > 12 && first <= 12) {
+      candidates.push({ month: first, day: second });
+    } else {
+      // TikTok report usually exports month/day text. Keep report-period validation as a guardrail.
+      candidates.push({ month: first, day: second });
+      if (first !== second) {
+        candidates.push({ month: second, day: first });
+      }
+    }
+
+    const parsedCandidates = candidates
+      .map(candidate => buildValidatedDate(year, candidate.month, candidate.day, hour, minute))
+      .filter(Boolean);
+
+    if (!parsedCandidates.length) return null;
+
+    if (reportPeriod) {
+      const inPeriodCandidates = parsedCandidates.filter(candidate => isDateWithinReportPeriod_(candidate, reportPeriod));
+      if (inPeriodCandidates.length) {
+        return inPeriodCandidates[0];
+      }
+    }
+
+    return parsedCandidates[0];
+  }
+
+  const directDate = new Date(raw);
+  if (!isNaN(directDate.getTime())) {
+    return directDate;
+  }
+
+  return null;
+}
+
 function getDefaultScheduleLocation(allowedLocation, currentFormat) {
   const safeAllowed = allowedLocation ? allowedLocation.toString().trim() : '';
   if (!safeAllowed) return '';
@@ -178,9 +311,9 @@ function importTikTokSalesData() {
     time: 3,
     host: 4,
     support: 7,
-    channel: 8,
-    status: 10,
-    sessionId: 13,
+    channel: 9,
+    status: 12,
+    sessionId: 11,
     conflictRowStatus: -1
   };
   const scheduleSheet = masterSs.getSheetByName('Live_Session_Master');
@@ -192,14 +325,35 @@ function importTikTokSalesData() {
 
   if (scheduleData.length > 0) {
     const scheduleHeaders = scheduleData[0].map(h => normalizeText(h));
-    const detectedDateIdx = scheduleHeaders.findIndex(h => h.includes('ngày'));
-    const detectedTimeIdx = scheduleHeaders.findIndex(h => h.includes('khung giờ') || h.includes('slot'));
-    const detectedHostIdx = scheduleHeaders.findIndex(h => h.includes('mã') && !h.includes('support'));
-    const detectedSupportIdx = scheduleHeaders.findIndex(h => h.includes('support'));
-    const detectedChannelIdx = scheduleHeaders.findIndex(h => h.includes('kênh') || h.includes('tài khoản'));
-    const detectedStatusIdx = scheduleHeaders.findIndex(h => h.includes('trạng thái') || h.includes('status'));
-    const detectedSessionIdx = scheduleHeaders.findIndex(h => h.includes('session_id'));
-    const detectedConflictRowStatusIdx = scheduleHeaders.findIndex(h => h.includes('conflict_row_status'));
+    const detectedDateIdx = findHeaderIndexByCandidates_(scheduleHeaders, ['ngày', 'ngay', 'date']);
+    const detectedTimeIdx = findHeaderIndexByCandidates_(scheduleHeaders, ['khung giờ', 'khung gio', 'slot', 'time']);
+    const detectedHostIdx = scheduleHeaders.findIndex(h =>
+      h && !h.includes('support') && (h.includes('mã nhân sự') || h.includes('ma nhan su') || h === 'mã' || h === 'ma')
+    );
+    const detectedSupportIdx = scheduleHeaders.findIndex(h =>
+      h && h.includes('support') && (h.includes('mã') || h.includes('ma') || h.includes('id'))
+    );
+    const detectedChannelIdx = findHeaderIndexByCandidates_(scheduleHeaders, [
+      'live_channel_id',
+      'live channel id',
+      'channel_id',
+      'channel',
+      'kênh',
+      'kenh',
+      'tài khoản',
+      'tai khoan'
+    ]);
+    const detectedStatusIdx = findHeaderIndexByCandidates_(scheduleHeaders, [
+      'trạng thái',
+      'trang thai',
+      'status',
+      'host_live_confirm',
+      'support_live_confirm',
+      'xác nhận',
+      'xac nhan'
+    ]);
+    const detectedSessionIdx = findHeaderIndexByCandidates_(scheduleHeaders, ['session_id', 'session id']);
+    const detectedConflictRowStatusIdx = findHeaderIndexByCandidates_(scheduleHeaders, ['conflict_row_status', 'conflict row status']);
 
     if (detectedDateIdx !== -1) scheduleIndexes.date = detectedDateIdx;
     if (detectedTimeIdx !== -1) scheduleIndexes.time = detectedTimeIdx;
@@ -213,6 +367,24 @@ function importTikTokSalesData() {
 
   function toDateParts(value) {
     return getAppDateParts(value);
+  }
+
+  function toDatePartsFromDate(date) {
+    return buildDatePartsFromDate_(date, scriptTz);
+  }
+
+  function getDateOnlyDifferenceInDays(leftDate, rightDate) {
+    if (!(leftDate instanceof Date) || isNaN(leftDate.getTime()) || !(rightDate instanceof Date) || isNaN(rightDate.getTime())) {
+      return 0;
+    }
+
+    const leftDay = new Date(leftDate.getFullYear(), leftDate.getMonth(), leftDate.getDate());
+    const rightDay = new Date(rightDate.getFullYear(), rightDate.getMonth(), rightDate.getDate());
+    return Math.round((leftDay.getTime() - rightDay.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  function getTimeOverlapMinutes(rangeStart, rangeEnd, slotStart, slotEnd) {
+    return Math.max(0, Math.min(rangeEnd, slotEnd) - Math.max(rangeStart, slotStart));
   }
 
   function parseScheduleSlot(slotValue) {
@@ -304,10 +476,13 @@ function importTikTokSalesData() {
 
   function chooseBestScheduleMatch(matches) {
     if (!matches.length) {
-      return { sessionId: "", hostId: "Unknown", supportId: "No_Support" };
+      return { sessionId: "", hostId: "Unknown", supportId: "No_Support", mappingNote: "No schedule match" };
     }
 
     matches.sort((a, b) => {
+      const overlapDiff = b.overlapMinutes - a.overlapMinutes;
+      if (overlapDiff !== 0) return overlapDiff;
+
       const conflictDiff = getConflictRowPriority(b.conflictRowStatus) - getConflictRowPriority(a.conflictRowStatus);
       if (conflictDiff !== 0) return conflictDiff;
 
@@ -317,25 +492,50 @@ function importTikTokSalesData() {
       const supportDiff = Number(isFilledSupport(b.supportId)) - Number(isFilledSupport(a.supportId));
       if (supportDiff !== 0) return supportDiff;
 
-      return 0;
+      return a.slotStartMinutes - b.slotStartMinutes;
     });
 
     const best = matches[0];
+    const candidateSessions = [...new Set(matches.map(match => match.sessionId || match.slotLabel).filter(Boolean))];
+    let mappingNote = '';
+
+    if (matches.length > 1) {
+      mappingNote = `Multi-slot overlap: picked ${best.sessionId || best.slotLabel} (${best.overlapMinutes}m), candidates ${candidateSessions.join(' | ')}`;
+    }
+
     return {
       sessionId: best.sessionId || "",
       hostId: best.hostId || "Unknown",
-      supportId: best.supportId || "No_Support"
+      supportId: best.supportId || "No_Support",
+      mappingNote
     };
   }
 
-  function findHostAndSupport(liveDateObj, accountId) {
-    if (!liveDateObj || scheduleData.length < 2) {
-      return { sessionId: "", hostId: "Unknown", supportId: "Unknown" };
+  function findHostAndSupport(liveStartValue, liveEndValue, accountId) {
+    if (!liveStartValue || scheduleData.length < 2) {
+      return { sessionId: "", hostId: "Unknown", supportId: "No_Support", mappingNote: "Missing start time" };
     }
 
-    const liveParts = toDateParts(liveDateObj);
-    if (!liveParts) return { sessionId: "", hostId: "Unknown", supportId: "Unknown" };
+    const liveStartDate = parseFlexibleDateValue(liveStartValue);
+    if (!liveStartDate) {
+      return { sessionId: "", hostId: "Unknown", supportId: "No_Support", mappingNote: "Invalid start time" };
+    }
+
+    let liveEndDate = parseFlexibleDateValue(liveEndValue);
+    if (!liveEndDate || liveEndDate.getTime() <= liveStartDate.getTime()) {
+      liveEndDate = new Date(liveStartDate.getTime() + 2 * 60 * 60 * 1000);
+    }
+
+    const liveStartParts = toDatePartsFromDate(liveStartDate);
+    const liveEndParts = toDatePartsFromDate(liveEndDate);
+    if (!liveStartParts || !liveEndParts) {
+      return { sessionId: "", hostId: "Unknown", supportId: "No_Support", mappingNote: "Unable to build live window" };
+    }
+
     const normalizedAccountId = normalizeChannelKey(accountId);
+    const liveDayOffset = getDateOnlyDifferenceInDays(liveEndDate, liveStartDate);
+    const liveStartMinutes = liveStartParts.minutes;
+    const liveEndMinutes = liveEndParts.minutes + (liveDayOffset > 0 ? liveDayOffset * 24 * 60 : (liveEndParts.minutes <= liveStartParts.minutes ? 24 * 60 : 0));
 
     const matchedRows = [];
 
@@ -351,23 +551,25 @@ function importTikTokSalesData() {
       const schedDateParts = toDateParts(schedDate);
       const schedSlot = parseScheduleSlot(schedTime);
       if (!schedDateParts || !schedSlot) continue;
+      if (schedDateParts.dateStr !== liveStartParts.dateStr) continue;
 
-      let liveMinutes = liveParts.minutes;
-      if (schedSlot.endMinutes > 24 * 60 && liveMinutes < schedSlot.startMinutes) {
-        liveMinutes += 24 * 60;
-      }
+      const overlapMinutes = getTimeOverlapMinutes(
+        liveStartMinutes,
+        liveEndMinutes,
+        schedSlot.startMinutes,
+        schedSlot.endMinutes
+      );
 
-      if (
-        schedDateParts.dateStr === liveParts.dateStr &&
-        liveMinutes >= schedSlot.startMinutes &&
-        liveMinutes <= schedSlot.endMinutes
-      ) {
+      if (overlapMinutes > 0) {
         matchedRows.push({
           sessionId: row[scheduleIndexes.sessionId] || "",
           hostId: row[scheduleIndexes.host] || "No_Host",
           supportId: row[scheduleIndexes.support] || "No_Support",
           status: row[scheduleIndexes.status] || "",
-          conflictRowStatus: scheduleIndexes.conflictRowStatus !== -1 ? (row[scheduleIndexes.conflictRowStatus] || "") : ""
+          conflictRowStatus: scheduleIndexes.conflictRowStatus !== -1 ? (row[scheduleIndexes.conflictRowStatus] || "") : "",
+          overlapMinutes,
+          slotStartMinutes: schedSlot.startMinutes,
+          slotLabel: schedTime ? schedTime.toString().trim() : ""
         });
       }
     }
@@ -387,6 +589,7 @@ function importTikTokSalesData() {
 
   while (files.hasNext()) {
     const file = files.next();
+    const reportPeriod = parseReportPeriodFromFileName_(file.getName());
     
     if (file.getName().includes('.EMPTY.txt')) {
        if (processedFolder) file.moveTo(processedFolder);
@@ -410,14 +613,19 @@ function importTikTokSalesData() {
           const cleanNumber = (val) => parseFloat((val||"").toString().replace(/,/g, '').trim()) || 0;
 
           const liveTitle = row[0];
-          const liveStart = row[2];        
-          const endTime = row[3];
+          const parsedLiveStart = parseReportDateTimeValue_(row[2], reportPeriod);
+          const parsedEndTime = parseReportDateTimeValue_(row[3], reportPeriod);
+          const liveStart = parsedLiveStart || row[2];
+          const endTime = parsedEndTime || row[3];
           const creatorName = row[4]; 
           
-          const matchingStaff = findHostAndSupport(liveStart, creatorName);
+          const matchingStaff = findHostAndSupport(liveStart, endTime, creatorName);
           const mappedSessionId = matchingStaff.sessionId;
           const hostID = matchingStaff.hostId;
           const supportID = matchingStaff.supportId;
+          const mappingNote = matchingStaff.mappingNote
+            ? `Auto Mapped | ${matchingStaff.mappingNote}`
+            : "Auto Mapped";
           
           const shortLiveId = liveID.toString().slice(-8); 
           const sessionID = mappedSessionId || `SS-${shortLiveId}-${hostID}`;
@@ -454,7 +662,7 @@ function importTikTokSalesData() {
             grossOrders,      // G: Gross_Orders
             grossGMV,         // H: Gross_GMV
             file.getName(),   // I: Source_Period 
-            "Auto Mapped",    // J: Note
+            mappingNote,      // J: Note
             hostID,           // K: Host_ID
             supportID,        // L: Support_ID
             liveTitle,        // M: Live_Title
@@ -480,6 +688,7 @@ function importTikTokSalesData() {
         if (rowsToImport.length > 0) {
           const lastRow = Math.max(targetSheet.getLastRow(), 1);
           targetSheet.getRange(lastRow + 1, 1, rowsToImport.length, rowsToImport[0].length).setValues(rowsToImport);
+          targetSheet.getRange(2, 4, targetSheet.getLastRow() - 1, 2).setNumberFormat("dd/MM/yyyy HH:mm");
           importedRows += rowsToImport.length;
         }
       }
@@ -517,6 +726,9 @@ function setupHeaders() {
   headerRange.setFontWeight("bold");
   headerRange.setBackground("#f3f3f3");
   sheet.setFrozenRows(1);
+  if (sheet.getMaxRows() > 1) {
+    sheet.getRange(2, 4, sheet.getMaxRows() - 1, 2).setNumberFormat("dd/MM/yyyy HH:mm");
+  }
   sheet.autoResizeColumns(1, headers.length);
   
   Logger.log("Đã cập nhật lại toàn bộ tiêu đề.");
