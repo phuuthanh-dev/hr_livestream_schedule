@@ -8,8 +8,70 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "warnings" | "pending";
+type IconName = "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "warning";
 
-const DAY_NAMES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"];
+const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
+const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const DEFAULT_SLOTS = [
+  "00:00 - 02:00",
+  "06:00 - 08:00",
+  "08:00 - 10:00",
+  "10:00 - 12:00",
+  "12:00 - 14:00",
+  "14:00 - 16:00",
+  "16:00 - 18:00",
+  "18:00 - 20:00",
+  "20:00 - 22:00",
+  "22:00 - 00:00"
+];
+
+let initialScheduleRequest: Promise<SchedulePayload> | null = null;
+
+function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true
+  };
+
+  if (name === "calendar") {
+    return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></svg>;
+  }
+  if (name === "check") {
+    return <svg {...common}><path d="m5 12 4 4L19 6" /></svg>;
+  }
+  if (name === "chevronLeft") {
+    return <svg {...common}><path d="m15 18-6-6 6-6" /></svg>;
+  }
+  if (name === "chevronRight") {
+    return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>;
+  }
+  if (name === "close") {
+    return <svg {...common}><path d="M18 6 6 18M6 6l12 12" /></svg>;
+  }
+  if (name === "logout") {
+    return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
+  }
+  if (name === "refresh") {
+    return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
+  }
+  if (name === "search") {
+    return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
+  }
+  if (name === "sheet") {
+    return <svg {...common}><path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" /><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" /></svg>;
+  }
+  if (name === "warning") {
+    return <svg {...common}><path d="M10.3 3.7 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.7a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg>;
+  }
+  return null;
+}
 
 function parseDateKey(dateKey: string) {
   const [year, month, day] = dateKey.split("-").map(Number);
@@ -29,20 +91,39 @@ function addDays(dateKey: string, days: number) {
   return toDateKey(date);
 }
 
+function getWeekStartKey(date = new Date()) {
+  const weekDate = new Date(date);
+  weekDate.setHours(12, 0, 0, 0);
+  const dayOffset = (weekDate.getDay() + 6) % 7;
+  weekDate.setDate(weekDate.getDate() - dayOffset);
+  return toDateKey(weekDate);
+}
+
 function getCurrentWeekStartKey() {
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  const dayOffset = (today.getDay() + 6) % 7;
-  today.setDate(today.getDate() - dayOffset);
-  return toDateKey(today);
+  return getWeekStartKey(new Date());
 }
 
 function formatShortDate(dateKey: string) {
-  const date = parseDateKey(dateKey);
+  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(parseDateKey(dateKey));
+}
+
+function formatLongDate(dateKey: string) {
   return new Intl.DateTimeFormat("vi-VN", {
+    weekday: "long",
     day: "2-digit",
-    month: "2-digit"
-  }).format(date);
+    month: "2-digit",
+    year: "numeric"
+  }).format(parseDateKey(dateKey));
+}
+
+function formatWeekTitle(startKey: string) {
+  const start = parseDateKey(startKey);
+  const end = parseDateKey(addDays(startKey, 6));
+  const formatter = new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" });
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return formatter.format(start);
+  }
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
 function formatWeekRange(startKey: string) {
@@ -106,14 +187,77 @@ function getPersonLabel(id: string, name: string, emptyLabel: string) {
   return `${name} · ${id}`;
 }
 
+function getSessionTitle(session: ScheduleSession) {
+  return session.channel || session.hostName || session.supportName || "Ca chưa phân công";
+}
+
+function getSessionPeople(session: ScheduleSession) {
+  const host = session.hostName || session.hostId;
+  const support = session.supportName || session.supportId;
+  if (host && support) return `${host} · ${support}`;
+  if (host) return `Host: ${host}`;
+  if (support) return `Support: ${support}`;
+  return "Chưa có host và support";
+}
+
+function getSessionTone(session: ScheduleSession) {
+  if (session.missingSupport) return "eventDanger";
+  if (session.isSupportOnly) return "eventSupportOnly";
+  if (session.format.toLowerCase().includes("studio")) return "eventStudio";
+  if (session.format.toLowerCase().includes("home")) return "eventHome";
+  return "eventNeutral";
+}
+
 function isUrl(value: string) {
   return /^https?:\/\//i.test(value);
+}
+
+function getSlotStart(slot: string) {
+  return slot.split("-")[0]?.trim() || slot;
+}
+
+function getSlotSortValue(slot: string) {
+  const match = slot.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return 9999;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function buildMiniMonth(weekStartKey: string) {
+  const anchor = parseDateKey(addDays(weekStartKey, 3));
+  const firstDay = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12);
+  const offset = (firstDay.getDay() + 6) % 7;
+  firstDay.setDate(firstDay.getDate() - offset);
+  return {
+    month: anchor.getMonth(),
+    days: Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(firstDay);
+      date.setDate(firstDay.getDate() + index);
+      return toDateKey(date);
+    })
+  };
+}
+
+async function requestFullSchedule() {
+  if (!initialScheduleRequest) {
+    initialScheduleRequest = fetch("/api/schedule", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json()) as SchedulePayload;
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || payload.error || "Không tải được lịch.");
+        }
+        return payload;
+      })
+      .catch((error) => {
+        initialScheduleRequest = null;
+        throw error;
+      });
+  }
+  return initialScheduleRequest;
 }
 
 export default function ScheduleDashboard({ username }: ScheduleDashboardProps) {
   const [weekStartKey, setWeekStartKey] = useState(getCurrentWeekStartKey);
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
-  const [summary, setSummary] = useState<ScheduleSummary>(emptySummary);
   const [generatedAt, setGeneratedAt] = useState("");
   const [timezone, setTimezone] = useState("");
   const [loading, setLoading] = useState(true);
@@ -123,44 +267,37 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterMode>("all");
   const [busyConfirm, setBusyConfirm] = useState("");
+  const [selectedSessionId, setSelectedSessionId] = useState("");
   const deferredQuery = useDeferredValue(query);
 
+  const todayKey = toDateKey(new Date());
   const weekEndKey = addDays(weekStartKey, 6);
-  const days = DAY_NAMES.map((label, index) => ({
-    label,
-    dateKey: addDays(weekStartKey, index)
-  }));
-  const visibleSessions = sessions.filter(
+  const days = DAY_NAMES.map((label, index) => ({ label, dateKey: addDays(weekStartKey, index) }));
+  const weekSessions = sessions.filter((session) => session.dateKey >= weekStartKey && session.dateKey <= weekEndKey);
+  const visibleSessions = weekSessions.filter(
     (session) => sessionMatchesQuery(session, deferredQuery) && sessionMatchesFilter(session, filter)
   );
-  const weekSummary = summary.total ? summary : buildSummary(sessions);
+  const weekSummary = buildSummary(weekSessions);
+  const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
+  const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
+  const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
+  const miniMonth = buildMiniMonth(weekStartKey);
+  const dataDates = sessions.map((session) => session.dateKey).filter(Boolean).sort();
+  const coverage = dataDates.length ? `${formatShortDate(dataDates[0])} - ${formatShortDate(dataDates[dataDates.length - 1])}` : "-";
+  const slotSet = new Set(DEFAULT_SLOTS);
+  sessions.forEach((session) => {
+    if (session.slot) slotSet.add(session.slot);
+  });
+  const slots = Array.from(slotSet).sort((left, right) => getSlotSortValue(left) - getSlotSortValue(right));
 
-  async function applyPayload(payload: SchedulePayload) {
-    setSessions(payload.rows || []);
-    setSummary(payload.summary || buildSummary(payload.rows || []));
+  function applyPayload(payload: SchedulePayload) {
+    const nextRows = payload.rows || [];
+    setSessions(nextRows);
     setGeneratedAt(payload.generatedAt || "");
     setTimezone(payload.timezone || "");
-  }
-
-  async function loadSchedule() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const response = await fetch(`/api/schedule?from=${weekStartKey}&to=${weekEndKey}`, {
-        cache: "no-store"
-      });
-      const payload = (await response.json()) as SchedulePayload;
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.message || payload.error || "Không tải được lịch.");
-      }
-
-      await applyPayload(payload);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Không tải được lịch.");
-    } finally {
-      setLoading(false);
+    initialScheduleRequest = Promise.resolve(payload);
+    if (selectedSessionId && !nextRows.some((session) => session.sessionId === selectedSessionId)) {
+      setSelectedSessionId("");
     }
   }
 
@@ -170,24 +307,13 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     setMessage("");
 
     try {
-      const response = await fetch("/api/refresh", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          from: weekStartKey,
-          to: weekEndKey
-        })
-      });
+      const response = await fetch("/api/refresh", { method: "POST" });
       const payload = (await response.json()) as SchedulePayload;
-
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || payload.error || "Không cập nhật được lịch.");
       }
-
-      await applyPayload(payload);
-      setMessage(payload.sync?.message || "Đã cập nhật lịch từ Google Sheet.");
+      applyPayload(payload);
+      setMessage(payload.sync?.message || "Đã cập nhật toàn bộ lịch từ Google Sheet.");
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : "Không cập nhật được lịch.");
     } finally {
@@ -204,24 +330,14 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     try {
       const response = await fetch("/api/confirm", {
         method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          role,
-          confirmed,
-          from: weekStartKey,
-          to: weekEndKey
-        })
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: session.sessionId, role, confirmed })
       });
       const payload = (await response.json()) as SchedulePayload;
-
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || payload.error || "Không xác nhận được ca.");
       }
-
-      await applyPayload(payload);
+      applyPayload(payload);
       setMessage(`${confirmed ? "Đã xác nhận" : "Đã huỷ xác nhận"} ${role} cho ${session.sessionId}.`);
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "Không xác nhận được ca.");
@@ -236,194 +352,261 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
   }
 
   function shiftWeek(delta: number) {
-    startTransition(() => {
-      setWeekStartKey(addDays(weekStartKey, delta * 7));
-    });
+    startTransition(() => setWeekStartKey((current) => addDays(current, delta * 7)));
+  }
+
+  function selectMiniDate(dateKey: string) {
+    startTransition(() => setWeekStartKey(getWeekStartKey(parseDateKey(dateKey))));
   }
 
   useEffect(() => {
-    void loadSchedule();
-  }, [weekStartKey]);
+    let active = true;
+    void requestFullSchedule()
+      .then((payload) => {
+        if (active) applyPayload(payload);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Không tải được lịch.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedSessionId("");
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedSessionId]);
 
   return (
-    <main className="dashboardShell">
-      <section className="heroPanel">
-        <div>
-          <p className="eyebrow">Live_Session_Master · Weekly Calendar</p>
-          <h1>Lịch livestream tuần {formatWeekRange(weekStartKey)}</h1>
-          <p className="heroCopy">
-            Sync từ Google Sheet master, giữ support-only, cảnh báo Studio thiếu support và confirm ngay trên web.
-          </p>
+    <main className="calendarApp">
+      <header className="appHeader">
+        <div className="brandBlock">
+          <span className="brandMark"><Icon name="calendar" size={25} /></span>
+          <span className="brandName">Live Calendar</span>
         </div>
-        <div className="heroActions">
-          <button className="secondaryButton" onClick={() => shiftWeek(-1)} type="button">
-            Tuần trước
+
+        <div className="dateNavigation">
+          <button className="todayButton" onClick={() => setWeekStartKey(getCurrentWeekStartKey())} type="button">Hôm nay</button>
+          <div className="iconButtonGroup">
+            <button className="iconButton" aria-label="Tuần trước" onClick={() => shiftWeek(-1)} type="button"><Icon name="chevronLeft" /></button>
+            <button className="iconButton" aria-label="Tuần sau" onClick={() => shiftWeek(1)} type="button"><Icon name="chevronRight" /></button>
+          </div>
+          <div className="currentRange">
+            <h1>{formatWeekTitle(weekStartKey)}</h1>
+            <span>{formatWeekRange(weekStartKey)}</span>
+          </div>
+        </div>
+
+        <div className="headerActions">
+          <button className="syncButton" onClick={refreshFromSheet} disabled={refreshing} type="button">
+            <Icon name="refresh" />
+            <span>{refreshing ? "Đang cập nhật..." : "Cập nhật Sheet"}</span>
           </button>
-          <button className="secondaryButton" onClick={() => setWeekStartKey(getCurrentWeekStartKey())} type="button">
-            Tuần này
-          </button>
-          <button className="secondaryButton" onClick={() => shiftWeek(1)} type="button">
-            Tuần sau
-          </button>
-          <button className="primaryButton" onClick={refreshFromSheet} disabled={refreshing} type="button">
-            {refreshing ? "Đang cập nhật..." : "Cập nhật từ Google Sheet"}
-          </button>
+          <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
+          <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
         </div>
-      </section>
+      </header>
 
-      <section className="toolbarPanel">
-        <div className="statCard dangerStat">
-          <span>Thiếu support</span>
-          <strong>{weekSummary.missingSupport}</strong>
-        </div>
-        <div className="statCard">
-          <span>Support-only</span>
-          <strong>{weekSummary.supportOnly}</strong>
-        </div>
-        <div className="statCard">
-          <span>Chờ host confirm</span>
-          <strong>{weekSummary.pendingHostConfirm}</strong>
-        </div>
-        <div className="statCard">
-          <span>Chờ support confirm</span>
-          <strong>{weekSummary.pendingSupportConfirm}</strong>
-        </div>
-        <label className="searchBox">
-          Tìm nhanh
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Host, support, kênh, session..."
-          />
-        </label>
-        <div className="segmentedControl" aria-label="Bộ lọc lịch">
-          {[
-            ["all", "Tất cả"],
-            ["warnings", "Cảnh báo"],
-            ["pending", "Chờ confirm"]
-          ].map(([value, label]) => (
-            <button
-              className={filter === value ? "active" : ""}
-              key={value}
-              onClick={() => setFilter(value as FilterMode)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="statusStrip">
-        <span>Đăng nhập: {username}</span>
-        <span>{generatedAt ? `Cập nhật: ${new Date(generatedAt).toLocaleString("vi-VN")}` : "Chưa có timestamp"}</span>
-        <span>{timezone ? `Timezone sheet: ${timezone}` : "Timezone sheet: -"}</span>
-        <button onClick={logout} type="button">Đăng xuất</button>
-      </section>
-
-      {error ? <div className="notice errorNotice">{error}</div> : null}
-      {message ? <div className="notice successNotice">{message}</div> : null}
-
-      <section className="calendarGrid" aria-busy={loading || refreshing}>
-        {days.map((day) => {
-          const daySessions = visibleSessions.filter((session) => session.dateKey === day.dateKey);
-
-          return (
-            <article className="dayColumn" key={day.dateKey}>
-              <header>
-                <span>{day.label}</span>
-                <strong>{formatShortDate(day.dateKey)}</strong>
-              </header>
-
-              {loading ? <div className="emptyDay">Đang tải lịch...</div> : null}
-              {!loading && daySessions.length === 0 ? <div className="emptyDay">Không có ca</div> : null}
-
-              {!loading && daySessions.map((session) => (
-                <div
+      <div className="appBody">
+        <aside className="calendarSidebar">
+          <div className="miniMonthHeader">
+            <strong>{formatWeekTitle(weekStartKey)}</strong>
+            <span>{sessions.length} ca đã tải</span>
+          </div>
+          <div className="miniMonth" aria-label="Lịch tháng thu gọn">
+            {MINI_DAY_NAMES.map((name) => <span className="miniDayName" key={name}>{name}</span>)}
+            {miniMonth.days.map((dateKey) => {
+              const date = parseDateKey(dateKey);
+              const inSelectedWeek = dateKey >= weekStartKey && dateKey <= weekEndKey;
+              return (
+                <button
                   className={[
-                    "sessionCard",
-                    session.missingSupport ? "missingSupportCard" : "",
-                    session.isSupportOnly ? "supportOnlyCard" : ""
+                    "miniDate",
+                    date.getMonth() !== miniMonth.month ? "outsideMonth" : "",
+                    inSelectedWeek ? "inSelectedWeek" : "",
+                    dateKey === todayKey ? "miniToday" : ""
                   ].join(" ")}
-                  key={session.sessionId || `${session.rowNumber}-${session.slot}`}
+                  aria-label={formatLongDate(dateKey)}
+                  key={dateKey}
+                  onClick={() => selectMiniDate(dateKey)}
+                  type="button"
                 >
-                  <div className="sessionTopline">
-                    <span className="slotPill">{session.slot || "Chưa có giờ"}</span>
-                    <span className={session.format.toLowerCase().includes("studio") ? "formatPill studio" : "formatPill"}>
-                      {session.format || "Chưa chọn nơi live"}
-                    </span>
-                  </div>
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
 
-                  {session.missingSupport ? (
-                    <p className="cardWarning">Cảnh báo: ca Studio đang thiếu support.</p>
-                  ) : null}
-                  {session.isSupportOnly ? (
-                    <p className="cardInfo">Support-only: giữ ca support để fill host sau.</p>
-                  ) : null}
+          <label className="calendarSearch">
+            <Icon name="search" size={18} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm host, support, kênh..." />
+          </label>
 
-                  <dl className="sessionDetails">
-                    <div>
-                      <dt>Host</dt>
-                      <dd>{getPersonLabel(session.hostId, session.hostName, "Chưa có host")}</dd>
-                    </div>
-                    <div>
-                      <dt>Support</dt>
-                      <dd>{getPersonLabel(session.supportId, session.supportName, "Chưa có support")}</dd>
-                    </div>
-                    <div>
-                      <dt>Kênh</dt>
-                      <dd>{session.channel || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>Kịch bản</dt>
-                      <dd>
-                        {isUrl(session.scriptUrl) ? (
-                          <a href={session.scriptUrl} target="_blank" rel="noreferrer">Mở link</a>
-                        ) : (
-                          session.scriptUrl || "-"
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Backup</dt>
-                      <dd>
-                        {[session.backupHostId, session.backupSupportId].filter(Boolean).join(" / ") || "-"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Session</dt>
-                      <dd className="sessionId">{session.sessionId || "-"}</dd>
-                    </div>
-                  </dl>
+          <section className="sidebarSection">
+            <p className="sidebarLabel">HIỂN THỊ</p>
+            <button className={`filterOption filterAll ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")} type="button">
+              <span className="filterDot" /><span>Tất cả ca live</span><strong>{weekSummary.total}</strong>
+            </button>
+            <button className={`filterOption filterWarning ${filter === "warnings" ? "active" : ""}`} onClick={() => setFilter("warnings")} type="button">
+              <span className="filterDot" /><span>Cảnh báo</span><strong>{warningCount}</strong>
+            </button>
+            <button className={`filterOption filterPending ${filter === "pending" ? "active" : ""}`} onClick={() => setFilter("pending")} type="button">
+              <span className="filterDot" /><span>Chờ confirm</span><strong>{pendingCount}</strong>
+            </button>
+          </section>
 
-                  <div className="confirmRow">
-                    {session.canConfirmHost ? (
-                      <button
-                        className={session.isHostConfirmed ? "confirmedButton" : "outlineButton"}
-                        disabled={busyConfirm === `${session.sessionId}:host`}
-                        onClick={() => confirmSession(session, "host", !session.isHostConfirmed)}
-                        type="button"
-                      >
-                        {session.isHostConfirmed ? "Host đã confirm" : "Confirm host"}
-                      </button>
-                    ) : null}
-                    {session.canConfirmSupport ? (
-                      <button
-                        className={session.isSupportConfirmed ? "confirmedButton" : "outlineButton"}
-                        disabled={busyConfirm === `${session.sessionId}:support`}
-                        onClick={() => confirmSession(session, "support", !session.isSupportConfirmed)}
-                        type="button"
-                      >
-                        {session.isSupportConfirmed ? "Support đã confirm" : "Confirm support"}
-                      </button>
-                    ) : null}
-                  </div>
+          <section className="weekHealth">
+            <div className="weekHealthTitle"><span>Tình trạng tuần</span><strong>{weekSummary.total} ca</strong></div>
+            <div className="healthRow danger"><span><Icon name="warning" size={16} /> Thiếu support</span><strong>{weekSummary.missingSupport}</strong></div>
+            <div className="healthRow support"><span>Support-only</span><strong>{weekSummary.supportOnly}</strong></div>
+            <div className="healthRow"><span>Chờ host</span><strong>{weekSummary.pendingHostConfirm}</strong></div>
+            <div className="healthRow"><span>Chờ support</span><strong>{weekSummary.pendingSupportConfirm}</strong></div>
+          </section>
+
+          <div className="sourceStatus">
+            <span className="sourceIcon"><Icon name="sheet" size={18} /></span>
+            <div>
+              <strong>Live_Session_Master</strong>
+              <span>Phạm vi dữ liệu {coverage}</span>
+              <span>{generatedAt ? `Đọc lúc ${new Date(generatedAt).toLocaleString("vi-VN")}` : "Chưa có thời gian cập nhật"}</span>
+            </div>
+          </div>
+        </aside>
+
+        <section className="scheduleWorkspace">
+          {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
+          {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
+
+          <div className="calendarSurface" aria-busy={loading || refreshing}>
+            <div className="calendarScroller">
+              <div className="weekCalendar">
+                <div className="weekHeaderGrid">
+                  <div className="timezoneCorner">{timezone || "GMT+7"}</div>
+                  {days.map((day) => (
+                    <div className={`dayHeader ${day.dateKey === todayKey ? "today" : ""}`} key={day.dateKey}>
+                      <span>{day.label}</span>
+                      <strong>{parseDateKey(day.dateKey).getDate()}</strong>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </article>
-          );
-        })}
-      </section>
+
+                <div className="calendarMetaRow">
+                  <span>GIỜ</span>
+                  <div className="legendItem"><i className="legendStudio" />Studio</div>
+                  <div className="legendItem"><i className="legendHome" />Home</div>
+                  <div className="legendItem"><i className="legendSupport" />Support-only</div>
+                  <div className="legendItem"><i className="legendDanger" />Thiếu support</div>
+                </div>
+
+                <div className="timeGrid">
+                  {slots.map((slot) => (
+                    <div className="timeRow" key={slot}>
+                      <div className="timeLabel"><span>{getSlotStart(slot)}</span></div>
+                      {days.map((day) => {
+                        const daySessions = visibleSessions.filter((session) => session.dateKey === day.dateKey && session.slot === slot);
+                        return (
+                          <div className={`timeCell ${day.dateKey === todayKey ? "todayColumn" : ""}`} key={`${day.dateKey}-${slot}`}>
+                            {daySessions.map((session) => (
+                              <button
+                                className={`calendarEvent ${getSessionTone(session)}`}
+                                aria-label={`Xem ${getSessionTitle(session)}, ${session.slot}`}
+                                key={session.sessionId || `${session.rowNumber}-${session.slot}`}
+                                onClick={() => setSelectedSessionId(session.sessionId)}
+                                type="button"
+                              >
+                                <span className="eventTopline">
+                                  <strong>{getSessionTitle(session)}</strong>
+                                  {session.missingSupport ? <Icon name="warning" size={14} /> : null}
+                                </span>
+                                <span className="eventPeople">{getSessionPeople(session)}</span>
+                                <span className="eventMeta">
+                                  <em>{session.format || (session.isSupportOnly ? "Support-only" : "Chưa chọn nơi live")}</em>
+                                  <i>{session.canConfirmHost ? (session.isHostConfirmed ? "H ✓" : "H ·") : ""} {session.canConfirmSupport ? (session.isSupportConfirmed ? "S ✓" : "S ·") : ""}</i>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                {loading ? <div className="calendarLoading"><span className="loadingSpinner" />Đang tải toàn bộ lịch từ Google Sheet...</div> : null}
+                {!loading && visibleSessions.length === 0 ? (
+                  <div className="emptyWeekBanner">Không có ca phù hợp trong tuần này.</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {selectedSession ? (
+        <>
+          <div className="drawerBackdrop" onClick={() => setSelectedSessionId("")} />
+          <aside className="sessionDrawer" role="dialog" aria-modal="true" aria-label={`Chi tiết ${selectedSession.sessionId}`}>
+            <div className={`drawerAccent ${getSessionTone(selectedSession)}`} />
+            <div className="drawerHeader">
+              <div>
+                <span className="drawerEyebrow">CHI TIẾT CA LIVE</span>
+                <h2>{getSessionTitle(selectedSession)}</h2>
+                <p>{formatLongDate(selectedSession.dateKey)} · {selectedSession.slot}</p>
+              </div>
+              <button className="iconButton" aria-label="Đóng chi tiết" onClick={() => setSelectedSessionId("")} type="button"><Icon name="close" /></button>
+            </div>
+
+            {selectedSession.missingSupport ? <div className="drawerAlert danger"><Icon name="warning" />Ca Studio đang thiếu support.</div> : null}
+            {selectedSession.isSupportOnly ? <div className="drawerAlert support"><Icon name="check" />Support-only: giữ ca để fill host sau.</div> : null}
+
+            <dl className="drawerDetails">
+              <div><dt>Host</dt><dd>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Chưa có host")}</dd></div>
+              <div><dt>Support</dt><dd>{getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Chưa có support")}</dd></div>
+              <div><dt>Hình thức</dt><dd>{selectedSession.format || "Chưa chọn nơi live"}</dd></div>
+              <div><dt>Kênh</dt><dd>{selectedSession.channel || "-"}</dd></div>
+              <div><dt>Kịch bản</dt><dd>{isUrl(selectedSession.scriptUrl) ? <a href={selectedSession.scriptUrl} target="_blank" rel="noreferrer">Mở kịch bản ↗</a> : selectedSession.scriptUrl || "-"}</dd></div>
+              <div><dt>Backup host</dt><dd>{getPersonLabel(selectedSession.backupHostId, selectedSession.backupHostName, "-")}</dd></div>
+              <div><dt>Backup support</dt><dd>{getPersonLabel(selectedSession.backupSupportId, selectedSession.backupSupportName, "-")}</dd></div>
+              <div><dt>Session ID</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div>
+              {selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
+            </dl>
+
+            <div className="confirmPanel">
+              <div className="confirmPanelTitle"><strong>Xác nhận tham gia</strong><span>Cập nhật trực tiếp vào master</span></div>
+              {selectedSession.canConfirmHost ? (
+                <button
+                  className={`confirmAction ${selectedSession.isHostConfirmed ? "confirmed" : ""}`}
+                  disabled={busyConfirm === `${selectedSession.sessionId}:host`}
+                  onClick={() => confirmSession(selectedSession, "host", !selectedSession.isHostConfirmed)}
+                  type="button"
+                >
+                  <span><Icon name="check" /></span>
+                  <div><strong>{selectedSession.isHostConfirmed ? "Host đã xác nhận" : "Xác nhận host"}</strong><small>{selectedSession.isHostConfirmed ? "Bấm để huỷ xác nhận" : getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
+                </button>
+              ) : null}
+              {selectedSession.canConfirmSupport ? (
+                <button
+                  className={`confirmAction ${selectedSession.isSupportConfirmed ? "confirmed" : ""}`}
+                  disabled={busyConfirm === `${selectedSession.sessionId}:support`}
+                  onClick={() => confirmSession(selectedSession, "support", !selectedSession.isSupportConfirmed)}
+                  type="button"
+                >
+                  <span><Icon name="check" /></span>
+                  <div><strong>{selectedSession.isSupportConfirmed ? "Support đã xác nhận" : "Xác nhận support"}</strong><small>{selectedSession.isSupportConfirmed ? "Bấm để huỷ xác nhận" : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        </>
+      ) : null}
     </main>
   );
 }

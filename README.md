@@ -10,6 +10,8 @@ Website Next.js hiển thị lịch livestream theo tuần từ `Live_Session_Ma
 4. Deploy Apps Script dạng Web app, Execute as `Me`, access `Anyone with the link`.
 5. Copy Web app URL vào `GOOGLE_SCHEDULE_API_URL`.
 
+`SCHEDULE_WEB_TOKEN` không tự hết hạn. Token tồn tại trong Apps Script `Script Properties` cho đến khi bị sửa/xóa hoặc chạy lại `generateScheduleWebToken()`; mỗi lần chạy lại hàm, token cũ mất hiệu lực ngay. Phiên đăng nhập dashboard là cơ chế riêng và có thời hạn 7 ngày.
+
 ## Vercel Env
 
 ```bash
@@ -29,4 +31,4 @@ npm install
 npm run dev
 ```
 
-The browser never receives the Google API token. All sheet reads, refreshes and confirm writes go through Next.js API routes.
+The browser never receives the Google API token. Lịch được tải toàn bộ một lần khi mở dashboard; chuyển tuần chỉ lọc dữ liệu trong browser. Refresh và confirm vẫn đi qua Next.js API routes vì đây là các thao tác đọc/ghi dữ liệu mới.
