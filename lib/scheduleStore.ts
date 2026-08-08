@@ -42,6 +42,7 @@ type ScheduleSessionDocument = ScheduleSession & {
 type ScheduleSyncRunDocument = {
   batchId: string;
   syncType: "schedule";
+  mode: "schedule_refresh" | "sheet_snapshot";
   status: "success";
   requestedBy: string;
   sourceSpreadsheetId: string;
@@ -78,6 +79,7 @@ type ScheduleRange = {
 
 type SyncScheduleOptions = {
   requestedBy: string;
+  mode: "schedule_refresh" | "sheet_snapshot";
   startedAt?: Date;
 };
 
@@ -94,6 +96,7 @@ type ApplyConfirmationInput = {
 
 type SyncScheduleResult = {
   batchId: string;
+  mode: "schedule_refresh" | "sheet_snapshot";
   inserted: number;
   updated: number;
   deactivated: number;
@@ -210,6 +213,7 @@ async function ensureScheduleIndexes(): Promise<void> {
         sessions.createIndex({ active: 1, supportPersonKey: 1, dateKey: 1 }),
         syncRuns.createIndex({ batchId: 1 }, { unique: true }),
         syncRuns.createIndex({ syncType: 1, status: 1, completedAt: -1 }),
+        syncRuns.createIndex({ mode: 1, completedAt: -1 }),
         events.createIndex({ eventId: 1 }, { unique: true }),
         events.createIndex({ sessionId: 1, createdAt: -1 }),
         events.createIndex({ actorAccountKey: 1, createdAt: -1 })
@@ -242,24 +246,24 @@ export async function syncSchedulePayloadToMongo(
   options: SyncScheduleOptions
 ): Promise<SyncScheduleResult> {
   if (payload.sync?.success === false) {
-    throw new Error(payload.sync.message || "Google Sheets schedule refresh failed.");
+    throw new Error(payload.sync.message || "Google Sheets không cập nhật được lịch.");
   }
 
   if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
-    throw new Error("Google Sheets returned no schedule rows; MongoDB was not changed.");
+    throw new Error("Google Sheets không trả về dòng lịch nào; MongoDB được giữ nguyên để tránh mất dữ liệu.");
   }
 
   const rows = payload.rows.map(normalizeScheduleSession);
   const seenSessionIds = new Set<string>();
   for (const row of rows) {
     if (!row.sessionId) {
-      throw new Error(`Schedule row ${row.rowNumber || "unknown"} is missing Session_ID.`);
+      throw new Error(`Dòng lịch ${row.rowNumber || "không xác định"} đang thiếu Session_ID.`);
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(row.dateKey)) {
-      throw new Error(`Session ${row.sessionId} has an invalid date.`);
+      throw new Error(`Session ${row.sessionId} có ngày không hợp lệ.`);
     }
     if (seenSessionIds.has(row.sessionId)) {
-      throw new Error(`Duplicate Session_ID returned by Google Sheets: ${row.sessionId}.`);
+      throw new Error(`Google Sheets đang có Session_ID bị trùng: ${row.sessionId}.`);
     }
     seenSessionIds.add(row.sessionId);
   }
@@ -369,6 +373,7 @@ export async function syncSchedulePayloadToMongo(
         {
           batchId,
           syncType: "schedule",
+          mode: options.mode,
           status: "success",
           requestedBy: cleanText(options.requestedBy) || "admin:admin",
           sourceSpreadsheetId,
@@ -389,6 +394,7 @@ export async function syncSchedulePayloadToMongo(
 
   return {
     batchId,
+    mode: options.mode,
     inserted,
     updated,
     deactivated,

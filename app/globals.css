@@ -446,6 +446,18 @@ a:hover {
   background: #dce9ff;
 }
 
+.readSyncButton {
+  color: #137333;
+  border: 1px solid #b7dfc3;
+  background: #edf7ef;
+  box-shadow: none;
+}
+
+.readSyncButton:hover {
+  border-color: #81c995;
+  background: #dff1e3;
+}
+
 .userAvatar {
   display: grid;
   width: 38px;

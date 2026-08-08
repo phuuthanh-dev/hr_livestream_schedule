@@ -269,6 +269,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [timezone, setTimezone] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [readingSchedule, setReadingSchedule] = useState(false);
   const [peopleSyncing, setPeopleSyncing] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -354,6 +355,30 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       setError(refreshError instanceof Error ? refreshError.message : "Không cập nhật được lịch.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function readScheduleFromSheet() {
+    setReadingSchedule(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ from: weekStartKey, to: weekEndKey })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không đọc được dữ liệu lịch.");
+      }
+      applyPayload(payload);
+      setMessage(payload.sync?.message || "Đã đọc dữ liệu hiện tại từ Live_Session_Master.");
+    } catch (readError) {
+      setError(readError instanceof Error ? readError.message : "Không đọc được dữ liệu lịch.");
+    } finally {
+      setReadingSchedule(false);
     }
   }
 
@@ -491,7 +516,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <button
                 className={`syncButton peopleSyncButton ${peopleSyncing ? "isLoading" : ""}`}
                 onClick={syncPeopleFromSheet}
-                disabled={peopleSyncing || refreshing}
+                disabled={peopleSyncing || refreshing || readingSchedule}
                 title="Đồng bộ Portfolio_Master và Support_Master vào MongoDB"
                 type="button"
               >
@@ -499,9 +524,19 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 <span>{peopleSyncing ? "Đang đồng bộ..." : "Cập nhật nhân viên"}</span>
               </button>
               <button
+                className={`syncButton readSyncButton ${readingSchedule ? "isLoading" : ""}`}
+                onClick={readScheduleFromSheet}
+                disabled={readingSchedule || refreshing || peopleSyncing}
+                title="Đọc nguyên trạng Live_Session_Master vào website, không chạy lại logic xếp lịch"
+                type="button"
+              >
+                <Icon name="sheet" />
+                <span>{readingSchedule ? "Đang đọc..." : "Đọc dữ liệu"}</span>
+              </button>
+              <button
                 className={`syncButton ${refreshing ? "isLoading" : ""}`}
                 onClick={refreshFromSheet}
-                disabled={refreshing || peopleSyncing}
+                disabled={refreshing || peopleSyncing || readingSchedule}
                 title="Đồng bộ và xếp lại lịch từ Google Sheet"
                 type="button"
               >
@@ -606,7 +641,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
           {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
 
-          <div className="calendarSurface" aria-busy={loading || refreshing}>
+          <div className="calendarSurface" aria-busy={loading || refreshing || readingSchedule}>
             <div className="calendarScroller">
               <div className="weekCalendar">
                 <div className="weekHeaderGrid">

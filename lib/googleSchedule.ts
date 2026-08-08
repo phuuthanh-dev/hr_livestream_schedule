@@ -86,6 +86,23 @@ export async function refreshSchedule() {
   return payload;
 }
 
+export async function readScheduleSnapshot() {
+  const { apiUrl, token } = getGoogleScheduleConfig();
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      action: "read",
+      token
+    })
+  });
+
+  return parseGoogleResponse<SchedulePayload>(response);
+}
+
 export async function confirmSchedule(input: ConfirmScheduleInput) {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const response = await fetch(apiUrl, {

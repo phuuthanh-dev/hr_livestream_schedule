@@ -90,6 +90,7 @@ export type SchedulePayload = {
     success?: boolean;
     message?: string;
     batchId?: string;
+    mode?: "schedule_refresh" | "sheet_snapshot";
     inserted?: number;
     updated?: number;
     deactivated?: number;

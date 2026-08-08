@@ -45,6 +45,10 @@ function handleScheduleWebRequest_(method, event) {
       return buildScheduleWebJsonResponse_(refreshScheduleWebPayload_(body));
     }
 
+    if (action === "read") {
+      return buildScheduleWebJsonResponse_(readScheduleWebSnapshot_());
+    }
+
     throw new Error("Action không hợp lệ.");
   } catch (error) {
     return buildScheduleWebJsonResponse_({
@@ -222,6 +226,19 @@ function refreshScheduleWebPayload_() {
     const payload = getScheduleWebPayload_({});
     payload.sync = syncResult;
     return payload;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function readScheduleWebSnapshot_() {
+  const lock = getScheduleWebLock_();
+  if (!lock.tryLock(10000)) {
+    throw new Error("Không lấy được lock để đọc lịch. Vui lòng thử lại.");
+  }
+
+  try {
+    return getScheduleWebPayload_({});
   } finally {
     lock.releaseLock();
   }
