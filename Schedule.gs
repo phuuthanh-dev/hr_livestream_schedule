@@ -517,6 +517,9 @@ function syncAndUnpivotSchedule(options) {
   }
   if (conflictResult) {
     alertLines.push(`Resolve conflict cho phạm vi ${scopeLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`);
+    if (conflictResult.sessionRepairSummary && conflictResult.sessionRepairSummary.updatedRows > 0) {
+      alertLines.push(`Session_ID: đã chuẩn hóa ${conflictResult.sessionRepairSummary.updatedRows} dòng trong phạm vi ${scopeLabel}.`);
+    }
   }
   if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
     alertLines.push("");
@@ -550,6 +553,98 @@ function syncAndUnpivotScheduleByDatePrompt() {
   }
 
   syncAndUnpivotScheduleForDate(response.getResponseText());
+}
+
+function repairLiveSessionMasterSessionIds() {
+  return rebuildScheduleSessionIdsInMaster_({ futureOnly: false }, true);
+}
+
+function repairFutureLiveSessionMasterSessionIds() {
+  return rebuildScheduleSessionIdsInMaster_({ futureOnly: true }, true);
+}
+
+function rebuildScheduleSessionIdsInMaster_(options, showAlert) {
+  const config = options || {};
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Live_Session_Master');
+
+  if (!sheet || sheet.getLastRow() <= 1) {
+    if (showAlert !== false) {
+      SpreadsheetApp.getUi().alert("Tab 'Live_Session_Master' chưa có dữ liệu để sửa Session_ID.");
+    }
+    return { scannedRows: 0, updatedRows: 0, clearedRows: 0, skippedRows: 0 };
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headerMap = buildSheetHeaderMap(data[0] || []);
+  const idx = getScheduleConflictIndexes(headerMap);
+
+  if (
+    idx.date === undefined ||
+    idx.time === undefined ||
+    idx.hostId === undefined ||
+    idx.supportId === undefined ||
+    idx.sessionId === undefined
+  ) {
+    throw new Error("Thiếu cột Ngày / Khung giờ / Mã nhân sự / Mã Nhân sự Support live / Session_ID.");
+  }
+
+  const nextSessionValues = [];
+  let updatedRows = 0;
+  let clearedRows = 0;
+  let skippedRows = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const rowDate = row[idx.date];
+    const rowSlot = idx.time !== undefined && row[idx.time] ? row[idx.time].toString().trim() : "";
+    const hostId = idx.hostId !== undefined && row[idx.hostId] ? row[idx.hostId].toString().trim() : "";
+    const supportId = idx.supportId !== undefined && row[idx.supportId] ? row[idx.supportId].toString().trim() : "";
+    const currentSessionId = idx.sessionId !== undefined && row[idx.sessionId] ? row[idx.sessionId].toString().trim() : "";
+    const hasScheduleContext = Boolean(formatAppDateValue(rowDate) || rowSlot || hostId || supportId);
+
+    let nextSessionId = currentSessionId;
+    if (isScheduleDateInScope(rowDate, config)) {
+      nextSessionId = hasScheduleContext
+        ? buildScheduleSessionId(rowDate, rowSlot, hostId, supportId)
+        : "";
+    } else {
+      skippedRows++;
+    }
+
+    if (nextSessionId !== currentSessionId) {
+      updatedRows++;
+      if (!nextSessionId && currentSessionId) {
+        clearedRows++;
+      }
+    }
+
+    nextSessionValues.push([nextSessionId]);
+  }
+
+  if (nextSessionValues.length > 0) {
+    sheet.getRange(2, idx.sessionId + 1, nextSessionValues.length, 1).setValues(nextSessionValues);
+  }
+
+  const summary = {
+    scannedRows: data.length - 1,
+    updatedRows,
+    clearedRows,
+    skippedRows
+  };
+
+  if (showAlert !== false) {
+    const scopeLabel = getScheduleScopeLabel(config);
+    SpreadsheetApp.getUi().alert(
+      `Đã rebuild Session_ID cho phạm vi ${scopeLabel}.\n` +
+      `Scanned rows: ${summary.scannedRows}\n` +
+      `Updated rows: ${summary.updatedRows}\n` +
+      `Cleared rows: ${summary.clearedRows}\n` +
+      `Skipped rows: ${summary.skippedRows}`
+    );
+  }
+
+  return summary;
 }
 
 function normalizeScheduleTrackingText(value) {
@@ -838,6 +933,93 @@ function buildScheduleSessionId(dateValue, slotValue, hostId, supportId) {
   const hostCode = isMeaningfulScheduleValue(hostId) ? hostId.toString().trim() : 'NOHOST';
   const supportCode = isMeaningfulScheduleValue(supportId) ? supportId.toString().trim() : 'NO_SUPPORT';
   return `SS-${cleanDateCode}-${cleanSlotCode}-${hostCode}-${supportCode}`;
+}
+
+function SESSION_ID_FX(dateValue, slotValue, hostId, supportId) {
+  return buildScheduleSessionIdFxValue_(dateValue, slotValue, hostId, supportId);
+}
+
+function buildScheduleSessionIdFxValue_(dateValue, slotValue, hostId, supportId) {
+  const matrices = [dateValue, slotValue, hostId, supportId].map(normalizeScheduleFxMatrix_);
+  const rowCount = Math.max.apply(null, matrices.map(getScheduleFxMatrixRowCount_));
+  const colCount = Math.max.apply(null, matrices.map(getScheduleFxMatrixColCount_));
+
+  const isBroadcastable = matrices.every(matrix =>
+    isScheduleFxMatrixBroadcastable_(matrix, rowCount, colCount)
+  );
+  if (!isBroadcastable) {
+    return [["#ERROR: Range size mismatch"]];
+  }
+
+  if (rowCount === 1 && colCount === 1) {
+    return buildScheduleSessionIdFxCell_(
+      getScheduleFxMatrixValue_(matrices[0], 0, 0),
+      getScheduleFxMatrixValue_(matrices[1], 0, 0),
+      getScheduleFxMatrixValue_(matrices[2], 0, 0),
+      getScheduleFxMatrixValue_(matrices[3], 0, 0)
+    );
+  }
+
+  const output = [];
+  for (let row = 0; row < rowCount; row++) {
+    const resultRow = [];
+    for (let col = 0; col < colCount; col++) {
+      resultRow.push(
+        buildScheduleSessionIdFxCell_(
+          getScheduleFxMatrixValue_(matrices[0], row, col),
+          getScheduleFxMatrixValue_(matrices[1], row, col),
+          getScheduleFxMatrixValue_(matrices[2], row, col),
+          getScheduleFxMatrixValue_(matrices[3], row, col)
+        )
+      );
+    }
+    output.push(resultRow);
+  }
+
+  return output;
+}
+
+function buildScheduleSessionIdFxCell_(dateValue, slotValue, hostId, supportId) {
+  const hasContext = Boolean(
+    formatAppDateValue(dateValue) ||
+    (slotValue && slotValue.toString().trim()) ||
+    (hostId && hostId.toString().trim()) ||
+    (supportId && supportId.toString().trim())
+  );
+  if (!hasContext) return "";
+
+  return buildScheduleSessionId(dateValue, slotValue, hostId, supportId);
+}
+
+function normalizeScheduleFxMatrix_(value) {
+  if (!Array.isArray(value)) return [[value]];
+  if (value.length === 0) return [[""]];
+  if (Array.isArray(value[0])) return value;
+  return value.map(item => [item]);
+}
+
+function getScheduleFxMatrixRowCount_(matrix) {
+  return matrix && matrix.length ? matrix.length : 1;
+}
+
+function getScheduleFxMatrixColCount_(matrix) {
+  if (!matrix || !matrix.length) return 1;
+  return Array.isArray(matrix[0]) ? matrix[0].length : 1;
+}
+
+function isScheduleFxMatrixBroadcastable_(matrix, rowCount, colCount) {
+  const rows = getScheduleFxMatrixRowCount_(matrix);
+  const cols = getScheduleFxMatrixColCount_(matrix);
+  return (rows === 1 || rows === rowCount) && (cols === 1 || cols === colCount);
+}
+
+function getScheduleFxMatrixValue_(matrix, rowIndex, colIndex) {
+  const rows = getScheduleFxMatrixRowCount_(matrix);
+  const cols = getScheduleFxMatrixColCount_(matrix);
+  const targetRow = rows === 1 ? 0 : rowIndex;
+  const targetCol = cols === 1 ? 0 : colIndex;
+  const row = Array.isArray(matrix[targetRow]) ? matrix[targetRow] : [matrix[targetRow]];
+  return row[targetCol];
 }
 
 function buildScheduleHostIdentityKey(dateValue, slotValue, hostId) {
@@ -2506,12 +2688,21 @@ function resolveScheduleConflicts(showAlert, options) {
     );
   }
 
+  const sessionRepairSummary = rebuildScheduleSessionIdsInMaster_(
+    targetDateLabel ? { targetDate: targetDateLabel } : (futureOnly ? { futureOnly: true } : undefined),
+    false
+  );
+  summary.sessionRepairSummary = sessionRepairSummary;
+
   if (showAlert !== false) {
     let alertMessage =
       `Đã resolve ${summary.totalGroups} nhóm conflict.\n` +
       `Final rows: ${summary.finalRows}\n` +
       `Auto-resolved groups: ${summary.autoResolvedGroups}\n` +
       `Manual review groups: ${summary.manualReviewGroups}`;
+    if (sessionRepairSummary && sessionRepairSummary.updatedRows > 0) {
+      alertMessage += `\nSession_ID repaired: ${sessionRepairSummary.updatedRows}`;
+    }
     if (summary.quotaReplaced || summary.quotaCleared) {
       alertMessage +=
         `\nQuota support: ${summary.quotaReplaced || 0} ca đổi người do hết giờ hợp đồng` +

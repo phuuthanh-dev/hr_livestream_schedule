@@ -281,6 +281,8 @@ function onOpen() {
         .addItem('Cập nhật Địa điểm + Kênh live', 'autoFillLocationToSchedule')
         .addItem('Resolve conflict lịch', 'resolveScheduleConflicts')
         .addItem('Tạo real schedule', 'buildRealScheduleFromMaster')
+        .addItem('Sửa Session_ID toàn bộ', 'repairLiveSessionMasterSessionIds')
+        .addItem('Sửa Session_ID từ hôm nay', 'repairFutureLiveSessionMasterSessionIds')
     )
     .addSubMenu(
       ui.createMenu('Dữ liệu TikTok')
