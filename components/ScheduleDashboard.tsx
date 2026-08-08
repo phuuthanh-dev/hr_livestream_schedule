@@ -579,7 +579,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           <div className="sourceStatus">
             <span className="sourceIcon"><Icon name="sheet" size={18} /></span>
             <div>
-              <strong>Live_Session_Master</strong>
+              <strong>MongoDB · Live_Session_Master</strong>
               <span>Phạm vi dữ liệu {coverage}</span>
               <span>{generatedAt ? `Đọc lúc ${new Date(generatedAt).toLocaleString("vi-VN")}` : "Chưa có thời gian cập nhật"}</span>
             </div>

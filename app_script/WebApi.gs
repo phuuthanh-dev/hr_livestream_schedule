@@ -1,4 +1,5 @@
 const SCHEDULE_WEB_TOKEN_PROPERTY = "SCHEDULE_WEB_TOKEN";
+const SCHEDULE_WEB_CONFIRM_REVISION_PROPERTY = "SCHEDULE_WEB_CONFIRM_REVISION";
 const SCHEDULE_WEB_CONFIRM_VALUE = "Đã xác nhận";
 const SCHEDULE_WEB_UNCONFIRM_VALUE = "Chưa xác nhận";
 
@@ -195,6 +196,7 @@ function getScheduleWebPayload_(params) {
     spreadsheetId: ss.getId(),
     sheetName: sheet.getName(),
     generatedAt: new Date().toISOString(),
+    confirmationRevision: getScheduleWebConfirmationRevision_(),
     timezone: timezone,
     rowCount: rows.length,
     summary: buildScheduleWebSummary_(rows),
@@ -202,21 +204,27 @@ function getScheduleWebPayload_(params) {
   };
 }
 
-function refreshScheduleWebPayload_(body) {
-  const syncResult = syncAndUnpivotSchedule({
-    futureOnly: true,
-    suppressAlert: true
-  }) || {
-    success: false,
-    message: "Không nhận được kết quả sync."
-  };
-  const params = {
-    from: body && body.from,
-    to: body && body.to
-  };
-  const payload = getScheduleWebPayload_(params);
-  payload.sync = syncResult;
-  return payload;
+function refreshScheduleWebPayload_() {
+  const lock = getScheduleWebLock_();
+  if (!lock.tryLock(30000)) {
+    throw new Error("Không lấy được lock để cập nhật lịch. Vui lòng thử lại.");
+  }
+
+  try {
+    const syncResult = syncAndUnpivotSchedule({
+      futureOnly: true,
+      suppressAlert: true,
+      externalLockHeld: true
+    }) || {
+      success: false,
+      message: "Không nhận được kết quả sync."
+    };
+    const payload = getScheduleWebPayload_({});
+    payload.sync = syncResult;
+    return payload;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function confirmScheduleWebSession_(body) {
@@ -288,16 +296,16 @@ function confirmScheduleWebSession_(body) {
     }
 
     SpreadsheetApp.flush();
+    const confirmationRevision = incrementScheduleWebConfirmationRevision_();
 
-    const params = {
-      from: body && body.from,
-      to: body && body.to
+    return {
+      success: true,
+      generatedAt: new Date().toISOString(),
+      confirmationRevision: confirmationRevision,
+      updatedSessionId: sessionId,
+      updatedRole: role,
+      confirmed: confirmed
     };
-    const payload = getScheduleWebPayload_(params);
-    payload.updatedSessionId = sessionId;
-    payload.updatedRole = role;
-    payload.confirmed = confirmed;
-    return payload;
   } finally {
     lock.releaseLock();
   }
@@ -361,7 +369,22 @@ function getScheduleWebRoleLabel_(role) {
 }
 
 function getScheduleWebLock_() {
-  return LockService.getDocumentLock() || LockService.getScriptLock();
+  return LockService.getScriptLock();
+}
+
+function getScheduleWebConfirmationRevision_() {
+  const value = PropertiesService.getScriptProperties().getProperty(SCHEDULE_WEB_CONFIRM_REVISION_PROPERTY);
+  const revision = Number(value || 0);
+  return isFinite(revision) && revision >= 0 ? Math.floor(revision) : 0;
+}
+
+function incrementScheduleWebConfirmationRevision_() {
+  const nextRevision = getScheduleWebConfirmationRevision_() + 1;
+  PropertiesService.getScriptProperties().setProperty(
+    SCHEDULE_WEB_CONFIRM_REVISION_PROPERTY,
+    String(nextRevision)
+  );
+  return nextRevision;
 }
 
 function readScheduleWebRows_(sheet, timezone, fromKey, toKey) {

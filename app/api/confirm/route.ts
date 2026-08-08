@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { confirmSchedule, fetchSchedule } from "@/lib/googleSchedule";
 import { getDashboardSession } from "@/lib/auth";
+import { confirmSchedule } from "@/lib/googleSchedule";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
+import {
+  applyScheduleConfirmationToMongo,
+  findScheduleSessionById,
+  getScheduleFromMongo
+} from "@/lib/scheduleStore";
 import type { ConfirmRole } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -46,29 +51,38 @@ export async function POST(request: Request) {
     if (!body.sessionId || !body.role || !VALID_ROLES.has(body.role)) {
       return NextResponse.json({ success: false, message: "Thiếu sessionId hoặc role." }, { status: 400 });
     }
+
     if (session.accountType === "employee") {
       if (!session.role || !session.employeeId || body.role !== session.role) {
-        return NextResponse.json({ success: false, message: "Bạn không có quyền xác nhận vai trò này." }, { status: 403 });
+        return NextResponse.json(
+          { success: false, message: "Bạn không có quyền xác nhận vai trò này." },
+          { status: 403 }
+        );
       }
-
       if (!body.from || !body.to) {
         throw new ConfirmRequestError("Thiếu phạm vi tuần để kiểm tra ca được phân công.", 400);
       }
+    }
 
-      const schedule = await fetchSchedule({ from: body.from, to: body.to });
-      const matchingSessions = (schedule.rows || []).filter((row) => row.sessionId === body.sessionId);
-      if (matchingSessions.length === 0) {
-        throw new ConfirmRequestError("Không tìm thấy ca này trong tuần đang xem. Vui lòng tải lại lịch.", 404);
-      }
-      if (matchingSessions.length > 1) {
-        throw new ConfirmRequestError(`Session_ID ${body.sessionId} đang bị trùng. Không thể cập nhật an toàn.`, 409);
-      }
+    const target = await findScheduleSessionById(body.sessionId);
+    if (!target) {
+      throw new ConfirmRequestError(
+        "Không tìm thấy ca này trong MongoDB. Admin cần cập nhật lịch trước khi xác nhận.",
+        404
+      );
+    }
 
-      const target = matchingSessions[0];
+    if (session.accountType === "employee") {
       if (!target.dateKey) {
-        throw new ConfirmRequestError("Ca này không có ngày hợp lệ nên nhân viên không thể thay đổi xác nhận.", 409);
+        throw new ConfirmRequestError(
+          "Ca này không có ngày hợp lệ nên nhân viên không thể thay đổi xác nhận.",
+          409
+        );
       }
-      if (target.dateKey < getScheduleTodayKey(schedule.timezone)) {
+      if (target.dateKey < body.from! || target.dateKey > body.to!) {
+        throw new ConfirmRequestError("Ca này không thuộc tuần đang xem. Vui lòng tải lại lịch.", 404);
+      }
+      if (target.dateKey < getScheduleTodayKey()) {
         throw new ConfirmRequestError(
           `Bạn không thể thay đổi xác nhận của ngày đã qua (${target.dateLabel}). Chỉ Admin được xử lý lịch sử.`,
           403
@@ -79,16 +93,17 @@ export async function POST(request: Request) {
       if (normalizeEmployeeId(assignedEmployeeId) !== normalizeEmployeeId(session.employeeId)) {
         const roleLabel = body.role === "host" ? "Host" : "Support Live";
         throw new ConfirmRequestError(
-          `Bạn không thể xác nhận hoặc huỷ xác nhận ca của người khác. ${roleLabel} ca ${target.slot} ngày ${target.dateLabel} không thuộc mã nhân viên của bạn.`,
+          `Bạn không thể xác nhận hoặc hủy xác nhận ca của người khác. ${roleLabel} ca ${target.slot} ngày ${target.dateLabel} không thuộc mã nhân viên của bạn.`,
           403
         );
       }
     }
 
-    const payload = await confirmSchedule({
+    const confirmed = body.confirmed !== false;
+    const googlePayload = await confirmSchedule({
       sessionId: body.sessionId,
       role: body.role,
-      confirmed: body.confirmed !== false,
+      confirmed,
       actorType: session.accountType,
       actorRole: session.role,
       actorEmployeeId: session.employeeId,
@@ -96,6 +111,32 @@ export async function POST(request: Request) {
       to: body.to
     });
 
+    const actorAccountKey =
+      session.accountType === "admin"
+        ? "admin:admin"
+        : `employee:${session.role}:${normalizeEmployeeId(session.employeeId)}`;
+    try {
+      await applyScheduleConfirmationToMongo({
+        sessionId: body.sessionId,
+        role: body.role,
+        confirmed,
+        actorAccountKey,
+        actorType: session.accountType,
+        actorRole: session.role,
+        actorEmployeeId: session.employeeId,
+        sourceRevision: googlePayload.confirmationRevision
+      });
+    } catch {
+      throw new ConfirmRequestError(
+        "Google Sheets đã nhận thay đổi nhưng MongoDB chưa đồng bộ được. Admin hãy bấm Cập nhật lịch để khôi phục dữ liệu.",
+        502
+      );
+    }
+
+    const payload = await getScheduleFromMongo({ from: body.from, to: body.to });
+    payload.updatedSessionId = body.sessionId;
+    payload.updatedRole = body.role;
+    payload.confirmed = confirmed;
     return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json(

@@ -15,9 +15,10 @@ const SOURCE_SCHEDULE_STAFF_ID_ALIASES = {
   HRSL02: 'HRSL02_6H'
 };
 
-function refreshSourceLiveStreamSchedule_() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) {
+function refreshSourceLiveStreamSchedule_(options) {
+  const config = options || {};
+  const lock = config.skipLock ? null : LockService.getScriptLock();
+  if (lock && !lock.tryLock(30000)) {
     throw new Error('Không lấy được lock để làm mới schedule nguồn.');
   }
 
@@ -70,7 +71,7 @@ function refreshSourceLiveStreamSchedule_() {
       mode: 'local_direct'
     };
   } finally {
-    lock.releaseLock();
+    if (lock) lock.releaseLock();
   }
 }
 

@@ -55,22 +55,6 @@ async function parseGoogleResponse<T extends GoogleApiPayload>(response: Respons
   return payload;
 }
 
-export async function fetchSchedule(range: ScheduleRange = {}) {
-  const { apiUrl, token } = getGoogleScheduleConfig();
-  const url = new URL(apiUrl);
-  url.searchParams.set("action", "schedule");
-  url.searchParams.set("token", token);
-  if (range.from) url.searchParams.set("from", range.from);
-  if (range.to) url.searchParams.set("to", range.to);
-
-  const response = await fetch(url, {
-    method: "GET",
-    cache: "no-store"
-  });
-
-  return parseGoogleResponse<SchedulePayload>(response);
-}
-
 export async function fetchSchedulePeopleFromGoogle() {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const url = new URL(apiUrl);
@@ -84,7 +68,7 @@ export async function fetchSchedulePeopleFromGoogle() {
   return payload;
 }
 
-export async function refreshSchedule(range: ScheduleRange = {}) {
+export async function refreshSchedule() {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const response = await fetch(apiUrl, {
     method: "POST",
@@ -94,9 +78,7 @@ export async function refreshSchedule(range: ScheduleRange = {}) {
     },
     body: JSON.stringify({
       action: "refresh",
-      token,
-      from: range.from,
-      to: range.to
+      token
     })
   });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchSchedule } from "@/lib/googleSchedule";
 import { getDashboardSession } from "@/lib/auth";
+import { getScheduleFromMongo } from "@/lib/scheduleStore";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   try {
     const url = new URL(request.url);
-    const payload = await fetchSchedule({
+    const payload = await getScheduleFromMongo({
       from: url.searchParams.get("from") || undefined,
       to: url.searchParams.get("to") || undefined
     });
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { success: false, message: error instanceof Error ? error.message : "Không tải được lịch." },
-      { status: 502 }
+      { status: 503 }
     );
   }
 }

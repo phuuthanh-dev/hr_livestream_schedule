@@ -91,7 +91,9 @@ function syncAndUnpivotSchedule(options) {
   }
 
   try {
-    sourceRefreshSummary = refreshSourceLiveStreamSchedule_();
+    sourceRefreshSummary = refreshSourceLiveStreamSchedule_({
+      skipLock: Boolean(config.externalLockHeld)
+    });
   } catch (error) {
     return showScheduleSyncAlert_(`Không thể làm mới schedule ở file nguồn: ${error.message}`, config);
   }

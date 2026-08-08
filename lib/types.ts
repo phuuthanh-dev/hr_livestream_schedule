@@ -76,9 +76,12 @@ export type ScheduleSummary = {
 
 export type SchedulePayload = {
   success: boolean;
+  storage?: "mongodb";
   spreadsheetId?: string;
   sheetName?: string;
   generatedAt?: string;
+  syncedAt?: string;
+  confirmationRevision?: number;
   timezone?: string;
   rowCount?: number;
   summary?: ScheduleSummary;
@@ -86,6 +89,12 @@ export type SchedulePayload = {
   sync?: {
     success?: boolean;
     message?: string;
+    batchId?: string;
+    inserted?: number;
+    updated?: number;
+    deactivated?: number;
+    total?: number;
+    syncedAt?: string;
   };
   updatedSessionId?: string;
   updatedRole?: ConfirmRole;
