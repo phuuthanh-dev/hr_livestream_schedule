@@ -4,6 +4,8 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   const skipDropdownRefresh = Boolean(config.skipDropdownRefresh);
   const skipLookupValidation = Boolean(config.skipLookupValidation);
   const futureOnly = Boolean(config.futureOnly);
+  const targetDateLabel = typeof getScheduleTargetDateLabel === 'function' ? getScheduleTargetDateLabel(config) : "";
+  const hasDateScope = futureOnly || Boolean(targetDateLabel);
 
   // Vì chạy trong cùng 1 file, ta dùng getActiveSpreadsheet()
   const masterSs = SpreadsheetApp.getActiveSpreadsheet(); 
@@ -83,7 +85,7 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
     return;
   }
 
-  if (futureOnly && schDateColIndex === -1) {
+  if (hasDateScope && schDateColIndex === -1) {
     Logger.log("Không thể giới hạn sync theo ngày vì thiếu cột Ngày trong Live_Session_Master.");
     return;
   }
@@ -92,12 +94,12 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   let updatedChannelCount = 0;
   const targetRows = [];
 
-  if (!skipChannelUpdate && scheduleData.length > 1 && !futureOnly) {
+  if (!skipChannelUpdate && scheduleData.length > 1 && !hasDateScope) {
     scheduleSheet.getRange(2, schChannelColIndex + 1, scheduleData.length - 1, 1).clearDataValidations();
   }
   
   for (let i = 1; i < scheduleData.length; i++) {
-    if (futureOnly && !isScheduleDateAfterToday(scheduleData[i][schDateColIndex])) {
+    if (hasDateScope && !isScheduleDateInScope(scheduleData[i][schDateColIndex], config)) {
       continue;
     }
 
@@ -146,15 +148,17 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   }
 
   if (!skipDropdownRefresh) {
-    if (!futureOnly) {
+    if (!hasDateScope) {
       ensurePlainLiveChannelColumn(scheduleSheet);
     }
-    refreshLiveChannelDropdowns(futureOnly ? { futureOnly: true } : undefined);
+    refreshLiveChannelDropdowns(
+      targetDateLabel ? { targetDate: targetDateLabel } : (futureOnly ? { futureOnly: true } : undefined)
+    );
   }
 
   const lookupSummary = skipLookupValidation
     ? null
-    : validateLiveSessionLookups(showLookupAlert !== false, futureOnly ? targetRows : undefined);
+    : validateLiveSessionLookups(showLookupAlert !== false, hasDateScope ? targetRows : undefined);
   
   Logger.log(`Tuyệt vời! Đã cập nhật Location cho ${updatedLocationCount} ca và Live_Channel_Id cho ${updatedChannelCount} ca trong tab Live_Session_Master.`);
   return {
@@ -190,6 +194,8 @@ function ensurePlainLiveChannelColumn(scheduleSheet) {
 function refreshLiveChannelDropdowns(options) {
   const config = options || {};
   const futureOnly = Boolean(config.futureOnly);
+  const targetDateLabel = typeof getScheduleTargetDateLabel === 'function' ? getScheduleTargetDateLabel(config) : "";
+  const hasDateScope = futureOnly || Boolean(targetDateLabel);
   const masterSs = SpreadsheetApp.getActiveSpreadsheet();
   const portfolioSheet = masterSs.getSheetByName('Portfolio_Master');
   const scheduleSheet = masterSs.getSheetByName('Live_Session_Master');
@@ -219,12 +225,12 @@ function refreshLiveChannelDropdowns(options) {
     return;
   }
 
-  if (futureOnly && schDateColIndex === -1) {
+  if (hasDateScope && schDateColIndex === -1) {
     Logger.log("Không thể giới hạn dropdown theo ngày vì thiếu cột Ngày trong Live_Session_Master.");
     return;
   }
 
-  if (!futureOnly) {
+  if (!hasDateScope) {
     const channelRange = scheduleSheet.getRange(2, schChannelColIndex + 1, scheduleData.length - 1, 1);
     channelRange.clearDataValidations();
   }
@@ -249,7 +255,7 @@ function refreshLiveChannelDropdowns(options) {
   }
 
   for (let i = 1; i < scheduleData.length; i++) {
-    if (futureOnly && !isScheduleDateAfterToday(scheduleData[i][schDateColIndex])) {
+    if (hasDateScope && !isScheduleDateInScope(scheduleData[i][schDateColIndex], config)) {
       continue;
     }
 
