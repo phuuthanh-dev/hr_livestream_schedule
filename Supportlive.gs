@@ -1,22 +1,34 @@
 // ===========================================================================
 // ĐỒNG BỘ CHÍNH XÁC DANH SÁCH SUPPORT, LEVEL VÀ SĐT TỪ BẢNG NGUỒN SANG MASTER
 // ===========================================================================
-function syncSupportMasterFromSource() {
+function syncSupportMasterFromSource(options) {
+  const config = options || {};
+  const showAlert = config.showAlert !== false;
   const SOURCE_SPREADSHEET_ID = '12WU5jM-KC9EngkA_xBS3U82KYnO-8RMwGwk9fwcGe3o';
   
   let sourceSs;
   try {
     sourceSs = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
   } catch (e) {
-    safeAlert("Không thể kết nối File Nguồn. Kiểm tra lại ID hoặc quyền truy cập!");
-    return;
+    if (showAlert) safeAlert("Không thể kết nối File Nguồn. Kiểm tra lại ID hoặc quyền truy cập!");
+    return {
+      success: false,
+      syncedRows: 0,
+      skippedRows: 0,
+      message: "Không thể kết nối File Nguồn. Kiểm tra lại ID hoặc quyền truy cập!"
+    };
   }
 
   // Mở tab 'Thông tin Support Live'
   const sourceSheet = sourceSs.getSheetByName('Thông tin Support Live');
   if (!sourceSheet) {
-    safeAlert("Không tìm thấy tab 'Thông tin Support Live' trong file Đăng Ký Lịch!");
-    return;
+    if (showAlert) safeAlert("Không tìm thấy tab 'Thông tin Support Live' trong file Đăng Ký Lịch!");
+    return {
+      success: false,
+      syncedRows: 0,
+      skippedRows: 0,
+      message: "Không tìm thấy tab 'Thông tin Support Live' trong file Đăng Ký Lịch!"
+    };
   }
 
   const destSs = SpreadsheetApp.getActiveSpreadsheet();
@@ -27,8 +39,13 @@ function syncSupportMasterFromSource() {
 
   const sourceData = sourceSheet.getDataRange().getValues();
   if (sourceData.length <= 1) {
-    safeAlert("Tab 'Thông tin Support Live' chưa có dữ liệu!");
-    return;
+    if (showAlert) safeAlert("Tab 'Thông tin Support Live' chưa có dữ liệu!");
+    return {
+      success: false,
+      syncedRows: 0,
+      skippedRows: 0,
+      message: "Tab 'Thông tin Support Live' chưa có dữ liệu!"
+    };
   }
 
   // 1. DÒ TỰ ĐỘNG VỊ TRÍ CÁC CỘT BÊN FILE NGUỒN
@@ -232,8 +249,21 @@ function syncSupportMasterFromSource() {
     if (skippedRows > 0) {
       alertMsg += `\nBỏ qua ${skippedRows} dòng không có mã Support.`;
     }
-    safeAlert(alertMsg);
+    if (showAlert) safeAlert(alertMsg);
+    return {
+      success: true,
+      syncedRows: supportRows.length,
+      skippedRows,
+      message: alertMsg
+    };
   } else {
-    safeAlert("Không lấy được dữ liệu từ tab 'Thông tin Support Live'!");
+    const message = "Không lấy được dữ liệu từ tab 'Thông tin Support Live'!";
+    if (showAlert) safeAlert(message);
+    return {
+      success: false,
+      syncedRows: 0,
+      skippedRows,
+      message
+    };
   }
 }

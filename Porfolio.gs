@@ -43,7 +43,7 @@ function setupPortfolioHeaders() {
   Logger.log("Đã setup xong tiêu đề mở rộng (có Entry_Grade) trong Portfolio_Master!");
 }
 
-function syncPortfolioMaster() {
+function syncPortfolioMaster(options) {
   const sourceSs = SpreadsheetApp.openById(SOURCE_FILE_ID);
   const sourceSheet = sourceSs.getSheetByName('Thông tin Mẫu Live');
   
@@ -52,7 +52,13 @@ function syncPortfolioMaster() {
   
   if (!sourceSheet || !destSheet) {
     Logger.log("Lỗi: Không tìm thấy tab dữ liệu ở file nguồn hoặc đích.");
-    return;
+    return {
+      success: false,
+      updatedCount: 0,
+      deletedCount: 0,
+      insertedCount: 0,
+      message: "Không tìm thấy tab dữ liệu ở file nguồn hoặc đích."
+    };
   }
 
   const sourceData = sourceSheet.getDataRange().getValues();
@@ -388,5 +394,13 @@ function syncPortfolioMaster() {
     }
   }
   
-  Logger.log(`Hoàn tất! Đã xóa ${deletedCount} dòng thừa. Cập nhật ${updatedCount} hồ sơ (bao gồm Entry_Grade) và thêm mới ${newRows.length} hồ sơ.`);
+  const summary = {
+    success: true,
+    updatedCount,
+    deletedCount,
+    insertedCount: newRows.length,
+    message: `Đã xóa ${deletedCount} dòng thừa, cập nhật ${updatedCount} hồ sơ và thêm mới ${newRows.length} hồ sơ.`
+  };
+  Logger.log(`Hoàn tất! ${summary.message}`);
+  return summary;
 }

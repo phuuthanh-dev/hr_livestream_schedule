@@ -48,12 +48,38 @@ const SUPPORT_SHIFT_WINDOWS = [
   { startMinutes: 18 * 60, endMinutes: 22 * 60, label: "18:00 - 22:00" }
 ];
 
+function syncScheduleMasterData_() {
+  const summary = {
+    portfolio: null,
+    support: null
+  };
+
+  if (typeof syncPortfolioMaster === 'function') {
+    summary.portfolio = syncPortfolioMaster({ showAlert: false });
+  }
+
+  if (typeof syncSupportMasterFromSource === 'function') {
+    summary.support = syncSupportMasterFromSource({ showAlert: false });
+  }
+
+  SpreadsheetApp.flush();
+  return summary;
+}
+
 function syncAndUnpivotSchedule(options) {
   const config = Object.assign({ futureOnly: true }, options || {});
   const todayLabel = formatAppDateValue(new Date());
   const targetDateLabel = getScheduleTargetDateLabel(config);
   const scopeLabel = getScheduleScopeLabel(config);
+  let masterSyncSummary = null;
   let sourceRefreshSummary = null;
+
+  try {
+    masterSyncSummary = syncScheduleMasterData_();
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(`Không thể đồng bộ Portfolio_Master / Support_Master trước khi chạy schedule: ${error.message}`);
+    return;
+  }
 
   try {
     sourceRefreshSummary = refreshSourceLiveStreamSchedule_();
@@ -511,6 +537,23 @@ function syncAndUnpivotSchedule(options) {
       ? `Đã đồng bộ lịch live cho ngày ${targetDateLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`
       : `Đã đồng bộ lịch live cho các ngày ${scopeLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`
   ];
+
+  if (masterSyncSummary) {
+    const masterSummaryParts = [];
+    if (masterSyncSummary.portfolio) {
+      masterSummaryParts.push(masterSyncSummary.portfolio.success
+        ? `Portfolio_Master: cập nhật ${masterSyncSummary.portfolio.updatedCount || 0}, thêm ${masterSyncSummary.portfolio.insertedCount || 0}, xoá ${masterSyncSummary.portfolio.deletedCount || 0}`
+        : `Portfolio_Master: ${masterSyncSummary.portfolio.message || "không sync được"}`);
+    }
+    if (masterSyncSummary.support) {
+      masterSummaryParts.push(masterSyncSummary.support.success
+        ? `Support_Master: ${masterSyncSummary.support.syncedRows || 0} hồ sơ, bỏ qua ${masterSyncSummary.support.skippedRows || 0}`
+        : `Support_Master: ${masterSyncSummary.support.message || "không sync được"}`);
+    }
+    if (masterSummaryParts.length > 0) {
+      alertLines.push(`Master sync: ${masterSummaryParts.join("; ")}.`);
+    }
+  }
 
   if (sourceRefreshSummary) {
     alertLines.push(`Nguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`);
