@@ -1,4 +1,4 @@
-import type { ConfirmRole, PeoplePayload, SchedulePayload, SchedulePerson } from "@/lib/types";
+import type { ConfirmRole, PeoplePayload, SchedulePayload } from "@/lib/types";
 
 type ScheduleRange = {
   from?: string;
@@ -55,37 +55,6 @@ async function parseGoogleResponse<T extends GoogleApiPayload>(response: Respons
   return payload;
 }
 
-function buildPeopleFromSchedule(rows: SchedulePayload["rows"]): PeoplePayload {
-  const hosts = new Map<string, SchedulePerson>();
-  const supports = new Map<string, SchedulePerson>();
-  (rows || []).forEach((row) => {
-    if (row.hostId) {
-      hosts.set(row.hostId.toLowerCase(), {
-        id: row.hostId,
-        name: row.hostName || row.hostId,
-        role: "host"
-      });
-    }
-    if (row.supportId) {
-      supports.set(row.supportId.toLowerCase(), {
-        id: row.supportId,
-        name: row.supportName || row.supportId,
-        role: "support"
-      });
-    }
-  });
-  const byName = (left: SchedulePerson, right: SchedulePerson) => left.name.localeCompare(right.name, "vi");
-  return {
-    success: true,
-    source: "Live_Session_Master fallback",
-    fallback: true,
-    hosts: Array.from(hosts.values()).sort(byName),
-    supports: Array.from(supports.values()).sort(byName)
-  };
-}
-
-let peopleCache: { expiresAt: number; payload: PeoplePayload } | null = null;
-
 export async function fetchSchedule(range: ScheduleRange = {}) {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const url = new URL(apiUrl);
@@ -102,22 +71,17 @@ export async function fetchSchedule(range: ScheduleRange = {}) {
   return parseGoogleResponse<SchedulePayload>(response);
 }
 
-export async function fetchSchedulePeople() {
-  if (peopleCache && peopleCache.expiresAt > Date.now()) {
-    return peopleCache.payload;
-  }
-
+export async function fetchSchedulePeopleFromGoogle() {
   const { apiUrl, token } = getGoogleScheduleConfig();
   const url = new URL(apiUrl);
   url.searchParams.set("action", "people");
   url.searchParams.set("token", token);
   const response = await fetch(url, { method: "GET", cache: "no-store" });
   const payload = await parseGoogleResponse<PeoplePayload & SchedulePayload>(response);
-  const peoplePayload = payload.hosts && payload.supports
-    ? payload
-    : buildPeopleFromSchedule(payload.rows);
-  peopleCache = { expiresAt: Date.now() + 5 * 60 * 1000, payload: peoplePayload };
-  return peoplePayload;
+  if (!Array.isArray(payload.hosts) || !Array.isArray(payload.supports) || payload.fallback) {
+    throw new Error("Apps Script deployment chưa hỗ trợ roster master. Hãy deploy WebApi.gs phiên bản mới rồi thử lại.");
+  }
+  return payload;
 }
 
 export async function refreshSchedule(range: ScheduleRange = {}) {
@@ -137,7 +101,6 @@ export async function refreshSchedule(range: ScheduleRange = {}) {
   });
 
   const payload = await parseGoogleResponse<SchedulePayload>(response);
-  peopleCache = null;
   return payload;
 }
 

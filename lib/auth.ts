@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { findActiveSchedulePerson } from "@/lib/employeeRoster";
 import type { AccountType, EmployeeRole } from "@/lib/types";
 
 const SESSION_COOKIE = "hr_schedule_session";
@@ -68,7 +69,18 @@ export function verifySessionToken(token?: string) {
 
 export async function getDashboardSession() {
   const cookieStore = await cookies();
-  return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
+  const session = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
+  if (!session || session.accountType !== "employee") return session;
+  if (!session.role || !session.employeeId) return null;
+
+  const person = await findActiveSchedulePerson(session.role, session.employeeId);
+  if (!person) return null;
+  return {
+    ...session,
+    user: person.id,
+    employeeId: person.id,
+    displayName: person.name
+  };
 }
 
 export async function setDashboardSession(identity: DashboardSessionIdentity) {

@@ -16,6 +16,7 @@ export default function LoginForm() {
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
   const [supports, setSupports] = useState<SchedulePerson[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(true);
+  const [peopleMessage, setPeopleMessage] = useState("");
   const [accountMode, setAccountMode] = useState<AccountMode>("idle");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,8 +35,15 @@ export default function LoginForm() {
           throw new Error(payload.message || payload.error || "Không tải được danh sách nhân viên.");
         }
         if (active) {
-          setHosts(payload.hosts || []);
-          setSupports(payload.supports || []);
+          const nextHosts = payload.hosts || [];
+          const nextSupports = payload.supports || [];
+          setHosts(nextHosts);
+          setSupports(nextSupports);
+          setPeopleMessage(
+            nextHosts.length === 0 && nextSupports.length === 0
+              ? payload.message || "Danh sách nhân viên chưa được Admin đồng bộ."
+              : ""
+          );
         }
       })
       .catch((loadError) => {
@@ -172,6 +180,7 @@ export default function LoginForm() {
             </div>
           ) : null}
           {accountMode === "checking" ? <p className="formStatus">Đang kiểm tra tài khoản...</p> : null}
+          {peopleMessage ? <p className="formStatus">{peopleMessage}</p> : null}
         </>
       ) : (
         <div className="accountModeHint adminAccount">

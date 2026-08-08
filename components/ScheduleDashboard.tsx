@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
-import type { ConfirmRole, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
+import type { ConfirmRole, PeopleSyncPayload, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
 
 type ScheduleDashboardProps = {
   username: string;
@@ -10,8 +10,8 @@ type ScheduleDashboardProps = {
   employeeId?: string;
 };
 
-type FilterMode = "all" | "warnings" | "pending";
-type IconName = "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "warning";
+type FilterMode = "all" | "mine" | "warnings" | "pending";
+type IconName = "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -67,6 +67,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "sheet") {
     return <svg {...common}><path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" /><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" /></svg>;
+  }
+  if (name === "users") {
+    return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
   }
   if (name === "warning") {
     return <svg {...common}><path d="M10.3 3.7 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.7a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg>;
@@ -182,6 +185,16 @@ function sessionMatchesFilter(session: ScheduleSession, filter: FilterMode) {
   return true;
 }
 
+function sessionBelongsToEmployee(
+  session: ScheduleSession,
+  role: ScheduleDashboardProps["employeeRole"],
+  normalizedEmployeeId: string
+) {
+  if (!role || !normalizedEmployeeId) return false;
+  const assignedId = role === "host" ? session.hostId : session.supportId;
+  return assignedId.trim().toLowerCase() === normalizedEmployeeId;
+}
+
 function getPersonLabel(id: string, name: string, emptyLabel: string) {
   if (!id && !name) return emptyLabel;
   if (!name || name === id) return id;
@@ -255,10 +268,11 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [timezone, setTimezone] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [peopleSyncing, setPeopleSyncing] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<FilterMode>("all");
+  const [filter, setFilter] = useState<FilterMode>(() => isAdmin ? "all" : "mine");
   const [busyConfirm, setBusyConfirm] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -267,14 +281,20 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const weekEndKey = addDays(weekStartKey, 6);
   const days = DAY_NAMES.map((label, index) => ({ label, dateKey: addDays(weekStartKey, index) }));
   const weekSessions = sessions.filter((session) => session.dateKey >= weekStartKey && session.dateKey <= weekEndKey);
+  const normalizedEmployeeId = employeeId?.trim().toLowerCase() || "";
+  const mySessions = weekSessions.filter((session) =>
+    sessionBelongsToEmployee(session, employeeRole, normalizedEmployeeId)
+  );
   const visibleSessions = weekSessions.filter(
-    (session) => sessionMatchesQuery(session, deferredQuery) && sessionMatchesFilter(session, filter)
+    (session) =>
+      sessionMatchesQuery(session, deferredQuery) &&
+      sessionMatchesFilter(session, filter) &&
+      (filter !== "mine" || sessionBelongsToEmployee(session, employeeRole, normalizedEmployeeId))
   );
   const weekSummary = buildSummary(weekSessions);
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
-  const normalizedEmployeeId = employeeId?.trim().toLowerCase() || "";
   const canConfirmSelectedHost = Boolean(
     selectedSession && (
       isAdmin || (employeeRole === "host" && selectedSession.hostId.trim().toLowerCase() === normalizedEmployeeId)
@@ -324,6 +344,28 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       setError(refreshError instanceof Error ? refreshError.message : "Không cập nhật được lịch.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function syncPeopleFromSheet() {
+    setPeopleSyncing(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/people/sync", { method: "POST" });
+      const payload = (await response.json()) as PeopleSyncPayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không cập nhật được danh sách nhân viên.");
+      }
+      setMessage(
+        `Đã cập nhật ${payload.total} nhân viên vào MongoDB` +
+        ` · ${payload.inserted} mới · ${payload.updated} cập nhật · ${payload.deactivated} ngừng hoạt động.`
+      );
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Không cập nhật được danh sách nhân viên.");
+    } finally {
+      setPeopleSyncing(false);
     }
   }
 
@@ -430,10 +472,28 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
         <div className="headerActions">
           {isAdmin ? (
-            <button className="syncButton" onClick={refreshFromSheet} disabled={refreshing} type="button">
-              <Icon name="refresh" />
-              <span>{refreshing ? "Đang cập nhật..." : "Cập nhật Sheet"}</span>
-            </button>
+            <>
+              <button
+                className={`syncButton peopleSyncButton ${peopleSyncing ? "isLoading" : ""}`}
+                onClick={syncPeopleFromSheet}
+                disabled={peopleSyncing || refreshing}
+                title="Đồng bộ Portfolio_Master và Support_Master vào MongoDB"
+                type="button"
+              >
+                <Icon name="users" />
+                <span>{peopleSyncing ? "Đang đồng bộ..." : "Cập nhật nhân viên"}</span>
+              </button>
+              <button
+                className={`syncButton ${refreshing ? "isLoading" : ""}`}
+                onClick={refreshFromSheet}
+                disabled={refreshing || peopleSyncing}
+                title="Đồng bộ và xếp lại lịch từ Google Sheet"
+                type="button"
+              >
+                <Icon name="refresh" />
+                <span>{refreshing ? "Đang cập nhật..." : "Cập nhật lịch"}</span>
+              </button>
+            </>
           ) : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
@@ -477,6 +537,11 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
           <section className="sidebarSection">
             <p className="sidebarLabel">HIỂN THỊ</p>
+            {!isAdmin ? (
+              <button className={`filterOption filterMine ${filter === "mine" ? "active" : ""}`} onClick={() => setFilter("mine")} type="button">
+                <span className="filterDot" /><span>Ca của tôi</span><strong>{mySessions.length}</strong>
+              </button>
+            ) : null}
             <button className={`filterOption filterAll ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")} type="button">
               <span className="filterDot" /><span>Tất cả ca live</span><strong>{weekSummary.total}</strong>
             </button>

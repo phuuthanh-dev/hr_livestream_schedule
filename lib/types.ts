@@ -12,12 +12,22 @@ export type SchedulePerson = {
 export type PeoplePayload = {
   success: boolean;
   generatedAt?: string;
+  syncedAt?: string;
   source?: string;
   fallback?: boolean;
+  total?: number;
   hosts?: SchedulePerson[];
   supports?: SchedulePerson[];
   error?: string;
   message?: string;
+};
+
+export type PeopleSyncPayload = PeoplePayload & {
+  syncedAt: string;
+  inserted: number;
+  updated: number;
+  deactivated: number;
+  total: number;
 };
 
 export type ScheduleSession = {

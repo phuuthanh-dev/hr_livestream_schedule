@@ -1,12 +1,14 @@
 # HR Streaming Schedule Web
 
-Website Next.js hiển thị lịch livestream theo tuần từ `Live_Session_Master`. Hệ thống có đăng nhập Admin/Nhân viên, xác nhận ca theo đúng người được phân công, cảnh báo Studio thiếu support, support-only và nút đồng bộ Google Sheet dành riêng cho Admin.
+Website Next.js hiển thị lịch livestream theo tuần từ `Live_Session_Master`. Hệ thống có đăng nhập Admin/Nhân viên, xác nhận ca theo đúng người được phân công, cảnh báo Studio thiếu support, support-only và các nút đồng bộ Google Sheet dành riêng cho Admin.
 
 ## Phân quyền
 
 - Admin có quyền đồng bộ Sheet và xác nhận/hủy xác nhận cho Host hoặc Support Live.
-- Nhân viên chọn vai trò và mã nhân viên từ `Portfolio_Master` hoặc `Support_Master`.
+- Admin dùng nút `Cập nhật nhân viên` để đồng bộ `Portfolio_Master` và `Support_Master` vào collection MongoDB `schedule_people`.
+- Nhân viên chọn vai trò và mã nhân viên từ roster `schedule_people`; website không đọc trực tiếp master Google Sheet trong luồng login.
 - Nhân viên chỉ được xác nhận/hủy đúng `Session_ID`, đúng vai trò và đúng mã nhân viên được gán trên `Live_Session_Master`.
+- Nhân viên mặc định chỉ thấy `Ca của tôi` và có thể chuyển sang `Tất cả ca live` khi cần.
 - Quyền được kiểm tra ở cả Next.js API và Apps Script ngay trước khi ghi Sheet. `Session_ID` trùng sẽ bị từ chối để tránh sửa nhầm dòng.
 - Tài khoản nhân viên chưa có mật khẩu có thể tạo mật khẩu lần đầu. Mật khẩu chỉ cần không rỗng và không vượt quá 72 byte; MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
 
@@ -19,6 +21,8 @@ Lưu ý: cơ chế tự tạo mật khẩu lần đầu cho phép người biế
 3. Deploy Apps Script dạng Web app, Execute as `Me`, access `Anyone with the link`.
 4. Copy URL `/exec` vào `GOOGLE_SCHEDULE_API_URL` và token vào `GOOGLE_SCHEDULE_API_TOKEN`.
 5. Tạo deployment version mới mỗi khi thay đổi `app_script/WebApi.gs`; deployment cũ không tự nhận code mới.
+
+Sau khi deploy Apps Script có endpoint `action=people`, đăng nhập Admin và bấm `Cập nhật nhân viên` lần đầu. Sync dùng transaction: upsert người hiện có, giữ tài khoản/mật khẩu trong `schedule_users`, và đánh dấu `active=false` đối với người không còn trong master. Một roster rỗng sẽ bị từ chối để tránh vô hiệu hóa nhầm toàn bộ nhân viên.
 
 `SCHEDULE_WEB_TOKEN` không tự hết hạn. Token tồn tại trong Script Properties đến khi bị sửa/xóa hoặc chạy lại `generateScheduleWebToken()`; chạy lại hàm sẽ làm token cũ mất hiệu lực ngay. Phiên đăng nhập dashboard có thời hạn 7 ngày.
 

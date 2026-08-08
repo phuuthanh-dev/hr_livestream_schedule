@@ -29,7 +29,11 @@ function getMongoClientPromise() {
   return globalThis.__hrStreamingMongoClientPromise;
 }
 
+export async function getMongoClient(): Promise<MongoClient> {
+  return getMongoClientPromise();
+}
+
 export async function getMongoDatabase(): Promise<Db> {
-  const client = await getMongoClientPromise();
+  const client = await getMongoClient();
   return client.db(process.env.MONGODB_DB || "hr_streaming");
 }
