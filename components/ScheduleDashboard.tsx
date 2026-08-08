@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { getScheduleTodayKey } from "@/lib/scheduleDate";
 import type { ConfirmRole, PeopleSyncPayload, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
 
 type ScheduleDashboardProps = {
@@ -277,7 +278,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const deferredQuery = useDeferredValue(query);
 
-  const todayKey = toDateKey(new Date());
+  const todayKey = getScheduleTodayKey(timezone || undefined);
   const weekEndKey = addDays(weekStartKey, 6);
   const days = DAY_NAMES.map((label, index) => ({ label, dateKey: addDays(weekStartKey, index) }));
   const weekSessions = sessions.filter((session) => session.dateKey >= weekStartKey && session.dateKey <= weekEndKey);
@@ -295,14 +296,23 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
+  const selectedSessionIsPast = Boolean(selectedSession?.dateKey && selectedSession.dateKey < todayKey);
   const canConfirmSelectedHost = Boolean(
     selectedSession && (
-      isAdmin || (employeeRole === "host" && selectedSession.hostId.trim().toLowerCase() === normalizedEmployeeId)
+      isAdmin || (
+        !selectedSessionIsPast &&
+        employeeRole === "host" &&
+        selectedSession.hostId.trim().toLowerCase() === normalizedEmployeeId
+      )
     )
   );
   const canConfirmSelectedSupport = Boolean(
     selectedSession && (
-      isAdmin || (employeeRole === "support" && selectedSession.supportId.trim().toLowerCase() === normalizedEmployeeId)
+      isAdmin || (
+        !selectedSessionIsPast &&
+        employeeRole === "support" &&
+        selectedSession.supportId.trim().toLowerCase() === normalizedEmployeeId
+      )
     )
   );
   const miniMonth = buildMiniMonth(weekStartKey);
@@ -370,6 +380,11 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   }
 
   async function confirmSession(session: ScheduleSession, role: ConfirmRole, confirmed: boolean) {
+    if (!isAdmin && session.dateKey < todayKey) {
+      setError(`Bạn không thể thay đổi xác nhận của ngày đã qua (${session.dateLabel}).`);
+      return;
+    }
+
     const busyKey = `${session.sessionId}:${role}`;
     setBusyConfirm(busyKey);
     setError("");
@@ -693,7 +708,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   <div><strong>{selectedSession.isSupportConfirmed ? (isAdmin ? "Support đã xác nhận" : "Bạn đã xác nhận ca này") : (isAdmin ? "Xác nhận support" : "Xác nhận ca support của tôi")}</strong><small>{selectedSession.isSupportConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
                 </button>
               ) : null}
-              {!isAdmin && !canConfirmSelectedHost && !canConfirmSelectedSupport ? (
+              {!isAdmin && selectedSessionIsPast ? (
+                <p className="confirmRestriction">Ca này đã qua ngày. Bạn chỉ có thể xem lịch sử; chỉ Admin được xác nhận hoặc huỷ xác nhận ca cũ.</p>
+              ) : !isAdmin && !canConfirmSelectedHost && !canConfirmSelectedSupport ? (
                 <p className="confirmRestriction">Ca này không được phân công cho tài khoản của bạn. Bạn chỉ có thể xác nhận hoặc huỷ xác nhận đúng ca, đúng vai trò và đúng mã nhân viên của mình.</p>
               ) : null}
             </div>

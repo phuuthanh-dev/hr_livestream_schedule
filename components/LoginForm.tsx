@@ -169,7 +169,7 @@ export default function LoginForm() {
             >
               <option value="">{peopleLoading ? "Đang tải danh sách..." : `Chọn ${role === "host" ? "host" : "support"}`}</option>
               {people.map((person) => (
-                <option key={person.id} value={person.id}>{person.name} · {person.id}{person.level ? ` · ${person.level}` : ""}</option>
+                <option key={person.id} value={person.id}>{person.name} · {person.id}</option>
               ))}
             </select>
           </label>

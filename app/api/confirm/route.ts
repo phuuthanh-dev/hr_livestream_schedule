@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { confirmSchedule, fetchSchedule } from "@/lib/googleSchedule";
 import { getDashboardSession } from "@/lib/auth";
+import { getScheduleTodayKey } from "@/lib/scheduleDate";
 import type { ConfirmRole } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -64,6 +65,16 @@ export async function POST(request: Request) {
       }
 
       const target = matchingSessions[0];
+      if (!target.dateKey) {
+        throw new ConfirmRequestError("Ca này không có ngày hợp lệ nên nhân viên không thể thay đổi xác nhận.", 409);
+      }
+      if (target.dateKey < getScheduleTodayKey(schedule.timezone)) {
+        throw new ConfirmRequestError(
+          `Bạn không thể thay đổi xác nhận của ngày đã qua (${target.dateLabel}). Chỉ Admin được xử lý lịch sử.`,
+          403
+        );
+      }
+
       const assignedEmployeeId = body.role === "host" ? target.hostId : target.supportId;
       if (normalizeEmployeeId(assignedEmployeeId) !== normalizeEmployeeId(session.employeeId)) {
         const roleLabel = body.role === "host" ? "Host" : "Support Live";

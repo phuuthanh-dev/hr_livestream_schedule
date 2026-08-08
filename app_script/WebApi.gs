@@ -315,6 +315,21 @@ function assertScheduleWebConfirmPermission_(sheet, rowNumber, body, requestedRo
   if (!actorEmployeeId || ["host", "support"].indexOf(actorRole) === -1) {
     throw new Error("Phiên đăng nhập thiếu mã nhân viên hoặc vai trò.");
   }
+
+  const targetDateValue = sheet.getRange(rowNumber, dateCol).getValue();
+  const targetDate = parseFlexibleDateValue(targetDateValue);
+  if (!targetDate) {
+    throw new Error("Ca " + sessionId + " không có ngày hợp lệ nên nhân viên không thể thay đổi xác nhận.");
+  }
+  const spreadsheet = sheet.getParent();
+  const timezone = (spreadsheet && spreadsheet.getSpreadsheetTimeZone()) ||
+    (typeof APP_TZ === "string" ? APP_TZ : "Asia/Bangkok");
+  const targetDateKey = Utilities.formatDate(targetDate, timezone, "yyyy-MM-dd");
+  const todayKey = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
+  if (targetDateKey < todayKey) {
+    throw new Error("Bạn không thể thay đổi xác nhận của ngày đã qua. Chỉ Admin được xử lý lịch sử.");
+  }
+
   if (requestedRole === "both" || requestedRole !== actorRole) {
     throw new Error(
       "Bạn đang đăng nhập với vai trò " + getScheduleWebRoleLabel_(actorRole) +
