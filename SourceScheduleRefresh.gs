@@ -103,7 +103,13 @@ function loadSourceHostInfo_(sheet) {
 
     const homeChecked = homeCol !== -1 ? isSourceCheckedValue_(data[i][homeCol]) : false;
     const studioChecked = studioCol !== -1 ? isSourceCheckedValue_(data[i][studioCol]) : false;
-    formatMap[hostId] = homeChecked && studioChecked ? 'Both' : 'Studio';
+    if (homeChecked && studioChecked) {
+      formatMap[hostId] = 'Both';
+    } else if (homeChecked) {
+      formatMap[hostId] = 'Home';
+    } else {
+      formatMap[hostId] = 'Studio';
+    }
   }
 
   return {

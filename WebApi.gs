@@ -1,0 +1,380 @@
+const SCHEDULE_WEB_TOKEN_PROPERTY = "SCHEDULE_WEB_TOKEN";
+const SCHEDULE_WEB_CONFIRM_VALUE = "Đã xác nhận";
+const SCHEDULE_WEB_UNCONFIRM_VALUE = "Chưa xác nhận";
+
+function doGet(e) {
+  return handleScheduleWebRequest_("GET", e);
+}
+
+function doPost(e) {
+  return handleScheduleWebRequest_("POST", e);
+}
+
+function generateScheduleWebToken() {
+  const token = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
+  PropertiesService.getScriptProperties().setProperty(SCHEDULE_WEB_TOKEN_PROPERTY, token);
+  const message =
+    "Đã tạo SCHEDULE_WEB_TOKEN. Copy token này vào biến GOOGLE_SCHEDULE_API_TOKEN trên Vercel:\n" +
+    token;
+  safeAlert(message);
+  return token;
+}
+
+function handleScheduleWebRequest_(method, event) {
+  try {
+    const body = method === "POST" ? parseScheduleWebJsonBody_(event) : {};
+    const params = (event && event.parameter) || {};
+    const action = (body.action || params.action || "schedule").toString().trim().toLowerCase();
+
+    assertScheduleWebToken_(body.token || params.token);
+
+    if (method === "GET" || action === "schedule") {
+      return buildScheduleWebJsonResponse_(getScheduleWebPayload_(params));
+    }
+
+    if (action === "confirm") {
+      return buildScheduleWebJsonResponse_(confirmScheduleWebSession_(body));
+    }
+
+    if (action === "refresh") {
+      return buildScheduleWebJsonResponse_(refreshScheduleWebPayload_(body));
+    }
+
+    throw new Error("Action không hợp lệ.");
+  } catch (error) {
+    return buildScheduleWebJsonResponse_({
+      success: false,
+      error: error && error.message ? error.message : String(error)
+    });
+  }
+}
+
+function parseScheduleWebJsonBody_(event) {
+  const raw = event && event.postData && event.postData.contents
+    ? event.postData.contents
+    : "";
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error("Body JSON không hợp lệ.");
+  }
+}
+
+function assertScheduleWebToken_(incomingToken) {
+  const expectedToken = PropertiesService.getScriptProperties().getProperty(SCHEDULE_WEB_TOKEN_PROPERTY);
+  if (!expectedToken) {
+    throw new Error("Chưa cấu hình Script Property SCHEDULE_WEB_TOKEN.");
+  }
+
+  if (!incomingToken || incomingToken !== expectedToken) {
+    throw new Error("Token không hợp lệ.");
+  }
+}
+
+function buildScheduleWebJsonResponse_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getScheduleWebSpreadsheet_() {
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (activeSpreadsheet) return activeSpreadsheet;
+
+  if (typeof DEST_FILE_ID === "string" && DEST_FILE_ID) {
+    return SpreadsheetApp.openById(DEST_FILE_ID);
+  }
+
+  throw new Error("Không xác định được spreadsheet đích.");
+}
+
+function getScheduleWebPayload_(params) {
+  const ss = getScheduleWebSpreadsheet_();
+  const sheet = ss.getSheetByName("Live_Session_Master");
+  if (!sheet) {
+    throw new Error("Không tìm thấy tab Live_Session_Master.");
+  }
+
+  ensureRealScheduleTrackingColumns(sheet);
+
+  const timezone = getAppTimeZone();
+  const fromKey = normalizeScheduleWebDateKey_(params && params.from);
+  const toKey = normalizeScheduleWebDateKey_(params && params.to);
+  const rows = readScheduleWebRows_(sheet, timezone, fromKey, toKey);
+
+  return {
+    success: true,
+    spreadsheetId: ss.getId(),
+    sheetName: sheet.getName(),
+    generatedAt: new Date().toISOString(),
+    timezone: timezone,
+    rowCount: rows.length,
+    summary: buildScheduleWebSummary_(rows),
+    rows: rows
+  };
+}
+
+function refreshScheduleWebPayload_(body) {
+  const syncResult = syncAndUnpivotSchedule({
+    futureOnly: true,
+    suppressAlert: true
+  }) || {
+    success: false,
+    message: "Không nhận được kết quả sync."
+  };
+  const params = {
+    from: body && body.from,
+    to: body && body.to
+  };
+  const payload = getScheduleWebPayload_(params);
+  payload.sync = syncResult;
+  return payload;
+}
+
+function confirmScheduleWebSession_(body) {
+  const sessionId = body && body.sessionId ? body.sessionId.toString().trim() : "";
+  const role = body && body.role ? body.role.toString().trim().toLowerCase() : "";
+  const confirmed = body && body.confirmed !== false;
+
+  if (!sessionId) {
+    throw new Error("Thiếu sessionId.");
+  }
+
+  if (["host", "support", "both"].indexOf(role) === -1) {
+    throw new Error("Role confirm phải là host, support hoặc both.");
+  }
+
+  const lock = getScheduleWebLock_();
+  if (!lock.tryLock(10000)) {
+    throw new Error("Không lấy được lock để cập nhật confirm. Vui lòng thử lại.");
+  }
+
+  try {
+    const ss = getScheduleWebSpreadsheet_();
+    const sheet = ss.getSheetByName("Live_Session_Master");
+    if (!sheet || sheet.getLastRow() <= 1) {
+      throw new Error("Tab Live_Session_Master chưa có dữ liệu.");
+    }
+
+    const headerMap = ensureRealScheduleTrackingColumns(sheet);
+    const sessionCol = getScheduleWebHeaderIndex_(headerMap, "Session_ID", LIVE_SESSION_SESSION_INDEX) + 1;
+    const hostConfirmCol = getScheduleWebHeaderIndex_(headerMap, "Host_Live_Confirm", -1) + 1;
+    const supportConfirmCol = getScheduleWebHeaderIndex_(headerMap, "Support_Live_Confirm", -1) + 1;
+
+    if (sessionCol <= 0 || hostConfirmCol <= 0 || supportConfirmCol <= 0) {
+      throw new Error("Thiếu cột Session_ID / Host_Live_Confirm / Support_Live_Confirm.");
+    }
+
+    const lastRow = sheet.getLastRow();
+    const sessionValues = sheet.getRange(2, sessionCol, lastRow - 1, 1).getValues();
+    let targetRowNumber = 0;
+
+    for (let i = 0; i < sessionValues.length; i++) {
+      const currentSessionId = sessionValues[i][0] ? sessionValues[i][0].toString().trim() : "";
+      if (currentSessionId === sessionId) {
+        targetRowNumber = i + 2;
+        break;
+      }
+    }
+
+    if (!targetRowNumber) {
+      throw new Error("Không tìm thấy Session_ID trong Live_Session_Master.");
+    }
+
+    const nextValue = confirmed ? SCHEDULE_WEB_CONFIRM_VALUE : SCHEDULE_WEB_UNCONFIRM_VALUE;
+    if (role === "host" || role === "both") {
+      sheet.getRange(targetRowNumber, hostConfirmCol).setValue(nextValue);
+    }
+    if (role === "support" || role === "both") {
+      sheet.getRange(targetRowNumber, supportConfirmCol).setValue(nextValue);
+    }
+
+    SpreadsheetApp.flush();
+
+    const params = {
+      from: body && body.from,
+      to: body && body.to
+    };
+    const payload = getScheduleWebPayload_(params);
+    payload.updatedSessionId = sessionId;
+    payload.updatedRole = role;
+    payload.confirmed = confirmed;
+    return payload;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getScheduleWebLock_() {
+  return LockService.getDocumentLock() || LockService.getScriptLock();
+}
+
+function readScheduleWebRows_(sheet, timezone, fromKey, toKey) {
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow <= 1 || lastCol <= 0) return [];
+
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const headers = data[0];
+  const headerMap = buildSheetHeaderMap(headers);
+  const idx = getScheduleWebIndexes_(headerMap);
+  const rows = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const session = buildScheduleWebSession_(row, idx, i + 1, timezone);
+    if (!session.sessionId && !session.hostId && !session.supportId) continue;
+    if (fromKey && session.dateKey && session.dateKey < fromKey) continue;
+    if (toKey && session.dateKey && session.dateKey > toKey) continue;
+    rows.push(session);
+  }
+
+  rows.sort(function(left, right) {
+    return [left.dateKey, left.slotSortKey, left.sessionId].join("__")
+      .localeCompare([right.dateKey, right.slotSortKey, right.sessionId].join("__"));
+  });
+
+  return rows;
+}
+
+function getScheduleWebIndexes_(headerMap) {
+  return {
+    stt: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[0], 0),
+    weekday: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[1], 1),
+    date: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[2], 2),
+    slot: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[3], 3),
+    hostId: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[4], 4),
+    hostName: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[5], 5),
+    format: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[6], 6),
+    supportId: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[7], 7),
+    supportName: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[8], 8),
+    channel: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[9], 9),
+    scriptUrl: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_BASE_HEADERS[10], 10),
+    sessionId: getScheduleWebHeaderIndex_(headerMap, "Session_ID", LIVE_SESSION_SESSION_INDEX),
+    hostConfirm: getScheduleWebHeaderIndex_(headerMap, "Host_Live_Confirm", -1),
+    supportConfirm: getScheduleWebHeaderIndex_(headerMap, "Support_Live_Confirm", -1),
+    backupHostId: getScheduleWebHeaderIndex_(headerMap, "Backup_Host_ID", -1),
+    backupHostName: getScheduleWebHeaderIndex_(headerMap, "Backup_Host_Name", -1),
+    backupSupportId: getScheduleWebHeaderIndex_(headerMap, "Backup_Support_ID", -1),
+    backupSupportName: getScheduleWebHeaderIndex_(headerMap, "Backup_Support_Name", -1),
+    supportCandidatePool: getScheduleWebHeaderIndex_(headerMap, LIVE_SESSION_SUPPORT_POOL_HEADER, -1)
+  };
+}
+
+function getScheduleWebHeaderIndex_(headerMap, headerName, fallbackIndex) {
+  return headerMap && headerMap[headerName] !== undefined ? headerMap[headerName] : fallbackIndex;
+}
+
+function buildScheduleWebSession_(row, idx, rowNumber, timezone) {
+  const dateValue = getScheduleWebCell_(row, idx.date);
+  const date = parseFlexibleDateValue(dateValue);
+  const dateKey = date ? Utilities.formatDate(date, timezone, "yyyy-MM-dd") : "";
+  const formatValue = getScheduleWebText_(row, idx.format);
+  const sessionId = getScheduleWebText_(row, idx.sessionId);
+  const hostId = getScheduleWebText_(row, idx.hostId);
+  const supportId = getScheduleWebText_(row, idx.supportId);
+  const hostConfirm = getScheduleWebText_(row, idx.hostConfirm);
+  const supportConfirm = getScheduleWebText_(row, idx.supportConfirm);
+  const supportRequired = isScheduleWebSupportRequired_(formatValue);
+  const isSupportOnly = !isMeaningfulScheduleValue(hostId) && isMeaningfulScheduleValue(supportId);
+  const missingSupport = isMeaningfulScheduleValue(hostId) && supportRequired && !isMeaningfulScheduleValue(supportId);
+  const warnings = [];
+
+  if (missingSupport) {
+    warnings.push("STUDIO_MISSING_SUPPORT");
+  }
+  if (isSupportOnly) {
+    warnings.push("SUPPORT_ONLY");
+  }
+  if (!dateKey) {
+    warnings.push("INVALID_DATE");
+  }
+
+  return {
+    rowNumber: rowNumber,
+    stt: getScheduleWebText_(row, idx.stt),
+    sessionId: sessionId,
+    dateKey: dateKey,
+    dateLabel: date ? Utilities.formatDate(date, timezone, "dd/MM/yyyy") : getScheduleWebText_(row, idx.date),
+    weekday: getScheduleWebText_(row, idx.weekday),
+    slot: getScheduleWebText_(row, idx.slot),
+    slotSortKey: getScheduleWebSlotSortKey_(getScheduleWebCell_(row, idx.slot)),
+    hostId: hostId,
+    hostName: getScheduleWebText_(row, idx.hostName),
+    format: formatValue,
+    supportId: supportId,
+    supportName: getScheduleWebText_(row, idx.supportName),
+    channel: getScheduleWebText_(row, idx.channel),
+    scriptUrl: getScheduleWebText_(row, idx.scriptUrl),
+    hostConfirm: hostConfirm,
+    supportConfirm: supportConfirm,
+    backupHostId: getScheduleWebText_(row, idx.backupHostId),
+    backupHostName: getScheduleWebText_(row, idx.backupHostName),
+    backupSupportId: getScheduleWebText_(row, idx.backupSupportId),
+    backupSupportName: getScheduleWebText_(row, idx.backupSupportName),
+    supportCandidatePool: getScheduleWebText_(row, idx.supportCandidatePool),
+    isHostConfirmed: isConfirmedScheduleValue(hostConfirm),
+    isSupportConfirmed: isConfirmedScheduleValue(supportConfirm),
+    canConfirmHost: Boolean(sessionId) && isMeaningfulScheduleValue(hostId),
+    canConfirmSupport: Boolean(sessionId) && isMeaningfulScheduleValue(supportId),
+    supportRequired: supportRequired,
+    isSupportOnly: isSupportOnly,
+    missingSupport: missingSupport,
+    warningLevel: missingSupport ? "danger" : (isSupportOnly ? "info" : "ok"),
+    warnings: warnings
+  };
+}
+
+function getScheduleWebCell_(row, index) {
+  if (index === undefined || index < 0) return "";
+  return row[index];
+}
+
+function getScheduleWebText_(row, index) {
+  const value = getScheduleWebCell_(row, index);
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return formatAppDateValue(value);
+  }
+  return value.toString().trim();
+}
+
+function getScheduleWebSlotSortKey_(slotValue) {
+  const slotParts = getScheduleSlotParts(slotValue);
+  if (!slotParts) return "9999";
+  return String(slotParts.startMinutes).padStart(4, "0");
+}
+
+function isScheduleWebSupportRequired_(formatValue) {
+  const normalized = normalizeScheduleTrackingText(formatValue);
+  if (!normalized || normalized === "both" || normalized === "home") return false;
+  return normalized.indexOf("studio") !== -1;
+}
+
+function normalizeScheduleWebDateKey_(value) {
+  const date = parseFlexibleDateValue(value);
+  return date ? Utilities.formatDate(date, getAppTimeZone(), "yyyy-MM-dd") : "";
+}
+
+function buildScheduleWebSummary_(rows) {
+  return (rows || []).reduce(function(summary, row) {
+    summary.total++;
+    if (row.isSupportOnly) summary.supportOnly++;
+    if (row.missingSupport) summary.missingSupport++;
+    if (row.canConfirmHost && !row.isHostConfirmed) summary.pendingHostConfirm++;
+    if (row.canConfirmSupport && !row.isSupportConfirmed) summary.pendingSupportConfirm++;
+    if (row.isHostConfirmed) summary.confirmedHost++;
+    if (row.isSupportConfirmed) summary.confirmedSupport++;
+    return summary;
+  }, {
+    total: 0,
+    supportOnly: 0,
+    missingSupport: 0,
+    pendingHostConfirm: 0,
+    pendingSupportConfirm: 0,
+    confirmedHost: 0,
+    confirmedSupport: 0
+  });
+}

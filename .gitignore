@@ -1,4 +1,10 @@
 Thumbs.db
 .DS_Store
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+.env*.local
+!.env.example
 ~$*.xlsx
 nguon/

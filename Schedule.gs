@@ -48,6 +48,16 @@ const SUPPORT_SHIFT_WINDOWS = [
   { startMinutes: 18 * 60, endMinutes: 22 * 60, label: "18:00 - 22:00" }
 ];
 
+function showScheduleSyncAlert_(message, options) {
+  if (options && options.suppressAlert) {
+    Logger.log(message);
+    return { success: false, message: message };
+  }
+
+  safeAlert(message);
+  return { success: false, message: message };
+}
+
 function syncScheduleMasterData_() {
   const summary = {
     portfolio: null,
@@ -77,29 +87,25 @@ function syncAndUnpivotSchedule(options) {
   try {
     masterSyncSummary = syncScheduleMasterData_();
   } catch (error) {
-    SpreadsheetApp.getUi().alert(`Không thể đồng bộ Portfolio_Master / Support_Master trước khi chạy schedule: ${error.message}`);
-    return;
+    return showScheduleSyncAlert_(`Không thể đồng bộ Portfolio_Master / Support_Master trước khi chạy schedule: ${error.message}`, config);
   }
 
   try {
     sourceRefreshSummary = refreshSourceLiveStreamSchedule_();
   } catch (error) {
-    SpreadsheetApp.getUi().alert(`Không thể làm mới schedule ở file nguồn: ${error.message}`);
-    return;
+    return showScheduleSyncAlert_(`Không thể làm mới schedule ở file nguồn: ${error.message}`, config);
   }
   
   let sourceSs;
   try {
     sourceSs = SpreadsheetApp.openById(SOURCE_SCHEDULE_SPREADSHEET_ID);
   } catch (e) {
-    SpreadsheetApp.getUi().alert("Không thể kết nối File Nguồn. Kiểm tra lại ID!");
-    return;
+    return showScheduleSyncAlert_("Không thể kết nối File Nguồn. Kiểm tra lại ID!", config);
   }
   
   const sourceSheet = sourceSs.getSheetByName('LIVE STREAM/ SCHEDULE');
   if (!sourceSheet) {
-    SpreadsheetApp.getUi().alert("Không tìm thấy tab 'LIVE STREAM/ SCHEDULE'!");
-    return;
+    return showScheduleSyncAlert_("Không tìm thấy tab 'LIVE STREAM/ SCHEDULE'!", config);
   }
   
   const destSs = SpreadsheetApp.getActiveSpreadsheet();
@@ -110,8 +116,7 @@ function syncAndUnpivotSchedule(options) {
 
   const sourceData = sourceSheet.getDataRange().getValues();
   if (sourceData.length <= 1) {
-    SpreadsheetApp.getUi().alert("Tab 'LIVE STREAM/ SCHEDULE' chưa có dữ liệu!");
-    return;
+    return showScheduleSyncAlert_("Tab 'LIVE STREAM/ SCHEDULE' chưa có dữ liệu!", config);
   }
 
   const portfolioMap = buildPortfolioConflictMap(destSs);
@@ -371,31 +376,28 @@ function syncAndUnpivotSchedule(options) {
 
   if (scopedNormalizedRows.length === 0 && existingScopedRows.length === 0) {
     if (targetDateLabel) {
-      SpreadsheetApp.getUi().alert(`Không có ca live ngày ${targetDateLabel} để sync.`);
-      return;
+      return showScheduleSyncAlert_(`Không có ca live ngày ${targetDateLabel} để sync.`, config);
     }
 
-    SpreadsheetApp.getUi().alert(
-      `Không có ca live trong phạm vi ${scopeLabel} để sync. Dữ liệu ngoài phạm vi này được giữ nguyên.`
+    return showScheduleSyncAlert_(
+      `Không có ca live trong phạm vi ${scopeLabel} để sync. Dữ liệu ngoài phạm vi này được giữ nguyên.`,
+      config
     );
-    return;
   }
 
   if (normalizedRows.length <= 0 && existingData.length === 0) {
-    SpreadsheetApp.getUi().alert("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.");
-    return;
+    return showScheduleSyncAlert_("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.", config);
   }
 
   if (scopedNormalizedRows.length === 0 && existingScopedRows.length === 0) {
     if (targetDateLabel) {
-      SpreadsheetApp.getUi().alert(`KhÃ´ng cÃ³ ca live ngÃ y ${targetDateLabel} Ä‘á»ƒ sync.`);
-      return;
+      return showScheduleSyncAlert_(`Không có ca live ngày ${targetDateLabel} để sync.`, config);
     }
 
-    SpreadsheetApp.getUi().alert(
-      `Không có ca live ngày >= ${todayLabel} để sync. Dữ liệu ngày < ${todayLabel} được giữ nguyên.`
+    return showScheduleSyncAlert_(
+      `Không có ca live ngày >= ${todayLabel} để sync. Dữ liệu ngày < ${todayLabel} được giữ nguyên.`,
+      config
     );
-    return;
   }
 
   const existingRowMap = {};
@@ -512,26 +514,6 @@ function syncAndUnpivotSchedule(options) {
   const locationResult = hasScopedRowsRemaining
     ? autoFillLocationToSchedule(false, targetDateLabel ? { targetDate: targetDateLabel } : { futureOnly: true })
     : null;
-  let alertMessage = `Đã đồng bộ lịch live cho các ngày >= ${todayLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`;
-  if (targetDateLabel) {
-    alertMessage = `ÄÃ£ Ä‘á»“ng bá»™ lá»‹ch live cho ngÃ y ${targetDateLabel}: cáº­p nháº­t ${updatedCount} dÃ²ng, thÃªm ${appendRows.length} dÃ²ng má»›i, xoÃ¡ ${removedCount} dÃ²ng.`;
-  }
-
-  if (sourceRefreshSummary) {
-    alertMessage += `\nNguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`;
-  }
-  if (hasScopedRowsRemaining) {
-    alertMessage += `\nĐã tự cập nhật Location + Kênh live cho các ca từ hôm nay.`;
-  }
-  if (skippedByCast > 0) {
-    alertMessage += `\nLoại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`;
-  }
-  if (conflictResult) {
-    alertMessage += `\nResolve conflict cho các ca >= ${todayLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
-  }
-  if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
-    alertMessage += `\n\n${formatLookupAlertMessage(locationResult.lookupSummary)}`;
-  }
   const alertLines = [
     targetDateLabel
       ? `Đã đồng bộ lịch live cho ngày ${targetDateLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`
@@ -575,8 +557,22 @@ function syncAndUnpivotSchedule(options) {
     alertLines.push(formatLookupAlertMessage(locationResult.lookupSummary));
   }
 
-  alertMessage = alertLines.join("\n");
-  SpreadsheetApp.getUi().alert(alertMessage);
+  const alertMessage = alertLines.join("\n");
+  showScheduleSyncAlert_(alertMessage, config);
+  return {
+    success: true,
+    message: alertMessage,
+    scopeLabel: scopeLabel,
+    targetDate: targetDateLabel,
+    updatedCount: updatedCount,
+    appendedCount: appendRows.length,
+    removedCount: removedCount,
+    skippedByCast: skippedByCast,
+    masterSyncSummary: masterSyncSummary,
+    sourceRefreshSummary: sourceRefreshSummary,
+    conflictResult: conflictResult,
+    locationResult: locationResult
+  };
 }
 
 function syncAndUnpivotScheduleForDate(targetDate) {
