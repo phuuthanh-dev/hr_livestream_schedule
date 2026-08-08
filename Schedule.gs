@@ -1197,7 +1197,7 @@ function buildSupportConflictCandidate(supportId, supportMap, sourceOrder) {
       meta.valid ? 1 : 0,
       meta.castReady || 0,
       meta.trainingReady || 0,
-      -(meta.levelWeight || 0),
+      meta.levelWeight || 0,
       -effectiveCashOffer,
     ]
   };
@@ -2060,7 +2060,6 @@ function buildPortfolioConflictMap(ss) {
       cashOffer: cashCol !== -1 ? parseScheduleCashOfferValue(data[i][cashCol]) : Number.MAX_SAFE_INTEGER,
       rankWeight: getHostConflictGradeWeight(gradeCol !== -1 ? data[i][gradeCol] : ""),
       allowedLocation,
-      studioPriority: normalizeScheduleTrackingText(allowedLocation) === "studio" ? 2 : (normalizeScheduleTrackingText(allowedLocation) === "both" ? 1 : 0),
       castReady: castCol !== -1 && isPositiveScheduleFlag(data[i][castCol]) ? 1 : 0,
       trainingReady: trainingCol !== -1 && isPositiveScheduleFlag(data[i][trainingCol]) ? 1 : 0,
       valid: true
@@ -2141,6 +2140,8 @@ function chooseSingleBestConflictCandidate(candidates, metricKey, reasonLabel, o
   if (tied.length > 1) {
     if (config.preferFirstOnTie) {
       const selected = tied.slice().sort((a, b) => {
+        const orderCompare = (a.sourceOrder || 0) - (b.sourceOrder || 0);
+        if (orderCompare !== 0) return orderCompare;
         const leftId = (a.id || "").toString();
         const rightId = (b.id || "").toString();
         return leftId.localeCompare(rightId, 'vi', { sensitivity: 'base' });
@@ -2149,7 +2150,7 @@ function chooseSingleBestConflictCandidate(candidates, metricKey, reasonLabel, o
       return {
         selected,
         manual: false,
-        reason: `${reasonLabel}: hòa tiêu chí, lấy theo alpha = ${selected.id}`
+        reason: `${reasonLabel}: hòa tiêu chí, lấy theo thứ tự nguồn = ${selected.id}`
       };
     }
 
