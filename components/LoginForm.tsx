@@ -187,8 +187,7 @@ export default function LoginForm() {
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          placeholder="Tối thiểu 8 ký tự"
-          minLength={8}
+          placeholder="Nhập mật khẩu"
           disabled={loginType === "employee" && accountMode !== "login" && accountMode !== "create"}
           required
         />
@@ -202,7 +201,6 @@ export default function LoginForm() {
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Nhập lại mật khẩu mới"
-            minLength={8}
             required
           />
         </label>

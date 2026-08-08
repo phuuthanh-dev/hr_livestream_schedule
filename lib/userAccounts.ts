@@ -45,8 +45,8 @@ function safeEqualText(left: string, right: string) {
 
 function assertPasswordPolicy(password: string) {
   const byteLength = Buffer.byteLength(password, "utf8");
-  if (password.length < 8) {
-    throw new Error("Mật khẩu phải có ít nhất 8 ký tự.");
+  if (password.length === 0) {
+    throw new Error("Mật khẩu không được để trống.");
   }
   if (byteLength > MAX_PASSWORD_BYTES) {
     throw new Error("Mật khẩu không được vượt quá 72 byte.");

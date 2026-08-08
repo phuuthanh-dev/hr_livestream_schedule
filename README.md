@@ -8,7 +8,7 @@ Website Next.js hiển thị lịch livestream theo tuần từ `Live_Session_Ma
 - Nhân viên chọn vai trò và mã nhân viên từ `Portfolio_Master` hoặc `Support_Master`.
 - Nhân viên chỉ được xác nhận/hủy đúng `Session_ID`, đúng vai trò và đúng mã nhân viên được gán trên `Live_Session_Master`.
 - Quyền được kiểm tra ở cả Next.js API và Apps Script ngay trước khi ghi Sheet. `Session_ID` trùng sẽ bị từ chối để tránh sửa nhầm dòng.
-- Tài khoản nhân viên chưa có mật khẩu có thể tạo mật khẩu lần đầu. MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
+- Tài khoản nhân viên chưa có mật khẩu có thể tạo mật khẩu lần đầu. Mật khẩu chỉ cần không rỗng và không vượt quá 72 byte; MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
 
 Lưu ý: cơ chế tự tạo mật khẩu lần đầu cho phép người biết mã nhân viên claim tài khoản chưa được tạo. Nếu cần bảo mật cao hơn, nên bổ sung mã mời do HR cấp hoặc yêu cầu Admin kích hoạt tài khoản.
 

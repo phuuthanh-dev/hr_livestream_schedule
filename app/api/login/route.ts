@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     }
     recordLoginFailure(rateLimitKey);
     const message = error instanceof Error ? error.message : "Không đăng nhập được.";
-    const status = message.includes("ít nhất 8") || message.includes("72 byte") || message.includes("nhập lại") ? 400 : 401;
+    const status = message.includes("để trống") || message.includes("72 byte") || message.includes("nhập lại") ? 400 : 401;
     return NextResponse.json(
       { success: false, message },
       { status }
