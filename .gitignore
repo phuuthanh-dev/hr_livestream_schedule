@@ -4,6 +4,7 @@ node_modules/
 .next/
 .vercel/
 *.tsbuildinfo
+.env
 .env*.local
 !.env.example
 ~$*.xlsx

@@ -20,6 +20,8 @@ GOOGLE_SCHEDULE_API_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/ex
 GOOGLE_SCHEDULE_API_TOKEN=token-from-generateScheduleWebToken
 ```
 
+After changing Vercel environment variables, redeploy the latest deployment so the new values are loaded by the serverless API routes. If you test with a Preview URL, set the same variables for the Preview environment too.
+
 ## Local Dev
 
 ```bash

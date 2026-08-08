@@ -29,6 +29,13 @@ async function parseScheduleResponse(response: Response) {
   try {
     payload = JSON.parse(text) as SchedulePayload;
   } catch {
+    const looksLikeHtml = text.trim().startsWith("<!doctype html") || text.includes("accounts.google.com");
+    if (looksLikeHtml) {
+      throw new Error(
+        "Apps Script returned HTML instead of JSON. Check that GOOGLE_SCHEDULE_API_URL is the Web app /exec URL and the deployment access is Anyone."
+      );
+    }
+
     throw new Error("Google Schedule API returned invalid JSON.");
   }
 
