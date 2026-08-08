@@ -1197,7 +1197,7 @@ function buildSupportConflictCandidate(supportId, supportMap, sourceOrder) {
       meta.valid ? 1 : 0,
       meta.castReady || 0,
       meta.trainingReady || 0,
-      meta.levelWeight || 0,
+      -(meta.levelWeight || 0),
       -effectiveCashOffer,
     ]
   };
