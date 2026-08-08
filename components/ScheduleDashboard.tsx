@@ -25,7 +25,7 @@ const DEFAULT_SLOTS = [
   "22:00 - 00:00"
 ];
 
-let initialScheduleRequest: Promise<SchedulePayload> | null = null;
+const weekScheduleRequests = new Map<string, Promise<SchedulePayload>>();
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const common = {
@@ -237,9 +237,19 @@ function buildMiniMonth(weekStartKey: string) {
   };
 }
 
-async function requestFullSchedule() {
-  if (!initialScheduleRequest) {
-    initialScheduleRequest = fetch("/api/schedule", { cache: "no-store" })
+function getWeekRequestKey(from: string, to: string) {
+  return `${from}:${to}`;
+}
+
+function cacheWeekPayload(from: string, to: string, payload: SchedulePayload) {
+  weekScheduleRequests.set(getWeekRequestKey(from, to), Promise.resolve(payload));
+}
+
+async function requestWeekSchedule(from: string, to: string) {
+  const requestKey = getWeekRequestKey(from, to);
+  if (!weekScheduleRequests.has(requestKey)) {
+    const query = new URLSearchParams({ from, to });
+    const request = fetch(`/api/schedule?${query.toString()}`, { cache: "no-store" })
       .then(async (response) => {
         const payload = (await response.json()) as SchedulePayload;
         if (!response.ok || !payload.success) {
@@ -248,11 +258,12 @@ async function requestFullSchedule() {
         return payload;
       })
       .catch((error) => {
-        initialScheduleRequest = null;
+        weekScheduleRequests.delete(requestKey);
         throw error;
       });
+    weekScheduleRequests.set(requestKey, request);
   }
-  return initialScheduleRequest;
+  return weekScheduleRequests.get(requestKey) as Promise<SchedulePayload>;
 }
 
 export default function ScheduleDashboard({ username }: ScheduleDashboardProps) {
@@ -282,8 +293,7 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
   const miniMonth = buildMiniMonth(weekStartKey);
-  const dataDates = sessions.map((session) => session.dateKey).filter(Boolean).sort();
-  const coverage = dataDates.length ? `${formatShortDate(dataDates[0])} - ${formatShortDate(dataDates[dataDates.length - 1])}` : "-";
+  const coverage = formatWeekRange(weekStartKey);
   const slotSet = new Set(DEFAULT_SLOTS);
   sessions.forEach((session) => {
     if (session.slot) slotSet.add(session.slot);
@@ -295,7 +305,7 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     setSessions(nextRows);
     setGeneratedAt(payload.generatedAt || "");
     setTimezone(payload.timezone || "");
-    initialScheduleRequest = Promise.resolve(payload);
+    cacheWeekPayload(weekStartKey, weekEndKey, payload);
     if (selectedSessionId && !nextRows.some((session) => session.sessionId === selectedSessionId)) {
       setSelectedSessionId("");
     }
@@ -307,13 +317,17 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     setMessage("");
 
     try {
-      const response = await fetch("/api/refresh", { method: "POST" });
+      const response = await fetch("/api/refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ from: weekStartKey, to: weekEndKey })
+      });
       const payload = (await response.json()) as SchedulePayload;
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || payload.error || "Không cập nhật được lịch.");
       }
       applyPayload(payload);
-      setMessage(payload.sync?.message || "Đã cập nhật toàn bộ lịch từ Google Sheet.");
+      setMessage(payload.sync?.message || "Đã cập nhật lịch tuần từ Google Sheet.");
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : "Không cập nhật được lịch.");
     } finally {
@@ -331,7 +345,13 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
       const response = await fetch("/api/confirm", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: session.sessionId, role, confirmed })
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          role,
+          confirmed,
+          from: weekStartKey,
+          to: weekEndKey
+        })
       });
       const payload = (await response.json()) as SchedulePayload;
       if (!response.ok || !payload.success) {
@@ -361,7 +381,11 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
 
   useEffect(() => {
     let active = true;
-    void requestFullSchedule()
+    setLoading(true);
+    setError("");
+    setMessage("");
+    setSelectedSessionId("");
+    void requestWeekSchedule(weekStartKey, weekEndKey)
       .then((payload) => {
         if (active) applyPayload(payload);
       })
@@ -374,7 +398,7 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     return () => {
       active = false;
     };
-  }, []);
+  }, [weekStartKey]);
 
   useEffect(() => {
     if (!selectedSessionId) return;
@@ -540,7 +564,7 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
                   ))}
                 </div>
 
-                {loading ? <div className="calendarLoading"><span className="loadingSpinner" />Đang tải toàn bộ lịch từ Google Sheet...</div> : null}
+                {loading ? <div className="calendarLoading"><span className="loadingSpinner" />Đang tải lịch tuần từ Google Sheet...</div> : null}
                 {!loading && visibleSessions.length === 0 ? (
                   <div className="emptyWeekBanner">Không có ca phù hợp trong tuần này.</div>
                 ) : null}
