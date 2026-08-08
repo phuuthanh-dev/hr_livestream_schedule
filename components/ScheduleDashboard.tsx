@@ -25,8 +25,6 @@ const DEFAULT_SLOTS = [
   "22:00 - 00:00"
 ];
 
-const weekScheduleRequests = new Map<string, Promise<SchedulePayload>>();
-
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const common = {
     width: size,
@@ -237,33 +235,14 @@ function buildMiniMonth(weekStartKey: string) {
   };
 }
 
-function getWeekRequestKey(from: string, to: string) {
-  return `${from}:${to}`;
-}
-
-function cacheWeekPayload(from: string, to: string, payload: SchedulePayload) {
-  weekScheduleRequests.set(getWeekRequestKey(from, to), Promise.resolve(payload));
-}
-
 async function requestWeekSchedule(from: string, to: string) {
-  const requestKey = getWeekRequestKey(from, to);
-  if (!weekScheduleRequests.has(requestKey)) {
-    const query = new URLSearchParams({ from, to });
-    const request = fetch(`/api/schedule?${query.toString()}`, { cache: "no-store" })
-      .then(async (response) => {
-        const payload = (await response.json()) as SchedulePayload;
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.message || payload.error || "Không tải được lịch.");
-        }
-        return payload;
-      })
-      .catch((error) => {
-        weekScheduleRequests.delete(requestKey);
-        throw error;
-      });
-    weekScheduleRequests.set(requestKey, request);
+  const query = new URLSearchParams({ from, to });
+  const response = await fetch(`/api/schedule?${query.toString()}`, { cache: "no-store" });
+  const payload = (await response.json()) as SchedulePayload;
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.message || payload.error || "Không tải được lịch.");
   }
-  return weekScheduleRequests.get(requestKey) as Promise<SchedulePayload>;
+  return payload;
 }
 
 export default function ScheduleDashboard({ username }: ScheduleDashboardProps) {
@@ -305,7 +284,6 @@ export default function ScheduleDashboard({ username }: ScheduleDashboardProps) 
     setSessions(nextRows);
     setGeneratedAt(payload.generatedAt || "");
     setTimezone(payload.timezone || "");
-    cacheWeekPayload(weekStartKey, weekEndKey, payload);
     if (selectedSessionId && !nextRows.some((session) => session.sessionId === selectedSessionId)) {
       setSelectedSessionId("");
     }

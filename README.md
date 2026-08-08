@@ -31,4 +31,4 @@ npm install
 npm run dev
 ```
 
-The browser never receives the Google API token. Mỗi tuần được tải tối đa một lần rồi cache trong browser; chuyển sang tuần chưa xem sẽ gọi API với đúng phạm vi `from/to`, còn quay lại tuần đã xem không gọi thêm. Refresh và confirm vẫn đi qua Next.js API routes vì đây là các thao tác đọc/ghi dữ liệu mới.
+The browser never receives the Google API token. Mỗi lần chuyển tuần, dashboard gọi API một lần với đúng phạm vi `from/to`, kể cả khi quay lại tuần đã xem. Refresh và confirm vẫn đi qua Next.js API routes vì đây là các thao tác đọc/ghi dữ liệu mới.
