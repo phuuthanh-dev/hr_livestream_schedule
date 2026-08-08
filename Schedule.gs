@@ -156,6 +156,12 @@ function syncAndUnpivotSchedule(options) {
     let suppIdList   = (rawSuppIds && !rawSuppIds.toLowerCase().includes("trống") && !rawSuppIds.toLowerCase().includes("no_support")) ? rawSuppIds.split(',').map(s => s.trim()) : [];
 
     const supportCandidateIds = normalizeScheduleCandidatePool(suppIdList);
+    const hasMeaningfulHostInput = hostIdList.some(hostId => isMeaningfulScheduleValue(hostId));
+    const hasMeaningfulSupportInput = supportCandidateIds.length > 0;
+
+    if (!hasMeaningfulHostInput && !hasMeaningfulSupportInput) {
+      continue;
+    }
 
     const eligibleHosts = hostIdList
       .map((hostId, index) => ({
@@ -177,7 +183,7 @@ function syncAndUnpivotSchedule(options) {
       });
 
     if (eligibleHosts.length === 0) {
-      if (!hostIdList.some(hostId => isMeaningfulScheduleValue(hostId)) && hasScheduleContext) {
+      if (!hasMeaningfulHostInput && hasMeaningfulSupportInput && hasScheduleContext) {
         const normalizedSupportId = suppIdList.length > 0 && isMeaningfulScheduleValue(suppIdList[0]) ? suppIdList[0] : "";
         const normalizedSupportName = normalizedSupportId && supportMap[normalizedSupportId]
           ? supportMap[normalizedSupportId].name || normalizedSupportId
@@ -2221,6 +2227,10 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     const rowDate = idx.date !== undefined ? formatAppDateValue(row[idx.date]) : "";
     const rowSlot = idx.time !== undefined && row[idx.time] ? row[idx.time].toString().trim() : "";
     const hasScheduleContext = Boolean(rowDate || rowSlot || normalizedHostId || normalizedSupportId);
+
+    if (!normalizedHostId && !normalizedSupportId) {
+      continue;
+    }
 
     if (!hasScheduleContext) {
       continue;
