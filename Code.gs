@@ -145,7 +145,6 @@ function onOpen() {
         .addItem('Đồng bộ danh sách Host', 'syncPortfolioMaster')
         .addItem('Đồng bộ danh sách Support', 'syncSupportMasterFromSource')
         .addItem('Đồng bộ lịch live', 'syncAndUnpivotSchedule')
-        .addItem('Đồng bộ lịch live theo ngày', 'syncAndUnpivotScheduleByDatePrompt')
         .addItem('Cập nhật Địa điểm + Kênh live', 'autoFillLocationToSchedule')
         .addItem('Resolve conflict lịch', 'resolveScheduleConflicts')
         .addItem('Tạo real schedule', 'buildRealScheduleFromMaster')

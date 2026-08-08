@@ -48,11 +48,8 @@ const SUPPORT_SHIFT_WINDOWS = [
   { startMinutes: 18 * 60, endMinutes: 22 * 60, label: "18:00 - 22:00" }
 ];
 
-function syncAndUnpivotSchedule(options) {
-  const config = Object.assign({ futureOnly: true }, options || {});
+function syncAndUnpivotSchedule() {
   const todayLabel = formatAppDateValue(new Date());
-  const targetDateLabel = getScheduleTargetDateLabel(config);
-  const scopeLabel = getScheduleScopeLabel(config);
   let sourceRefreshSummary = null;
 
   try {
@@ -294,8 +291,8 @@ function syncAndUnpivotSchedule(options) {
       };
     });
   const normalizedRows = normalizedRowEntries.map(entry => entry.row);
-  const scopedNormalizedRowEntries = normalizedRowEntries.filter(entry => isScheduleDateInScope(entry.row[2], config));
-  const scopedNormalizedRows = scopedNormalizedRowEntries.map(entry => entry.row);
+  const futureNormalizedRowEntries = normalizedRowEntries.filter(entry => isScheduleDateOnOrAfterToday(entry.row[2]));
+  const futureNormalizedRows = futureNormalizedRowEntries.map(entry => entry.row);
 
   function buildRowKey(row) {
     const hostKey = buildScheduleHostIdentityKey(row[2], row[3], row[4]);
@@ -335,29 +332,24 @@ function syncAndUnpivotSchedule(options) {
   const existingData = existingLastRow > 1
     ? destSheet.getRange(2, 1, existingLastRow - 1, destHeaders.length).getValues()
     : [];
-  const existingScopedRows = existingData.filter(row => isScheduleDateInScope(row[2], config));
-
-  if (scopedNormalizedRows.length === 0 && existingScopedRows.length === 0) {
-    if (targetDateLabel) {
-      SpreadsheetApp.getUi().alert(`Không có ca live ngày ${targetDateLabel} để sync.`);
-      return;
-    }
-
-    SpreadsheetApp.getUi().alert(
-      `Không có ca live trong phạm vi ${scopeLabel} để sync. Dữ liệu ngoài phạm vi này được giữ nguyên.`
-    );
-    return;
-  }
+  const existingFutureRows = existingData.filter(row => isScheduleDateOnOrAfterToday(row[2]));
 
   if (normalizedRows.length <= 0 && existingData.length === 0) {
     SpreadsheetApp.getUi().alert("Không có dữ liệu ca live hợp lệ để sync sang Live_Session_Master.");
     return;
   }
 
+  if (futureNormalizedRows.length === 0 && existingFutureRows.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      `Không có ca live ngày >= ${todayLabel} để sync. Dữ liệu ngày < ${todayLabel} được giữ nguyên.`
+    );
+    return;
+  }
+
   const existingRowMap = {};
   const existingRowDataMap = {};
   for (let i = 0; i < existingData.length; i++) {
-    if (!isScheduleDateInScope(existingData[i][2], config)) continue;
+    if (!isScheduleDateOnOrAfterToday(existingData[i][2])) continue;
     const key = buildRowKey(existingData[i]);
     if (key !== "__") {
       existingRowMap[key] = i + 2;
@@ -370,8 +362,8 @@ function syncAndUnpivotSchedule(options) {
   let updatedCount = 0;
   let removedCount = 0;
 
-  for (let i = 0; i < scopedNormalizedRows.length; i++) {
-    const row = scopedNormalizedRows[i];
+  for (let i = 0; i < futureNormalizedRows.length; i++) {
+    const row = futureNormalizedRows[i];
     row[0] = i + 1;
     const sheetRow = row.slice(0, LIVE_SESSION_BASE_COLUMN_COUNT);
 
@@ -411,7 +403,7 @@ function syncAndUnpivotSchedule(options) {
 
     for (let i = finalData.length - 1; i >= 0; i--) {
       const key = buildRowKey(finalData[i]);
-      if (isScheduleDateInScope(finalData[i][2], config) && !incomingKeySet.has(key)) {
+      if (isScheduleDateOnOrAfterToday(finalData[i][2]) && !incomingKeySet.has(key)) {
         rowsToDelete.push(i + 2);
       }
     }
@@ -426,7 +418,7 @@ function syncAndUnpivotSchedule(options) {
   if (refreshedLastRow > 1) {
     const refreshedData = destSheet.getRange(2, 1, refreshedLastRow - 1, destHeaders.length).getValues();
     const supportPoolByRowKey = {};
-    scopedNormalizedRowEntries.forEach(entry => {
+    futureNormalizedRowEntries.forEach(entry => {
       const rowKey = buildRowKey(entry.row);
       if (!rowKey) return;
       supportPoolByRowKey[rowKey] = entry.supportCandidatePool || "";
@@ -447,7 +439,7 @@ function syncAndUnpivotSchedule(options) {
       const supportPoolCol = trackingHeaderMap[LIVE_SESSION_SUPPORT_POOL_HEADER] + 1;
       const currentSupportPoolValues = destSheet.getRange(2, supportPoolCol, refreshedData.length, 1).getValues();
       const supportPoolValues = refreshedData.map((row, index) => [
-        isScheduleDateInScope(row[2], config)
+        isScheduleDateOnOrAfterToday(row[2])
           ? (supportPoolByRowKey[buildRowKey(row)] || "")
           : (currentSupportPoolValues[index][0] || "")
       ]);
@@ -460,64 +452,31 @@ function syncAndUnpivotSchedule(options) {
     }
   }
 
-  const hasScopedRowsRemaining = refreshedLastRow > 1 &&
-    destSheet.getRange(2, 3, refreshedLastRow - 1, 1).getValues().some(row => isScheduleDateInScope(row[0], config));
-  const conflictResult = hasScopedRowsRemaining
-    ? resolveScheduleConflicts(false, targetDateLabel ? { skipPostAutoFill: true, targetDate: targetDateLabel } : { skipPostAutoFill: true, futureOnly: true })
+  const hasFutureRowsRemaining = refreshedLastRow > 1 &&
+    destSheet.getRange(2, 3, refreshedLastRow - 1, 1).getValues().some(row => isScheduleDateOnOrAfterToday(row[0]));
+  const conflictResult = hasFutureRowsRemaining
+    ? resolveScheduleConflicts(false, { skipPostAutoFill: true, futureOnly: true })
     : null;
-  const locationResult = hasScopedRowsRemaining
-    ? autoFillLocationToSchedule(false, targetDateLabel ? { targetDate: targetDateLabel } : { futureOnly: true })
+  const locationResult = hasFutureRowsRemaining
+    ? autoFillLocationToSchedule(false, { futureOnly: true })
     : null;
-  const alertLines = [
-    targetDateLabel
-      ? `Đã đồng bộ lịch live cho ngày ${targetDateLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`
-      : `Đã đồng bộ lịch live cho các ngày ${scopeLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`
-  ];
-
+  let alertMessage = `Đã đồng bộ lịch live cho các ngày >= ${todayLabel}: cập nhật ${updatedCount} dòng, thêm ${appendRows.length} dòng mới, xoá ${removedCount} dòng.`;
   if (sourceRefreshSummary) {
-    alertLines.push(`Nguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`);
+    alertMessage += `\nNguồn: dọn ${sourceRefreshSummary.cleanedHostCells} ô host, ${sourceRefreshSummary.cleanedSupportCells} ô support, build ${sourceRefreshSummary.aggregateRows} dòng ở LIVE STREAM/ SCHEDULE.`;
   }
-  if (hasScopedRowsRemaining) {
-    alertLines.push(`Đã tự cập nhật Location + Kênh live cho phạm vi ${scopeLabel}.`);
+  if (hasFutureRowsRemaining) {
+    alertMessage += `\nĐã tự cập nhật Location + Kênh live cho các ca từ hôm nay.`;
   }
   if (skippedByCast > 0) {
-    alertLines.push(`Loại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`);
+    alertMessage += `\nLoại ${skippedByCast} host chưa Đồng ý Cast khỏi proposal trước khi xếp priority.`;
   }
   if (conflictResult) {
-    alertLines.push(`Resolve conflict cho phạm vi ${scopeLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`);
+    alertMessage += `\nResolve conflict cho các ca >= ${todayLabel}: giữ ${conflictResult.finalRows} row final, ${conflictResult.autoResolvedGroups} nhóm auto-resolve, ${conflictResult.manualReviewGroups} nhóm chưa auto quyết.`;
   }
   if (locationResult && locationResult.lookupSummary && locationResult.lookupSummary.totalIssues > 0) {
-    alertLines.push("");
-    alertLines.push(formatLookupAlertMessage(locationResult.lookupSummary));
+    alertMessage += `\n\n${formatLookupAlertMessage(locationResult.lookupSummary)}`;
   }
-
-  const alertMessage = alertLines.join("\n");
   SpreadsheetApp.getUi().alert(alertMessage);
-}
-
-function syncAndUnpivotScheduleForDate(targetDate) {
-  const targetDateLabel = formatAppDateValue(targetDate);
-  if (!getScheduleDateComparisonKey(targetDateLabel)) {
-    SpreadsheetApp.getUi().alert("Ngày không hợp lệ. Hãy nhập theo định dạng dd/MM/yyyy, ví dụ 07/08/2026.");
-    return;
-  }
-
-  syncAndUnpivotSchedule({ targetDate: targetDateLabel });
-}
-
-function syncAndUnpivotScheduleByDatePrompt() {
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt(
-    "Đồng bộ lịch live theo ngày",
-    "Nhập ngày cần sync theo định dạng dd/MM/yyyy. Ví dụ: 07/08/2026",
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
-  }
-
-  syncAndUnpivotScheduleForDate(response.getResponseText());
 }
 
 function normalizeScheduleTrackingText(value) {
@@ -555,37 +514,6 @@ function isScheduleDateOnOrAfterToday(value) {
 
 function isScheduleDateAfterToday(value) {
   return isScheduleDateOnOrAfterToday(value);
-}
-
-function getScheduleTargetDateLabel(options) {
-  const targetDate = options && options.targetDate ? formatAppDateValue(options.targetDate) : "";
-  return getScheduleDateComparisonKey(targetDate) ? targetDate : "";
-}
-
-function isScheduleDateInScope(value, options) {
-  const targetDateLabel = getScheduleTargetDateLabel(options);
-  if (targetDateLabel) {
-    return getScheduleDateComparisonKey(value) === getScheduleDateComparisonKey(targetDateLabel);
-  }
-
-  if (options && options.futureOnly) {
-    return isScheduleDateOnOrAfterToday(value);
-  }
-
-  return true;
-}
-
-function getScheduleScopeLabel(options) {
-  const targetDateLabel = getScheduleTargetDateLabel(options);
-  if (targetDateLabel) {
-    return targetDateLabel;
-  }
-
-  if (options && options.futureOnly) {
-    return `>= ${formatAppDateValue(new Date())}`;
-  }
-
-  return "all dates";
 }
 
 function normalizeScheduleCandidatePool(values) {
@@ -2353,16 +2281,6 @@ function computeResolvedMasterRows(ss, data, headerMap) {
 function resolveScheduleConflicts(showAlert, options) {
   const config = options || {};
   const futureOnly = Boolean(config.futureOnly);
-  const targetDateLabel = getScheduleTargetDateLabel(config);
-  const hasDateScope = futureOnly || Boolean(targetDateLabel);
-  const autoFillOptions = Object.assign(
-    {
-      skipChannelUpdate: true,
-      skipDropdownRefresh: true,
-      skipLookupValidation: true
-    },
-    targetDateLabel ? { targetDate: targetDateLabel } : (futureOnly ? { futureOnly: true } : {})
-  );
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Live_Session_Master');
   if (!sheet || sheet.getLastRow() <= 1) {
@@ -2377,7 +2295,12 @@ function resolveScheduleConflicts(showAlert, options) {
 
   removeColumnsByHeaders(sheet, REMOVED_LIVE_SESSION_HEADERS);
   if (typeof autoFillLocationToSchedule === 'function') {
-    autoFillLocationToSchedule(false, autoFillOptions);
+    autoFillLocationToSchedule(false, {
+      skipChannelUpdate: true,
+      skipDropdownRefresh: true,
+      skipLookupValidation: true,
+      futureOnly
+    });
   }
 
   removeConflictTrackingColumns(sheet);
@@ -2387,13 +2310,13 @@ function resolveScheduleConflicts(showAlert, options) {
   let outputHeaders;
   let outputRows;
 
-  if (hasDateScope) {
+  if (futureOnly) {
     const idx = getScheduleConflictIndexes(headerMap);
     const targetData = [data[0]];
     const preservedRows = [];
 
     for (let i = 1; i < data.length; i++) {
-      if (isScheduleDateInScope(idx.date !== undefined ? data[i][idx.date] : "", config)) {
+      if (isScheduleDateOnOrAfterToday(idx.date !== undefined ? data[i][idx.date] : "")) {
         targetData.push(data[i].slice());
       } else {
         preservedRows.push(buildMasterFinalRow(data[i], idx, headerMap));
@@ -2420,23 +2343,6 @@ function resolveScheduleConflicts(showAlert, options) {
     resolution = computeResolvedMasterRows(ss, data, headerMap);
     outputHeaders = resolution.outputHeaders;
     outputRows = resolution.outputRows;
-  }
-
-  if (hasDateScope) {
-    outputRows = outputRows
-      .map((row, index) => ({
-        row: row.slice(),
-        sortOrder: index
-      }))
-      .sort((left, right) => compareScheduleRowsByDateAndTime(
-        left.row[2],
-        left.row[3],
-        right.row[2],
-        right.row[3],
-        left.sortOrder,
-        right.sortOrder
-      ))
-      .map(entry => entry.row);
   }
 
   outputRows = outputRows.map((row, index) => {
@@ -2468,10 +2374,7 @@ function resolveScheduleConflicts(showAlert, options) {
   trimTrailingGeneratedColumns(sheet, outputHeaders.length);
 
   if (!config.skipPostAutoFill && typeof autoFillLocationToSchedule === 'function') {
-    autoFillLocationToSchedule(
-      false,
-      targetDateLabel ? { targetDate: targetDateLabel } : (futureOnly ? { futureOnly: true } : undefined)
-    );
+    autoFillLocationToSchedule(false, futureOnly ? { futureOnly: true } : undefined);
   }
 
   if (showAlert !== false) {
