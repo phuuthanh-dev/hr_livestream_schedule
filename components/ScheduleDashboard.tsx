@@ -469,7 +469,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     <main className="calendarApp">
       <header className="appHeader">
         <div className="brandBlock">
-          <span className="brandMark"><Icon name="calendar" size={25} /></span>
+          <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
           <span className="brandName">Live Calendar</span>
         </div>
 
@@ -587,6 +587,22 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         </aside>
 
         <section className="scheduleWorkspace">
+          {!isAdmin ? (
+            <div className="employeeViewToolbar">
+              <div className="employeeViewCopy">
+                <strong>Phạm vi lịch</strong>
+                <span>{filter === "mine" ? "Chỉ các ca được phân công cho bạn" : filter === "all" ? "Bao gồm lịch của tất cả host và support" : "Đang dùng bộ lọc nâng cao"}</span>
+              </div>
+              <div className="employeeViewSwitch" role="group" aria-label="Phạm vi lịch hiển thị">
+                <button aria-pressed={filter === "mine"} className={filter === "mine" ? "active" : ""} onClick={() => setFilter("mine")} type="button">
+                  Ca của tôi <strong>{mySessions.length}</strong>
+                </button>
+                <button aria-pressed={filter === "all"} className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")} type="button">
+                  Tất cả lịch <strong>{weekSummary.total}</strong>
+                </button>
+              </div>
+            </div>
+          ) : null}
           {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
           {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
 
