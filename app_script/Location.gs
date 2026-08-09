@@ -320,6 +320,414 @@ function formatLookupAlertMessage(summary) {
   return lines.join("\n");
 }
 
+function buildSupportLookupRepairContext_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const supportSheet = ss.getSheetByName('Support_Master');
+  const context = {
+    byId: {},
+    idsByName: {},
+    idsByBaseCode: {}
+  };
+
+  if (!supportSheet || supportSheet.getLastRow() <= 1) {
+    return context;
+  }
+
+  const supportData = supportSheet.getDataRange().getValues();
+  const supportHeaders = supportData[0] || [];
+  const supportIdColIndex = supportHeaders.indexOf("Mã Support (Support_ID)") !== -1
+    ? supportHeaders.indexOf("Mã Support (Support_ID)")
+    : supportHeaders.findIndex(h => normalizeScheduleTrackingText(h) === "ma support (support_id)" || normalizeScheduleTrackingText(h).indexOf("ma support") !== -1);
+  const supportNameColIndex = supportHeaders.indexOf("Họ Và Tên") !== -1
+    ? supportHeaders.indexOf("Họ Và Tên")
+    : supportHeaders.findIndex(h => {
+        const normalized = normalizeScheduleTrackingText(h);
+        return normalized === "ho va ten" || normalized === "full_name";
+      });
+
+  if (supportIdColIndex === -1) {
+    return context;
+  }
+
+  for (let i = 1; i < supportData.length; i++) {
+    const supportId = supportData[i][supportIdColIndex] ? supportData[i][supportIdColIndex].toString().trim() : "";
+    if (!supportId) continue;
+
+    const supportName = supportNameColIndex !== -1 && supportData[i][supportNameColIndex]
+      ? supportData[i][supportNameColIndex].toString().trim()
+      : "";
+    const normalizedName = normalizeSupportLookupName_(supportName);
+    const baseCode = getSupportLookupBaseCode_(supportId);
+
+    context.byId[supportId] = {
+      id: supportId,
+      name: supportName,
+      normalizedName: normalizedName,
+      baseCode: baseCode
+    };
+
+    if (normalizedName) {
+      if (!context.idsByName[normalizedName]) context.idsByName[normalizedName] = [];
+      if (!context.idsByName[normalizedName].includes(supportId)) {
+        context.idsByName[normalizedName].push(supportId);
+      }
+    }
+
+    if (baseCode) {
+      if (!context.idsByBaseCode[baseCode]) context.idsByBaseCode[baseCode] = [];
+      if (!context.idsByBaseCode[baseCode].includes(supportId)) {
+        context.idsByBaseCode[baseCode].push(supportId);
+      }
+    }
+  }
+
+  return context;
+}
+
+function normalizeSupportLookupName_(value) {
+  return normalizeScheduleTrackingText(value).replace(/\s+/g, " ").trim();
+}
+
+function getSupportLookupBaseCode_(value) {
+  const raw = (value || "").toString().trim().toUpperCase();
+  if (!raw) return "";
+  return raw.replace(/_\d+H$/i, "");
+}
+
+function getUniqueSupportLookupId_(candidateIds) {
+  if (!candidateIds || candidateIds.length !== 1) return "";
+  return candidateIds[0] || "";
+}
+
+function findSupportLookupIdByName_(supportName, supportContext) {
+  if (!supportName || !supportContext) return "";
+  const ids = supportContext.idsByName[normalizeSupportLookupName_(supportName)] || [];
+  return getUniqueSupportLookupId_(ids);
+}
+
+function findSupportLookupIdByBaseCode_(supportId, supportContext) {
+  if (!supportId || !supportContext) return "";
+  const ids = supportContext.idsByBaseCode[getSupportLookupBaseCode_(supportId)] || [];
+  return getUniqueSupportLookupId_(ids);
+}
+
+function normalizeSupportCandidatePoolForLookupRepair_(candidatePoolValue, supportContext) {
+  const rawIds = typeof parseScheduleCandidatePool === "function"
+    ? parseScheduleCandidatePool(candidatePoolValue)
+    : (candidatePoolValue ? candidatePoolValue.toString().split(",").map(item => item.trim()).filter(Boolean) : []);
+
+  const normalizedIds = [];
+  rawIds.forEach(rawId => {
+    const exactId = supportContext.byId[rawId] ? rawId : "";
+    const fallbackId = exactId || findSupportLookupIdByBaseCode_(rawId, supportContext) || rawId;
+    if (!fallbackId) return;
+    if (!normalizedIds.includes(fallbackId)) {
+      normalizedIds.push(fallbackId);
+    }
+  });
+
+  return typeof serializeScheduleCandidatePool === "function"
+    ? serializeScheduleCandidatePool(normalizedIds)
+    : normalizedIds.join(", ");
+}
+
+function resolveSupportLookupRepair_(supportId, supportName, candidatePoolValue, supportContext) {
+  const currentId = supportId ? supportId.toString().trim() : "";
+  const currentName = supportName ? supportName.toString().trim() : "";
+  const exactMeta = currentId && supportContext.byId[currentId] ? supportContext.byId[currentId] : null;
+  const nameMatchedId = currentName ? findSupportLookupIdByName_(currentName, supportContext) : "";
+  const baseMatchedId = currentId ? findSupportLookupIdByBaseCode_(currentId, supportContext) : "";
+  const candidateIds = typeof parseScheduleCandidatePool === "function"
+    ? parseScheduleCandidatePool(candidatePoolValue)
+    : [];
+  const normalizedCandidateIds = candidateIds
+    .map(candidateId => {
+      if (supportContext.byId[candidateId]) return candidateId;
+      return findSupportLookupIdByBaseCode_(candidateId, supportContext);
+    })
+    .filter(Boolean);
+
+  if (exactMeta) {
+    if (
+      nameMatchedId &&
+      nameMatchedId !== currentId &&
+      normalizedCandidateIds.includes(nameMatchedId)
+    ) {
+      const matchedMeta = supportContext.byId[nameMatchedId];
+      return {
+        nextId: nameMatchedId,
+        nextName: matchedMeta ? matchedMeta.name : currentName,
+        changedId: true,
+        changedName: !matchedMeta || currentName !== matchedMeta.name,
+        unresolved: false,
+        reason: "name matched a different candidate from Support_Candidate_Pool"
+      };
+    }
+
+    return {
+      nextId: currentId,
+      nextName: exactMeta.name || currentName,
+      changedId: false,
+      changedName: Boolean(exactMeta.name) && currentName !== exactMeta.name,
+      unresolved: false,
+      reason: "exact support id exists"
+    };
+  }
+
+  if (nameMatchedId) {
+    const matchedByName = supportContext.byId[nameMatchedId];
+    return {
+      nextId: nameMatchedId,
+      nextName: matchedByName ? matchedByName.name : currentName,
+      changedId: nameMatchedId !== currentId,
+      changedName: !matchedByName || currentName !== matchedByName.name,
+      unresolved: false,
+      reason: "support name matched Support_Master uniquely"
+    };
+  }
+
+  if (baseMatchedId) {
+    const matchedByBase = supportContext.byId[baseMatchedId];
+    return {
+      nextId: baseMatchedId,
+      nextName: matchedByBase ? matchedByBase.name : currentName,
+      changedId: baseMatchedId !== currentId,
+      changedName: !matchedByBase || currentName !== matchedByBase.name,
+      unresolved: false,
+      reason: "legacy support id mapped by base code"
+    };
+  }
+
+  return {
+    nextId: currentId,
+    nextName: currentName,
+    changedId: false,
+    changedName: false,
+    unresolved: Boolean(currentId),
+    reason: currentId ? "no safe lookup repair found" : "blank support id"
+  };
+}
+
+function repairLiveSessionSupportLookups(showAlert, options) {
+  const shouldAlert = showAlert !== false;
+  const config = options || {};
+  const futureOnly = Boolean(config.futureOnly);
+  const targetDateLabel = typeof getScheduleTargetDateLabel === 'function' ? getScheduleTargetDateLabel(config) : "";
+  const hasDateScope = futureOnly || Boolean(targetDateLabel);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const scheduleSheet = ss.getSheetByName('Live_Session_Master');
+
+  if (!scheduleSheet || scheduleSheet.getLastRow() <= 1) {
+    if (shouldAlert) safeAlert("Tab 'Live_Session_Master' chưa có dữ liệu để sửa lookup support.");
+    return {
+      scannedRows: 0,
+      updatedSupportIds: 0,
+      updatedSupportNames: 0,
+      updatedBackupSupportIds: 0,
+      updatedBackupSupportNames: 0,
+      normalizedCandidatePools: 0,
+      unresolvedRows: 0,
+      validationSummary: null
+    };
+  }
+
+  const supportContext = buildSupportLookupRepairContext_();
+  if (Object.keys(supportContext.byId).length === 0) {
+    if (shouldAlert) safeAlert("Support_Master chưa có dữ liệu hợp lệ để repair lookup.");
+    return {
+      scannedRows: 0,
+      updatedSupportIds: 0,
+      updatedSupportNames: 0,
+      updatedBackupSupportIds: 0,
+      updatedBackupSupportNames: 0,
+      normalizedCandidatePools: 0,
+      unresolvedRows: 0,
+      validationSummary: null
+    };
+  }
+
+  const scheduleData = scheduleSheet.getDataRange().getValues();
+  const headers = scheduleData[0] || [];
+  const headerMap = typeof buildSheetHeaderMap === "function" ? buildSheetHeaderMap(headers) : {};
+  const idx = {
+    date: headerMap["Ngày"],
+    supportId: headerMap["Mã Nhân sự Support live"],
+    supportName: headerMap["Tên Support live"],
+    backupSupportId: headerMap["Backup_Support_ID"],
+    backupSupportName: headerMap["Backup_Support_Name"],
+    supportCandidatePool: headerMap["Support_Candidate_Pool"]
+  };
+
+  if (idx.supportId === undefined) {
+    if (shouldAlert) safeAlert("Thiếu cột Mã Nhân sự Support live để repair lookup.");
+    return {
+      scannedRows: 0,
+      updatedSupportIds: 0,
+      updatedSupportNames: 0,
+      updatedBackupSupportIds: 0,
+      updatedBackupSupportNames: 0,
+      normalizedCandidatePools: 0,
+      unresolvedRows: 0,
+      validationSummary: null
+    };
+  }
+
+  const numRows = scheduleData.length - 1;
+  const supportIdRange = scheduleSheet.getRange(2, idx.supportId + 1, numRows, 1);
+  const supportIdValues = supportIdRange.getValues();
+  const supportNameRange = idx.supportName !== undefined
+    ? scheduleSheet.getRange(2, idx.supportName + 1, numRows, 1)
+    : null;
+  const supportNameValues = supportNameRange ? supportNameRange.getValues() : null;
+  const backupSupportIdRange = idx.backupSupportId !== undefined
+    ? scheduleSheet.getRange(2, idx.backupSupportId + 1, numRows, 1)
+    : null;
+  const backupSupportIdValues = backupSupportIdRange ? backupSupportIdRange.getValues() : null;
+  const backupSupportNameRange = idx.backupSupportName !== undefined
+    ? scheduleSheet.getRange(2, idx.backupSupportName + 1, numRows, 1)
+    : null;
+  const backupSupportNameValues = backupSupportNameRange ? backupSupportNameRange.getValues() : null;
+  const supportPoolRange = idx.supportCandidatePool !== undefined
+    ? scheduleSheet.getRange(2, idx.supportCandidatePool + 1, numRows, 1)
+    : null;
+  const supportPoolValues = supportPoolRange ? supportPoolRange.getValues() : null;
+
+  let scannedRows = 0;
+  let updatedSupportIds = 0;
+  let updatedSupportNames = 0;
+  let updatedBackupSupportIds = 0;
+  let updatedBackupSupportNames = 0;
+  let normalizedCandidatePools = 0;
+  let unresolvedRows = 0;
+  const touchedRows = [];
+  const scopedRows = [];
+
+  for (let i = 1; i < scheduleData.length; i++) {
+    const sheetRow = i + 1;
+    if (hasDateScope && idx.date !== undefined && !isScheduleDateInScope(scheduleData[i][idx.date], config)) {
+      continue;
+    }
+
+    scannedRows++;
+    scopedRows.push(sheetRow);
+    const rowIndex = i - 1;
+    let rowTouched = false;
+    let rowUnresolved = false;
+    const currentSupportId = supportIdValues[rowIndex][0] ? supportIdValues[rowIndex][0].toString().trim() : "";
+    const currentSupportName = supportNameValues ? (supportNameValues[rowIndex][0] ? supportNameValues[rowIndex][0].toString().trim() : "") : "";
+    const currentPoolValue = supportPoolValues ? supportPoolValues[rowIndex][0] : "";
+
+    if (supportPoolValues) {
+      const normalizedPool = normalizeSupportCandidatePoolForLookupRepair_(currentPoolValue, supportContext);
+      const currentPoolText = currentPoolValue ? currentPoolValue.toString().trim() : "";
+      if (normalizedPool !== currentPoolText) {
+        supportPoolValues[rowIndex][0] = normalizedPool;
+        normalizedCandidatePools++;
+        rowTouched = true;
+      }
+    }
+
+    const supportRepair = resolveSupportLookupRepair_(
+      currentSupportId,
+      currentSupportName,
+      supportPoolValues ? supportPoolValues[rowIndex][0] : currentPoolValue,
+      supportContext
+    );
+
+    if (supportRepair.changedId) {
+      supportIdValues[rowIndex][0] = supportRepair.nextId || "";
+      updatedSupportIds++;
+      rowTouched = true;
+    }
+    if (supportNameValues && supportRepair.changedName) {
+      supportNameValues[rowIndex][0] = supportRepair.nextName || "";
+      updatedSupportNames++;
+      rowTouched = true;
+    }
+    if (supportRepair.unresolved) {
+      rowUnresolved = true;
+    }
+
+    if (backupSupportIdValues) {
+      const currentBackupId = backupSupportIdValues[rowIndex][0] ? backupSupportIdValues[rowIndex][0].toString().trim() : "";
+      const currentBackupName = backupSupportNameValues ? (backupSupportNameValues[rowIndex][0] ? backupSupportNameValues[rowIndex][0].toString().trim() : "") : "";
+      const backupRepair = resolveSupportLookupRepair_(
+        currentBackupId,
+        currentBackupName,
+        "",
+        supportContext
+      );
+
+      if (backupRepair.changedId) {
+        backupSupportIdValues[rowIndex][0] = backupRepair.nextId || "";
+        updatedBackupSupportIds++;
+        rowTouched = true;
+      }
+      if (backupSupportNameValues && backupRepair.changedName) {
+        backupSupportNameValues[rowIndex][0] = backupRepair.nextName || "";
+        updatedBackupSupportNames++;
+        rowTouched = true;
+      }
+      if (backupRepair.unresolved) {
+        rowUnresolved = true;
+      }
+    }
+
+    if (rowUnresolved) {
+      unresolvedRows++;
+    }
+    if (rowTouched) {
+      touchedRows.push(sheetRow);
+    }
+  }
+
+  supportIdRange.setValues(supportIdValues);
+  if (supportNameRange) supportNameRange.setValues(supportNameValues);
+  if (backupSupportIdRange) backupSupportIdRange.setValues(backupSupportIdValues);
+  if (backupSupportNameRange) backupSupportNameRange.setValues(backupSupportNameValues);
+  if (supportPoolRange) supportPoolRange.setValues(supportPoolValues);
+
+  const validationSummary = validateLiveSessionLookups(false, hasDateScope ? scopedRows : undefined);
+  const scopeLabel = targetDateLabel
+    ? `ngày ${targetDateLabel}`
+    : (futureOnly ? "từ hôm nay trở đi" : "toàn bộ sheet");
+
+  if (shouldAlert) {
+    const messageLines = [
+      `Đã repair lookup support cho phạm vi ${scopeLabel}.`,
+      `Rows scanned: ${scannedRows}`,
+      `Support chính: đổi ${updatedSupportIds} mã, cập nhật ${updatedSupportNames} tên`,
+      `Backup support: đổi ${updatedBackupSupportIds} mã, cập nhật ${updatedBackupSupportNames} tên`,
+      `Support_Candidate_Pool: chuẩn hóa ${normalizedCandidatePools} dòng`,
+      `Còn ${unresolvedRows} dòng không auto-fix an toàn`
+    ];
+    if (validationSummary && validationSummary.totalIssues > 0) {
+      messageLines.push("");
+      messageLines.push(formatLookupAlertMessage(validationSummary));
+    }
+    safeAlert(messageLines.join("\n"));
+  }
+
+  return {
+    scannedRows,
+    updatedSupportIds,
+    updatedSupportNames,
+    updatedBackupSupportIds,
+    updatedBackupSupportNames,
+    normalizedCandidatePools,
+    unresolvedRows,
+    validationSummary
+  };
+}
+
+function repairAllLiveSessionSupportLookups() {
+  return repairLiveSessionSupportLookups(true, { futureOnly: false });
+}
+
+function repairFutureLiveSessionSupportLookups() {
+  return repairLiveSessionSupportLookups(true, { futureOnly: true });
+}
+
 function validateLiveSessionLookups(showAlert, targetRows) {
   const masterSs = SpreadsheetApp.getActiveSpreadsheet();
   const scheduleSheet = masterSs.getSheetByName('Live_Session_Master');

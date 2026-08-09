@@ -283,6 +283,8 @@ function onOpen() {
         .addItem('Tạo real schedule', 'buildRealScheduleFromMaster')
         .addItem('Sửa Session_ID toàn bộ', 'repairLiveSessionMasterSessionIds')
         .addItem('Sửa Session_ID từ hôm nay', 'repairFutureLiveSessionMasterSessionIds')
+        .addItem('Sửa lookup Support toàn bộ', 'repairAllLiveSessionSupportLookups')
+        .addItem('Sửa lookup Support từ hôm nay', 'repairFutureLiveSessionSupportLookups')
     )
     .addSubMenu(
       ui.createMenu('Dữ liệu TikTok')

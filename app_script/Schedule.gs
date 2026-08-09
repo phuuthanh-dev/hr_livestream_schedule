@@ -1598,28 +1598,23 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
         const candidateIds = normalizeScheduleCandidatePool(
           (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
         );
-        const overlappingCandidates = candidateIds
-          .map(candidateId => assignedSupportMap[candidateId])
-          .filter(Boolean);
-        const fallbackCandidates = overlappingCandidates.length === 0
-          ? candidateIds.map(candidateId => buildSupportConflictCandidate(
-              candidateId,
-              supportMap,
-              item.rowNumber
-            ))
-          : [];
-        const candidatePool = overlappingCandidates.length > 0
-          ? overlappingCandidates
+        const allCandidates = candidateIds.map(candidateId => buildSupportConflictCandidate(
+          candidateId,
+          supportMap,
+          item.rowNumber
+        ));
+        const overlappingCandidates = allCandidates.filter(candidate => assignedSupportMap[candidate.id]);
+        const fallbackCandidates = allCandidates.filter(candidate => !assignedSupportMap[candidate.id]);
+
+        const availableOverlappingCandidates = item.slotKey
+          ? overlappingCandidates.filter(candidate => !isCandidateOccupied(occupiedSupportBySlot, item.slotKey, candidate.id))
+          : overlappingCandidates;
+        const availableFallbackCandidates = item.slotKey
+          ? fallbackCandidates.filter(candidate => !isCandidateOccupied(occupiedSupportBySlot, item.slotKey, candidate.id))
           : fallbackCandidates;
-
-        if (candidatePool.length === 0) {
-          return;
-        }
-
-        const availableCandidates = item.slotKey
-          ? candidatePool.filter(candidate => !isCandidateOccupied(occupiedSupportBySlot, item.slotKey, candidate.id))
-          : candidatePool;
-        const effectivePool = availableCandidates.length > 0 ? availableCandidates : candidatePool;
+        const effectivePool = availableOverlappingCandidates.length > 0
+          ? availableOverlappingCandidates
+          : availableFallbackCandidates;
 
         const selection = effectivePool.length > 1
           ? chooseSingleBestConflictCandidate(effectivePool, "score", "Support", { preferFirstOnTie: true })
@@ -1627,6 +1622,8 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
         const selectedSupportId = selection.selected ? selection.selected.id : "";
 
         if (!selectedSupportId) {
+          item.supportId = "";
+          item.supportName = "";
           return;
         }
 
