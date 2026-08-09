@@ -271,6 +271,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [refreshing, setRefreshing] = useState(false);
   const [readingSchedule, setReadingSchedule] = useState(false);
   const [peopleSyncing, setPeopleSyncing] = useState(false);
+  const [mobileDayKey, setMobileDayKey] = useState(() => toDateKey(new Date()));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
@@ -293,6 +294,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       sessionMatchesFilter(session, filter) &&
       (filter !== "mine" || sessionBelongsToEmployee(session, employeeRole, normalizedEmployeeId))
   );
+  const mobileDaySessions = visibleSessions.filter((session) => session.dateKey === mobileDayKey);
   const weekSummary = buildSummary(weekSessions);
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
@@ -482,16 +484,66 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   }, [weekStartKey]);
 
   useEffect(() => {
+    setMobileDayKey((current) => {
+      if (current >= weekStartKey && current <= weekEndKey) return current;
+      if (todayKey >= weekStartKey && todayKey <= weekEndKey) return todayKey;
+      return weekStartKey;
+    });
+  }, [todayKey, weekEndKey, weekStartKey]);
+
+  useEffect(() => {
     if (!selectedSessionId) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setSelectedSessionId("");
     }
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
   }, [selectedSessionId]);
 
+  function renderAdminActions(variant: "desktop" | "mobile") {
+    return (
+      <div className={`adminActions adminActions${variant === "desktop" ? "Desktop" : "Mobile"}`} aria-label="Công cụ Admin">
+        <button
+          className={`syncButton peopleSyncButton ${peopleSyncing ? "isLoading" : ""}`}
+          onClick={syncPeopleFromSheet}
+          disabled={peopleSyncing || refreshing || readingSchedule}
+          title="Đồng bộ Portfolio_Master và Support_Master vào MongoDB"
+          type="button"
+        >
+          <Icon name="users" />
+          <span>{peopleSyncing ? "Đang đồng bộ..." : "Cập nhật nhân viên"}</span>
+        </button>
+        <button
+          className={`syncButton readSyncButton ${readingSchedule ? "isLoading" : ""}`}
+          onClick={readScheduleFromSheet}
+          disabled={readingSchedule || refreshing || peopleSyncing}
+          title="Đọc nguyên trạng Live_Session_Master vào website, không chạy lại logic xếp lịch"
+          type="button"
+        >
+          <Icon name="sheet" />
+          <span>{readingSchedule ? "Đang đọc..." : "Đọc dữ liệu"}</span>
+        </button>
+        <button
+          className={`syncButton ${refreshing ? "isLoading" : ""}`}
+          onClick={refreshFromSheet}
+          disabled={refreshing || peopleSyncing || readingSchedule}
+          title="Đồng bộ và xếp lại lịch từ Google Sheet"
+          type="button"
+        >
+          <Icon name="refresh" />
+          <span>{refreshing ? "Đang cập nhật..." : "Cập nhật lịch"}</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <main className="calendarApp">
+    <main className={`calendarApp ${isAdmin ? "hasAdminDock" : ""}`}>
       <header className="appHeader">
         <div className="brandBlock">
           <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
@@ -511,44 +563,13 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         </div>
 
         <div className="headerActions">
-          {isAdmin ? (
-            <>
-              <button
-                className={`syncButton peopleSyncButton ${peopleSyncing ? "isLoading" : ""}`}
-                onClick={syncPeopleFromSheet}
-                disabled={peopleSyncing || refreshing || readingSchedule}
-                title="Đồng bộ Portfolio_Master và Support_Master vào MongoDB"
-                type="button"
-              >
-                <Icon name="users" />
-                <span>{peopleSyncing ? "Đang đồng bộ..." : "Cập nhật nhân viên"}</span>
-              </button>
-              <button
-                className={`syncButton readSyncButton ${readingSchedule ? "isLoading" : ""}`}
-                onClick={readScheduleFromSheet}
-                disabled={readingSchedule || refreshing || peopleSyncing}
-                title="Đọc nguyên trạng Live_Session_Master vào website, không chạy lại logic xếp lịch"
-                type="button"
-              >
-                <Icon name="sheet" />
-                <span>{readingSchedule ? "Đang đọc..." : "Đọc dữ liệu"}</span>
-              </button>
-              <button
-                className={`syncButton ${refreshing ? "isLoading" : ""}`}
-                onClick={refreshFromSheet}
-                disabled={refreshing || peopleSyncing || readingSchedule}
-                title="Đồng bộ và xếp lại lịch từ Google Sheet"
-                type="button"
-              >
-                <Icon name="refresh" />
-                <span>{refreshing ? "Đang cập nhật..." : "Cập nhật lịch"}</span>
-              </button>
-            </>
-          ) : null}
+          {isAdmin ? renderAdminActions("desktop") : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
         </div>
       </header>
+
+      {isAdmin ? renderAdminActions("mobile") : null}
 
       <div className="appBody">
         <aside className="calendarSidebar">
@@ -641,7 +662,85 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
           {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
 
-          <div className="calendarSurface" aria-busy={loading || refreshing || readingSchedule}>
+          <div className="mobileCalendar" aria-busy={loading || refreshing || readingSchedule}>
+            <nav className="mobileDayStrip" aria-label="Chọn ngày trong tuần">
+              {days.map((day) => {
+                const dayCount = visibleSessions.filter((session) => session.dateKey === day.dateKey).length;
+                return (
+                  <button
+                    aria-current={day.dateKey === mobileDayKey ? "date" : undefined}
+                    className={`${day.dateKey === mobileDayKey ? "active" : ""} ${day.dateKey === todayKey ? "today" : ""}`}
+                    key={day.dateKey}
+                    onClick={() => setMobileDayKey(day.dateKey)}
+                    type="button"
+                  >
+                    <span>{day.label.replace("THỨ ", "T").replace("CHỦ NHẬT", "CN")}</span>
+                    <strong>{parseDateKey(day.dateKey).getDate()}</strong>
+                    <i>{dayCount || ""}</i>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="mobileAgendaHeader">
+              <div>
+                <span>LỊCH TRONG NGÀY</span>
+                <strong>{formatLongDate(mobileDayKey)}</strong>
+              </div>
+              <em>{mobileDaySessions.length} ca</em>
+            </div>
+
+            {loading ? (
+              <div className="mobileAgendaState"><span className="loadingSpinner" />Đang tải lịch...</div>
+            ) : mobileDaySessions.length === 0 ? (
+              <div className="mobileAgendaState empty">
+                <Icon name="calendar" size={24} />
+                <strong>Không có ca phù hợp</strong>
+                <span>Chọn ngày khác hoặc đổi bộ lọc để xem thêm lịch.</span>
+              </div>
+            ) : (
+              <div className="mobileAgendaList">
+                {slots.map((slot) => {
+                  const slotSessions = mobileDaySessions.filter((session) => session.slot === slot);
+                  if (slotSessions.length === 0) return null;
+                  return (
+                    <section className="mobileAgendaSlot" key={slot}>
+                      <div className="mobileAgendaTime">
+                        <strong>{getSlotStart(slot)}</strong>
+                        <span>{slot}</span>
+                      </div>
+                      <div className="mobileAgendaEvents">
+                        {slotSessions.map((session) => (
+                          <button
+                            className={`mobileEventCard ${getSessionTone(session)}`}
+                            key={session.sessionId || `${session.rowNumber}-${session.slot}`}
+                            onClick={() => setSelectedSessionId(session.sessionId)}
+                            type="button"
+                          >
+                            <span className="mobileEventTopline">
+                              <strong>{getSessionTitle(session)}</strong>
+                              {session.missingSupport ? <Icon name="warning" size={16} /> : null}
+                            </span>
+                            <span className="mobileEventPeople">{getSessionPeople(session)}</span>
+                            <span className="mobileEventFooter">
+                              <em>{session.format || (session.isSupportOnly ? "Support-only" : "Chưa chọn nơi live")}</em>
+                              <i>
+                                {session.canConfirmHost ? (session.isHostConfirmed ? "Host ✓" : "Host ·") : ""}
+                                {session.canConfirmHost && session.canConfirmSupport ? "  " : ""}
+                                {session.canConfirmSupport ? (session.isSupportConfirmed ? "Support ✓" : "Support ·") : ""}
+                              </i>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="calendarSurface desktopCalendar" aria-busy={loading || refreshing || readingSchedule}>
             <div className="calendarScroller">
               <div className="weekCalendar">
                 <div className="weekHeaderGrid">
@@ -696,7 +795,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   ))}
                 </div>
 
-                {loading ? <div className="calendarLoading"><span className="loadingSpinner" />Đang tải lịch tuần từ Google Sheet...</div> : null}
+                {loading ? <div className="calendarLoading"><span className="loadingSpinner" />Đang tải lịch tuần...</div> : null}
                 {!loading && visibleSessions.length === 0 ? (
                   <div className="emptyWeekBanner">Không có ca phù hợp trong tuần này.</div>
                 ) : null}

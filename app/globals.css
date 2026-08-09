@@ -412,6 +412,16 @@ a:hover {
   gap: 8px;
 }
 
+.adminActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.adminActionsMobile {
+  display: none;
+}
+
 .syncButton {
   display: inline-flex;
   min-height: 42px;
@@ -868,6 +878,10 @@ a:hover {
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
+}
+
+.mobileCalendar {
+  display: none;
 }
 
 .calendarScroller {
@@ -1593,6 +1607,587 @@ a:hover {
   .loginAside {
     display: none;
   }
+}
+
+@media (max-width: 600px) {
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(211, 227, 253, 0.72), transparent 22rem),
+      #f7f9fc;
+  }
+
+  .calendarApp {
+    min-height: 100dvh;
+  }
+
+  .calendarApp.hasAdminDock {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+
+  .appHeader {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    min-height: auto;
+    padding: 9px 10px 10px;
+    border-bottom-color: #dfe4eb;
+    background: rgba(255, 255, 255, 0.97);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .brandBlock {
+    min-width: 0;
+    gap: 9px;
+  }
+
+  .brandMark {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+
+  .brandName {
+    overflow: hidden;
+    font-size: 0.95rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .headerActions {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 1px;
+  }
+
+  .headerActions > .iconButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .adminActionsDesktop {
+    display: none;
+  }
+
+  .adminActionsMobile {
+    position: fixed;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 10px;
+    z-index: 55;
+    display: grid;
+    padding: 7px;
+    border: 1px solid rgba(208, 216, 226, 0.92);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 14px 42px rgba(38, 53, 74, 0.2);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    backdrop-filter: blur(18px);
+  }
+
+  .adminActionsMobile .syncButton {
+    width: 100%;
+    min-height: 54px;
+    padding: 5px 4px;
+    border-radius: 14px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    font-size: 0.62rem;
+    line-height: 1.1;
+  }
+
+  .adminActionsMobile .syncButton span {
+    display: block;
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .adminActionsMobile .syncButton svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .dateNavigation {
+    width: 100%;
+    padding-top: 2px;
+    justify-content: space-between;
+    gap: 5px;
+  }
+
+  .todayButton {
+    min-height: 38px;
+    padding: 0 12px;
+    flex: 0 0 auto;
+  }
+
+  .iconButtonGroup .iconButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .currentRange {
+    min-width: 0;
+    margin-left: 2px;
+    align-items: flex-end;
+    justify-content: flex-end;
+    flex: 1;
+  }
+
+  .currentRange h1 {
+    max-width: 128px;
+    font-size: 0.95rem;
+  }
+
+  .currentRange span {
+    display: none;
+  }
+
+  .calendarSidebar {
+    padding: 10px 10px 8px;
+    border-bottom: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  .calendarSearch {
+    min-height: 44px;
+    margin-bottom: 8px;
+    border: 1px solid #e0e5eb;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 3px 12px rgba(60, 64, 67, 0.05);
+  }
+
+  .calendarSearch input {
+    font-size: 0.78rem;
+  }
+
+  .sidebarSection {
+    width: 100%;
+    padding: 1px 0 4px;
+    gap: 7px;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .sidebarSection::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  .filterOption {
+    min-height: 40px;
+    padding: 0 11px;
+    border: 1px solid #e0e4e9;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 2px 8px rgba(60, 64, 67, 0.04);
+    gap: 8px;
+  }
+
+  .filterOption:hover,
+  .filterOption.active {
+    border-color: #bfd2f5;
+    background: #e8f0fe;
+  }
+
+  .employeeViewToolbar {
+    display: none;
+  }
+
+  .scheduleWorkspace {
+    padding: 4px 10px 18px;
+  }
+
+  .notice {
+    min-height: 42px;
+    margin-bottom: 8px;
+    padding: 9px 11px;
+    border-radius: 13px;
+    font-size: 0.7rem;
+    line-height: 1.45;
+  }
+
+  .desktopCalendar {
+    display: none;
+  }
+
+  .mobileCalendar {
+    display: block;
+    overflow: hidden;
+    border: 1px solid #dfe4ea;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 9px 30px rgba(49, 62, 82, 0.09);
+  }
+
+  .mobileDayStrip {
+    display: grid;
+    padding: 8px 7px 7px;
+    border-bottom: 1px solid var(--line-soft);
+    background: linear-gradient(180deg, #fff, #fafbfe);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .mobileDayStrip button {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 64px;
+    padding: 5px 2px 8px;
+    border-radius: 14px;
+    color: #6f757a;
+    background: transparent;
+    place-items: center;
+    gap: 1px;
+  }
+
+  .mobileDayStrip button span {
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .mobileDayStrip button strong {
+    display: grid;
+    width: 31px;
+    height: 31px;
+    border-radius: 50%;
+    color: #303438;
+    place-items: center;
+    font-size: 0.95rem;
+  }
+
+  .mobileDayStrip button i {
+    position: absolute;
+    bottom: 3px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 7px;
+    color: #6b7280;
+    background: #eef1f5;
+    font-size: 0.48rem;
+    font-style: normal;
+    font-weight: 800;
+    line-height: 14px;
+  }
+
+  .mobileDayStrip button.today strong {
+    color: var(--blue);
+  }
+
+  .mobileDayStrip button.active {
+    color: #174ea6;
+    background: var(--blue-pale);
+  }
+
+  .mobileDayStrip button.active strong {
+    color: #fff;
+    background: var(--blue);
+    box-shadow: 0 4px 10px rgba(11, 87, 208, 0.25);
+  }
+
+  .mobileDayStrip button.active i {
+    color: #174ea6;
+    background: #d3e3fd;
+  }
+
+  .mobileAgendaHeader {
+    display: flex;
+    min-height: 66px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobileAgendaHeader div {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .mobileAgendaHeader span {
+    color: #8a9095;
+    font-size: 0.53rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+  }
+
+  .mobileAgendaHeader strong {
+    overflow: hidden;
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+
+  .mobileAgendaHeader em {
+    padding: 5px 9px;
+    border-radius: 11px;
+    color: #174ea6;
+    background: #e8f0fe;
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+    font-style: normal;
+    font-weight: 800;
+  }
+
+  .mobileAgendaList {
+    display: grid;
+    padding: 8px 10px 14px;
+    gap: 4px;
+  }
+
+  .mobileAgendaSlot {
+    display: grid;
+    padding: 7px 0;
+    border-bottom: 1px solid #f0f2f5;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .mobileAgendaSlot:last-child {
+    border-bottom: 0;
+  }
+
+  .mobileAgendaTime {
+    display: flex;
+    padding-top: 7px;
+    color: #747a80;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mobileAgendaTime strong {
+    color: #3c4043;
+    font-size: 0.72rem;
+  }
+
+  .mobileAgendaTime span {
+    font-size: 0.49rem;
+    font-weight: 650;
+    line-height: 1.35;
+  }
+
+  .mobileAgendaEvents {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .mobileEventCard {
+    --event-bg: #e8f0fe;
+    --event-border: #1a73e8;
+    --event-ink: #174ea6;
+    display: grid;
+    min-width: 0;
+    width: 100%;
+    min-height: 78px;
+    padding: 10px 11px 9px 13px;
+    border-left: 4px solid var(--event-border);
+    border-radius: 12px;
+    color: var(--event-ink);
+    background: var(--event-bg);
+    gap: 4px;
+    text-align: left;
+    box-shadow: 0 3px 10px rgba(60, 64, 67, 0.06);
+  }
+
+  .mobileEventCard.eventStudio {
+    --event-bg: #d3e3fd;
+    --event-border: #1a73e8;
+    --event-ink: #174ea6;
+  }
+
+  .mobileEventCard.eventHome {
+    --event-bg: #ceead6;
+    --event-border: #188038;
+    --event-ink: #0d652d;
+  }
+
+  .mobileEventCard.eventSupportOnly {
+    --event-bg: #feefc3;
+    --event-border: #f9ab00;
+    --event-ink: #7a4d00;
+  }
+
+  .mobileEventCard.eventDanger {
+    --event-bg: #f9dedc;
+    --event-border: #d93025;
+    --event-ink: #8c1d18;
+  }
+
+  .mobileEventCard.eventNeutral {
+    --event-bg: #e8eaed;
+    --event-border: #80868b;
+    --event-ink: #3c4043;
+  }
+
+  .mobileEventTopline,
+  .mobileEventFooter {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 7px;
+  }
+
+  .mobileEventTopline strong {
+    overflow: hidden;
+    font-size: 0.76rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileEventPeople {
+    overflow: hidden;
+    opacity: 0.92;
+    font-size: 0.63rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileEventFooter {
+    margin-top: 2px;
+    opacity: 0.86;
+    font-size: 0.55rem;
+    font-weight: 750;
+  }
+
+  .mobileEventFooter em,
+  .mobileEventFooter i {
+    overflow: hidden;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: pre;
+  }
+
+  .mobileAgendaState {
+    display: flex;
+    min-height: 180px;
+    padding: 24px;
+    color: var(--muted);
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .mobileAgendaState.empty {
+    color: #737980;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .mobileAgendaState.empty strong {
+    color: #3c4043;
+    font-size: 0.83rem;
+  }
+
+  .mobileAgendaState.empty span {
+    max-width: 250px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .drawerBackdrop {
+    background: rgba(25, 29, 35, 0.46);
+  }
+
+  .sessionDrawer {
+    top: max(34px, env(safe-area-inset-top));
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: auto;
+    max-height: calc(100dvh - max(34px, env(safe-area-inset-top)));
+    padding: 24px 18px calc(22px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -18px 55px rgba(32, 33, 36, 0.24);
+    overscroll-behavior: contain;
+    animation: sheetIn 240ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .sessionDrawer::before {
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: #d4d8dd;
+    content: "";
+    transform: translateX(-50%);
+  }
+
+  .drawerAccent {
+    height: 5px;
+    margin: -24px -18px 23px;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .drawerHeader {
+    margin-bottom: 16px;
+  }
+
+  .drawerHeader h2 {
+    font-size: 1.3rem;
+  }
+
+  .drawerDetails {
+    margin-bottom: 18px;
+  }
+
+  .drawerDetails > div {
+    padding: 11px 0;
+  }
+
+  .confirmPanel {
+    position: sticky;
+    bottom: calc(-22px - env(safe-area-inset-bottom));
+    margin: 0 -18px calc(-22px - env(safe-area-inset-bottom));
+    padding: 13px 18px calc(18px + env(safe-area-inset-bottom));
+    border-top: 1px solid #e4e8ed;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 -8px 24px rgba(60, 64, 67, 0.08);
+    backdrop-filter: blur(16px);
+  }
+
+  .confirmAction {
+    min-height: 58px;
+  }
+
+  .loginShell {
+    min-height: 100dvh;
+    padding: 14px;
+  }
+
+  .loginCard {
+    padding: 26px 20px;
+    border-radius: 24px;
+    box-shadow: 0 20px 55px rgba(32, 61, 107, 0.15);
+  }
+
+  .loginCard h1 {
+    font-size: clamp(2.35rem, 14vw, 3.35rem);
+  }
+}
+
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(48px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
