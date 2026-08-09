@@ -9,10 +9,13 @@ Website Next.js hiển thị lịch livestream theo tuần từ MongoDB, đượ
 - Admin dùng nút `Cập nhật lịch` để chạy logic schedule trên Google Sheets một lần, lấy toàn bộ `Live_Session_Master` và lưu snapshot vào MongoDB.
 - Admin dùng nút `Đọc dữ liệu` khi HR đã chỉnh tay `Live_Session_Master`; thao tác này chỉ đọc nguyên trạng Sheet vào MongoDB, không chạy lại logic xếp lịch.
 - Nhân viên chọn vai trò và mã nhân viên từ roster `schedule_people`; website không đọc trực tiếp master Google Sheet trong luồng login.
-- Nhân viên chỉ được xác nhận/hủy đúng `Session_ID`, đúng vai trò và đúng mã nhân viên được gán trên `Live_Session_Master`.
+- Nhân viên chỉ được xác nhận/hủy đúng `Session_ID`, đúng vai trò và đúng mã nhân viên được gán trên `Live_Session_Master`; ca ngày cũ luôn bị chặn phía server.
 - Nhân viên mặc định chỉ thấy `Ca của tôi` và có thể chuyển sang `Tất cả ca live` khi cần.
-- Quyền được kiểm tra ở cả Next.js API và Apps Script ngay trước khi ghi Sheet. `Session_ID` trùng sẽ bị từ chối để tránh sửa nhầm dòng.
-- Tài khoản nhân viên chưa có mật khẩu có thể tạo mật khẩu lần đầu. Mật khẩu chỉ cần không rỗng và không vượt quá 72 byte; MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
+- Quyền confirm được kiểm tra lại trên MongoDB, ngay trong transaction cập nhật cache và trên Apps Script trước khi ghi Sheet. Phạm vi tuần do trình duyệt gửi chỉ dùng để tải lại giao diện, không được dùng làm căn cứ cấp quyền. `Session_ID` trùng sẽ bị từ chối để tránh sửa nhầm dòng.
+- Sau khi chọn nhân viên, form tự kiểm tra tài khoản và tự chuyển sang `Đăng nhập` hoặc `Tạo mật khẩu lần đầu`; nhân viên không phải chọn thao tác thủ công.
+- Mật khẩu chỉ cần không rỗng và không vượt quá 72 byte; MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
+- Mỗi cookie đăng nhập mang `sessionVersion` và được đối chiếu với MongoDB ở mọi request. Đổi/reset mật khẩu, khóa tài khoản hoặc `Đăng xuất tất cả` sẽ tăng version và vô hiệu hóa ngay toàn bộ cookie cũ.
+- Nhân viên mở mục tài khoản trên thanh đầu trang để tự đổi mật khẩu. Admin dùng cùng màn hình để reset mật khẩu, khóa/mở khóa và thu hồi mọi phiên của từng tài khoản nhân viên.
 
 Lưu ý: cơ chế tự tạo mật khẩu lần đầu cho phép người biết mã nhân viên claim tài khoản chưa được tạo. Nếu cần bảo mật cao hơn, nên bổ sung mã mời do HR cấp hoặc yêu cầu Admin kích hoạt tài khoản.
 

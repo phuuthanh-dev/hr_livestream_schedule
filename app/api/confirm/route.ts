@@ -59,9 +59,6 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-      if (!body.from || !body.to) {
-        throw new ConfirmRequestError("Thiếu phạm vi tuần để kiểm tra ca được phân công.", 400);
-      }
     }
 
     const target = await findScheduleSessionById(body.sessionId);
@@ -78,9 +75,6 @@ export async function POST(request: Request) {
           "Ca này không có ngày hợp lệ nên nhân viên không thể thay đổi xác nhận.",
           409
         );
-      }
-      if (target.dateKey < body.from! || target.dateKey > body.to!) {
-        throw new ConfirmRequestError("Ca này không thuộc tuần đang xem. Vui lòng tải lại lịch.", 404);
       }
       if (target.dateKey < getScheduleTodayKey()) {
         throw new ConfirmRequestError(
@@ -124,6 +118,7 @@ export async function POST(request: Request) {
         actorType: session.accountType,
         actorRole: session.role,
         actorEmployeeId: session.employeeId,
+        expectedDateKey: target.dateKey,
         sourceRevision: googlePayload.confirmationRevision
       });
     } catch {

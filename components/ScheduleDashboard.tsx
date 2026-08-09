@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import AccountPanel from "@/components/AccountPanel";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
 import type { ConfirmRole, PeopleSyncPayload, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
 
@@ -12,7 +13,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -41,6 +42,10 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     strokeLinejoin: "round" as const,
     "aria-hidden": true
   };
+
+  if (name === "account") {
+    return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
+  }
 
   if (name === "calendar") {
     return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></svg>;
@@ -278,6 +283,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [filter, setFilter] = useState<FilterMode>(() => isAdmin ? "all" : "mine");
   const [busyConfirm, setBusyConfirm] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   const todayKey = getScheduleTodayKey(timezone || undefined);
@@ -565,6 +571,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         <div className="headerActions">
           {isAdmin ? renderAdminActions("desktop") : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
+          <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
         </div>
       </header>
@@ -866,6 +873,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             </div>
           </aside>
         </>
+      ) : null}
+      {accountPanelOpen ? (
+        <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
       ) : null}
     </main>
   );

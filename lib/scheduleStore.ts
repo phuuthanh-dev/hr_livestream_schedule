@@ -91,6 +91,7 @@ type ApplyConfirmationInput = {
   actorType: AccountType;
   actorRole?: EmployeeRole;
   actorEmployeeId?: string;
+  expectedDateKey?: string;
   sourceRevision?: number;
 };
 
@@ -456,10 +457,25 @@ export async function applyScheduleConfirmationToMongo(
     await mongoSession.withTransaction(async () => {
       const sessionStillExists = await sessions.findOne(
         { sessionKey: sessionId, active: true },
-        { session: mongoSession, projection: { _id: 1 } }
+        { session: mongoSession, projection: { _id: 1, dateKey: 1, hostId: 1, supportId: 1 } }
       );
       if (!sessionStillExists) {
         throw new Error("Session is not available in the MongoDB schedule cache.");
+      }
+
+      if (input.actorType === "employee") {
+        if (!input.actorRole || input.role !== input.actorRole || !input.actorEmployeeId) {
+          throw new Error("Employee confirmation role does not match the authenticated account.");
+        }
+        const assignedEmployeeId = input.role === "host"
+          ? sessionStillExists.hostId
+          : sessionStillExists.supportId;
+        if (cleanText(assignedEmployeeId).toLowerCase() !== cleanText(input.actorEmployeeId).toLowerCase()) {
+          throw new Error("Schedule assignment changed before confirmation was saved.");
+        }
+        if (input.expectedDateKey && cleanText(sessionStillExists.dateKey) !== cleanText(input.expectedDateKey)) {
+          throw new Error("Schedule date changed before confirmation was saved.");
+        }
       }
 
       const requestedRoles: EmployeeRole[] = input.role === "both" ? ["host", "support"] : [input.role];

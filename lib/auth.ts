@@ -1,12 +1,15 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { findActiveSchedulePerson } from "@/lib/employeeRoster";
+import { validateAccountSession } from "@/lib/userAccounts";
 import type { AccountType, EmployeeRole } from "@/lib/types";
 
 const SESSION_COOKIE = "hr_schedule_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export type DashboardSession = {
+  accountKey: string;
+  sessionVersion: number;
   user: string;
   displayName: string;
   accountType: AccountType;
@@ -58,7 +61,15 @@ export function verifySessionToken(token?: string) {
 
   try {
     const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as DashboardSession;
-    if (!payload.user || !payload.displayName || !payload.accountType || !payload.expiresAt || payload.expiresAt < Date.now()) {
+    if (
+      !payload.accountKey ||
+      !Number.isInteger(payload.sessionVersion) ||
+      !payload.user ||
+      !payload.displayName ||
+      !payload.accountType ||
+      !payload.expiresAt ||
+      payload.expiresAt < Date.now()
+    ) {
       return null;
     }
     return payload;
@@ -70,13 +81,20 @@ export function verifySessionToken(token?: string) {
 export async function getDashboardSession() {
   const cookieStore = await cookies();
   const session = verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
-  if (!session || session.accountType !== "employee") return session;
-  if (!session.role || !session.employeeId) return null;
+  if (!session) return null;
 
-  const person = await findActiveSchedulePerson(session.role, session.employeeId);
+  const account = await validateAccountSession(session);
+  if (!account) return null;
+  if (account.accountType !== "employee") {
+    return { ...session, ...account };
+  }
+  if (!account.role || !account.employeeId) return null;
+
+  const person = await findActiveSchedulePerson(account.role, account.employeeId);
   if (!person) return null;
   return {
     ...session,
+    ...account,
     user: person.id,
     employeeId: person.id,
     displayName: person.name

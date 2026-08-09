@@ -6,7 +6,17 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const payload = await getSchedulePeopleFromMongo();
-    return NextResponse.json(payload, {
+    const toPublicPerson = (person: NonNullable<typeof payload.hosts>[number]) => ({
+      id: person.id,
+      name: person.name,
+      role: person.role
+    });
+    return NextResponse.json({
+      success: payload.success,
+      hosts: (payload.hosts || []).map(toPublicPerson),
+      supports: (payload.supports || []).map(toPublicPerson),
+      message: payload.message
+    }, {
       headers: { "cache-control": "no-store" }
     });
   } catch (error) {

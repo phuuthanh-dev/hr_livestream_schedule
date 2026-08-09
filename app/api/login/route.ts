@@ -51,10 +51,10 @@ export async function POST(request: Request) {
     }
 
     if (loginType === "admin") {
-      const result = await authenticateAdmin(password);
-      await setDashboardSession(result.account);
+      const account = await authenticateAdmin(password);
+      await setDashboardSession(account);
       clearLoginFailures(rateLimitKey);
-      return NextResponse.json({ success: true, created: result.created });
+      return NextResponse.json({ success: true });
     }
 
     if ((body.role !== "host" && body.role !== "support") || !body.employeeId) {
@@ -66,15 +66,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: "Nhân viên không còn tồn tại trong master." }, { status: 403 });
     }
 
-    const result = await authenticateEmployee({
+    const account = await authenticateEmployee({
       person,
       password,
       confirmPassword: body.confirmPassword,
       createPassword: body.createPassword
     });
-    await setDashboardSession(result.account);
+    await setDashboardSession(account);
     clearLoginFailures(rateLimitKey);
-    return NextResponse.json({ success: true, created: result.created });
+    return NextResponse.json({ success: true });
   } catch (error) {
     if (isAccountStoreUnavailable(error)) {
       console.error("Account store is unavailable during login.", error);
