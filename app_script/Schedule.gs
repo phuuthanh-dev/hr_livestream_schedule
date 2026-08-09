@@ -314,7 +314,7 @@ function syncAndUnpivotSchedule(options) {
   alignSupportAssignmentsWithinShift(normalizedItems, supportMap);
   alignSupportOnlyRowsWithinShift(normalizedItems, supportMap);
   const normalizedRowEntries = normalizedItems
-    .filter(item => shouldKeepMasterScheduleRow(item.formatValue, item.supportId))
+    .filter(item => shouldKeepMasterScheduleRow(item))
     .map((item, index) => {
       const row = item.values.slice();
       row[0] = index + 1;
@@ -969,7 +969,11 @@ function isHomeFormatValue(formatValue) {
   return normalizeScheduleTrackingText(formatValue) === "home";
 }
 
-function shouldKeepMasterScheduleRow(formatValue, supportId) {
+function shouldKeepMasterScheduleRow(itemOrFormatValue, supportId) {
+  if (itemOrFormatValue && typeof itemOrFormatValue === "object") {
+    return !itemOrFormatValue.dropFromMaster;
+  }
+
   return true;
 }
 
@@ -1598,6 +1602,26 @@ function alignSupportOnlyRowsWithinShift(items, supportMap) {
         const candidateIds = normalizeScheduleCandidatePool(
           (item.supportCandidateIds || []).concat(item.supportId ? [item.supportId] : [])
         );
+        const assignedSupportIdsInSameSlot = group.hostItems
+          .filter(hostItem =>
+            item.slotKey &&
+            hostItem.slotKey === item.slotKey &&
+            isMeaningfulScheduleValue(hostItem.supportId)
+          )
+          .map(hostItem => hostItem.supportId);
+
+        if (
+          item.homeStudioShadow &&
+          assignedSupportIdsInSameSlot.length > 0 &&
+          hasOverlappingScheduleCandidateIds(candidateIds, assignedSupportIdsInSameSlot)
+        ) {
+          item.supportId = "";
+          item.supportName = "";
+          item.dropFromMaster = true;
+          syncScheduleItemPayloadFields(item);
+          return;
+        }
+
         const overlappingCandidates = candidateIds
           .map(candidateId => assignedSupportMap[candidateId])
           .filter(Boolean);
@@ -2314,6 +2338,10 @@ function computeResolvedMasterRows(ss, data, headerMap) {
   alignSupportOnlyRowsWithinShift(preparedItems, supportMap);
 
   preparedItems.forEach(item => {
+    if (!shouldKeepMasterScheduleRow(item)) {
+      return;
+    }
+
     if (idx.format !== undefined) {
       item.rawRow[idx.format] = item.formatValue || "";
     }
@@ -2483,7 +2511,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
       manualReviewGroups++;
       unresolvedGroupKeys[groupKey] = true;
       rows.forEach(item => {
-        if (!shouldKeepMasterScheduleRow(item.formatValue, item.supportId)) {
+        if (!shouldKeepMasterScheduleRow(item)) {
           return;
         }
         finalRows.push({
@@ -2524,7 +2552,7 @@ function computeResolvedMasterRows(ss, data, headerMap) {
     }
     setScheduleDerivedNames(finalRow, portfolioMap, supportMap);
 
-    if (!shouldKeepMasterScheduleRow(canonicalRow.formatValue, selectedSupportId)) {
+    if (!shouldKeepMasterScheduleRow(canonicalRow)) {
       return;
     }
 
