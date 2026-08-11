@@ -570,7 +570,10 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
         <div className="headerActions">
           {isAdmin ? renderAdminActions("desktop") : null}
-          <a className="todayButton availabilityShortcut" href="/availability">Lịch rảnh</a>
+          <a className="todayButton availabilityShortcut" href="/availability">
+            <Icon name="calendar" size={17} />
+            <span>Lịch rảnh</span>
+          </a>
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>

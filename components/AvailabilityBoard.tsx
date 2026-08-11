@@ -165,6 +165,7 @@ export default function AvailabilityBoard({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [selectedMobileDateKey, setSelectedMobileDateKey] = useState(getScheduleTodayKey);
 
   const weekDays = useMemo(
     () =>
@@ -186,6 +187,14 @@ export default function AvailabilityBoard({
     });
     return nextMap;
   }, [slots]);
+  const selectedMobileDay = weekDays.find((day) => day.dateKey === selectedMobileDateKey) || weekDays[0];
+
+  useEffect(() => {
+    const dateKeys = getScheduleWeekDateKeys(weekStartKey);
+    if (dateKeys.includes(selectedMobileDateKey)) return;
+    const today = getScheduleTodayKey();
+    setSelectedMobileDateKey(dateKeys.includes(today) ? today : dateKeys[0]);
+  }, [selectedMobileDateKey, weekStartKey]);
 
   async function loadPeople() {
     if (!isAdmin) return;
@@ -390,7 +399,7 @@ export default function AvailabilityBoard({
       <div className="availabilityShell">
         <aside className="availabilitySidebar">
           <section className="availabilityCard availabilityIntroCard">
-            <span className="availabilityEyebrow">API-ONLY</span>
+            <span className="availabilityEyebrow">ĐĂNG KÝ THEO TUẦN</span>
             <strong>Đăng ký lịch rảnh theo tuần</strong>
             <p>
               Chọn các slot bạn có thể nhận ca. Admin sẽ dùng dữ liệu này để tạo lịch nháp và publish lịch chính thức.
@@ -460,7 +469,7 @@ export default function AvailabilityBoard({
             </div>
           </section>
 
-          <section className="availabilityCard">
+          <section className="availabilityCard availabilitySidebarActions">
             <div className="availabilityCardHeader">
               <strong>Thao tác</strong>
               <span>{canEdit ? "Bạn có thể tiếp tục chỉnh tuần này." : "Tuần này đang khóa chỉnh sửa."}</span>
@@ -501,64 +510,149 @@ export default function AvailabilityBoard({
                 <em>{(isAdmin ? selectedRole : employeeRole) === "host" ? "Host có thể chọn Home / Studio / Both" : "Support chỉ cần đánh dấu slot rảnh"}</em>
               </div>
 
-              <div className="availabilityGrid">
-                <div className="availabilityGridHead slotCorner">Khung giờ</div>
-                {weekDays.map((day) => (
-                  <div className={`availabilityGridHead ${day.dateKey === todayKey ? "today" : ""}`} key={day.dateKey}>
-                    <span>{day.label}</span>
-                    <strong>{formatShortDate(day.dateKey)}</strong>
-                  </div>
-                ))}
+              <div className="availabilityDesktopBoard">
+                <div className="availabilityGrid">
+                  <div className="availabilityGridHead slotCorner">Khung giờ</div>
+                  {weekDays.map((day) => (
+                    <div className={`availabilityGridHead ${day.dateKey === todayKey ? "today" : ""}`} key={day.dateKey}>
+                      <span>{day.label}</span>
+                      <strong>{formatShortDate(day.dateKey)}</strong>
+                    </div>
+                  ))}
 
-                {DEFAULT_SCHEDULE_SLOTS.map((slot) => (
-                  <div className="availabilityGridRow" key={slot}>
-                    <div className="availabilitySlotLabel">{slot}</div>
-                    {weekDays.map((day) => {
-                      const currentSlot = slotMap.get(buildSlotKey(day.dateKey, slot));
-                      const active = Boolean(currentSlot);
-                      return (
-                        <div className="availabilityCell" key={`${day.dateKey}-${slot}`}>
-                          <button
-                            className={`availabilityCellButton ${active ? "active" : ""}`}
-                            disabled={!canEdit}
-                            onClick={() => toggleSlot(day.dateKey, slot)}
-                            type="button"
-                          >
-                            <span>{active ? "Sẵn sàng" : "Để trống"}</span>
-                            <strong>{active ? locationLabel(currentSlot?.locationPreference) : "Chưa đăng ký"}</strong>
-                          </button>
-                          {active && (isAdmin ? selectedRole : employeeRole) === "host" ? (
-                            <label className="availabilityCellMeta">
-                              <span>Nơi live</span>
-                              <select
-                                value={currentSlot?.locationPreference || DEFAULT_HOST_LOCATION_PREFERENCE}
-                                disabled={!canEdit}
-                                onChange={(event) => updateLocationPreference(day.dateKey, slot, event.target.value as AvailabilityLocationPreference)}
-                              >
-                                {HOST_AVAILABILITY_LOCATION_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                              </select>
-                            </label>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                  {DEFAULT_SCHEDULE_SLOTS.map((slot) => (
+                    <div className="availabilityGridRow" key={slot}>
+                      <div className="availabilitySlotLabel">{slot}</div>
+                      {weekDays.map((day) => {
+                        const currentSlot = slotMap.get(buildSlotKey(day.dateKey, slot));
+                        const active = Boolean(currentSlot);
+                        return (
+                          <div className="availabilityCell" key={`${day.dateKey}-${slot}`}>
+                            <button
+                              aria-pressed={active}
+                              className={`availabilityCellButton ${active ? "active" : ""}`}
+                              disabled={!canEdit}
+                              onClick={() => toggleSlot(day.dateKey, slot)}
+                              type="button"
+                            >
+                              <span>{active ? "Sẵn sàng" : "Để trống"}</span>
+                              <strong>{active ? locationLabel(currentSlot?.locationPreference) : "Chưa đăng ký"}</strong>
+                            </button>
+                            {active && (isAdmin ? selectedRole : employeeRole) === "host" ? (
+                              <label className="availabilityCellMeta">
+                                <span>Nơi live</span>
+                                <select
+                                  value={currentSlot?.locationPreference || DEFAULT_HOST_LOCATION_PREFERENCE}
+                                  disabled={!canEdit}
+                                  onChange={(event) => updateLocationPreference(day.dateKey, slot, event.target.value as AvailabilityLocationPreference)}
+                                >
+                                  {HOST_AVAILABILITY_LOCATION_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="availabilityLegend">
+                  <span><i className="legendChip active" /> Slot đã đăng ký</span>
+                  <span><i className="legendChip" /> Slot chưa đăng ký</span>
+                  <span><i className="legendChip today" /> Cột hôm nay</span>
+                </div>
+                <div className="availabilityFootnote">
+                  <p>Ngày chi tiết: {formatLongDate(weekStartKey)} đến {formatLongDate(addDaysToScheduleDateKey(weekStartKey, 6))}</p>
+                </div>
               </div>
 
-              <div className="availabilityLegend">
-                <span><i className="legendChip active" /> Slot đã đăng ký</span>
-                <span><i className="legendChip" /> Slot chưa đăng ký</span>
-                <span><i className="legendChip today" /> Cột hôm nay</span>
-              </div>
-              <div className="availabilityFootnote">
-                <p>Ngày chi tiết: {formatLongDate(weekStartKey)} đến {formatLongDate(addDaysToScheduleDateKey(weekStartKey, 6))}</p>
+              <div className="availabilityMobileBoard">
+                <div className="availabilityDayStrip" aria-label="Chọn ngày đăng ký lịch rảnh">
+                  {weekDays.map((day) => {
+                    const registeredCount = slots.filter((item) => item.dateKey === day.dateKey).length;
+                    return (
+                      <button
+                        aria-pressed={day.dateKey === selectedMobileDay?.dateKey}
+                        className={`${day.dateKey === selectedMobileDay?.dateKey ? "active" : ""} ${day.dateKey === todayKey ? "today" : ""}`}
+                        key={day.dateKey}
+                        onClick={() => setSelectedMobileDateKey(day.dateKey)}
+                        type="button"
+                      >
+                        <span>{day.label.replace("Thứ ", "T")}</span>
+                        <strong>{parseScheduleDateKey(day.dateKey)?.getDate()}</strong>
+                        <i>{registeredCount}</i>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="availabilityMobileDayHeader">
+                  <div>
+                    <span>NGÀY ĐANG CHỌN</span>
+                    <strong>{selectedMobileDay ? formatLongDate(selectedMobileDay.dateKey) : ""}</strong>
+                  </div>
+                  <em>{slots.filter((item) => item.dateKey === selectedMobileDay?.dateKey).length} slot rảnh</em>
+                </div>
+
+                <div className="availabilityMobileSlots">
+                  {DEFAULT_SCHEDULE_SLOTS.map((slot) => {
+                    if (!selectedMobileDay) return null;
+                    const currentSlot = slotMap.get(buildSlotKey(selectedMobileDay.dateKey, slot));
+                    const active = Boolean(currentSlot);
+                    return (
+                      <article className={`availabilityMobileSlot ${active ? "active" : ""}`} key={slot}>
+                        <button
+                          aria-pressed={active}
+                          className="availabilityMobileSlotToggle"
+                          disabled={!canEdit}
+                          onClick={() => toggleSlot(selectedMobileDay.dateKey, slot)}
+                          type="button"
+                        >
+                          <span className="availabilityMobileSlotTime">{slot}</span>
+                          <span className="availabilityMobileSlotState">
+                            <i><Icon name="check" size={15} /></i>
+                            <span>
+                              <strong>{active ? "Sẵn sàng nhận ca" : "Chưa đăng ký"}</strong>
+                              <small>{active ? locationLabel(currentSlot?.locationPreference) : "Chạm để chọn khung giờ này"}</small>
+                            </span>
+                          </span>
+                        </button>
+                        {active && (isAdmin ? selectedRole : employeeRole) === "host" ? (
+                          <label className="availabilityMobileLocation">
+                            <span>Nơi live</span>
+                            <select
+                              value={currentSlot?.locationPreference || DEFAULT_HOST_LOCATION_PREFERENCE}
+                              disabled={!canEdit}
+                              onChange={(event) => updateLocationPreference(selectedMobileDay.dateKey, slot, event.target.value as AvailabilityLocationPreference)}
+                            >
+                              {HOST_AVAILABILITY_LOCATION_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
         </section>
+      </div>
+
+      <div className="availabilityMobileActions">
+        <button className="syncButton peopleSyncButton" disabled={!canEdit || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
+          <Icon name="calendar" />
+          <span>{saving ? "Đang lưu..." : "Lưu nháp"}</span>
+        </button>
+        <button className="syncButton" disabled={!canEdit || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
+          <Icon name="check" />
+          <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
+        </button>
       </div>
 
       {accountPanelOpen ? (
