@@ -103,3 +103,49 @@ export type SchedulePayload = {
   error?: string;
   message?: string;
 };
+
+export type AvailabilityWeekStatus = "draft" | "submitted" | "locked";
+export type AvailabilityLocationPreference = "home" | "studio" | "both";
+
+export type AvailabilitySlot = {
+  dateKey: string;
+  slot: string;
+  available: boolean;
+  locationPreference?: AvailabilityLocationPreference;
+  note?: string;
+  updatedAt?: string;
+};
+
+export type AvailabilityWeek = {
+  weekStartKey: string;
+  role: EmployeeRole;
+  employeeId: string;
+  employeeName: string;
+  status: AvailabilityWeekStatus;
+  submittedAt?: string;
+  lockedAt?: string;
+  lockedReason?: string;
+  slots: AvailabilitySlot[];
+};
+
+export type AvailabilitySummary = {
+  totalSlots: number;
+  availableSlots: number;
+  availableHome: number;
+  availableStudio: number;
+  availableBoth: number;
+};
+
+export type AvailabilityPayload = {
+  success: boolean;
+  target?: {
+    role: EmployeeRole;
+    employeeId: string;
+    employeeName: string;
+  };
+  week?: AvailabilityWeek;
+  summary?: AvailabilitySummary;
+  canEdit?: boolean;
+  error?: string;
+  message?: string;
+};

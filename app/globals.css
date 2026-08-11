@@ -279,6 +279,403 @@ a:hover {
   font-weight: 700;
 }
 
+.availabilityApp {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(211, 227, 253, 0.52), transparent 24rem),
+    var(--canvas);
+}
+
+.availabilityHeader {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.availabilityShortcut {
+  white-space: nowrap;
+}
+
+.availabilityShortcut:hover {
+  text-decoration: none;
+}
+
+.availabilityShell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  min-height: calc(100vh - 72px);
+}
+
+.availabilitySidebar {
+  position: sticky;
+  top: 72px;
+  display: grid;
+  align-content: start;
+  height: calc(100vh - 72px);
+  padding: 20px 18px 18px;
+  border-right: 1px solid var(--line-soft);
+  background: rgba(246, 248, 252, 0.84);
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.availabilityWorkspace {
+  min-width: 0;
+  padding: 18px;
+  animation: riseIn 420ms ease-out both;
+}
+
+.availabilityCard {
+  display: grid;
+  padding: 16px;
+  border: 1px solid #dfe5ee;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 5px 18px rgba(60, 64, 67, 0.05);
+  gap: 10px;
+}
+
+.availabilityIntroCard {
+  background: linear-gradient(140deg, #eff4ff 0%, #fffdf3 100%);
+}
+
+.availabilityEyebrow {
+  color: var(--blue);
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.availabilityCard strong,
+.availabilityCardHeader strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.availabilityCard p,
+.availabilityCardHeader span,
+.availabilityMetaLine {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.55;
+}
+
+.availabilityMetaLine.danger {
+  color: var(--red);
+}
+
+.availabilityCardHeader,
+.availabilityStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.availabilityTargetForm,
+.availabilityTargetForm label {
+  display: grid;
+  gap: 6px;
+}
+
+.availabilityTargetForm label,
+.availabilityCellMeta {
+  color: #4d5563;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.availabilityTargetForm select,
+.availabilityCellMeta select {
+  min-height: 42px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid #d6dde6;
+  border-radius: 11px;
+  color: var(--ink);
+  background: #fff;
+  outline: none;
+}
+
+.availabilityTargetReadOnly {
+  display: grid;
+  gap: 4px;
+}
+
+.availabilityTargetReadOnly span {
+  color: var(--muted);
+  font-size: 0.69rem;
+  font-weight: 700;
+}
+
+.availabilityStatusBadge {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.availabilityStatusBadge.draft {
+  color: #7a4d00;
+  background: #fff4da;
+}
+
+.availabilityStatusBadge.submitted {
+  color: #174ea6;
+  background: #e8f0fe;
+}
+
+.availabilityStatusBadge.locked {
+  color: #8c1d18;
+  background: #fde8e7;
+}
+
+.availabilityDirtyFlag {
+  color: #7a4d00;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.availabilityMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.availabilityMetrics div {
+  display: grid;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f6f8fb;
+  gap: 4px;
+}
+
+.availabilityMetrics span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.availabilityMetrics strong {
+  font-size: 1.05rem;
+}
+
+.availabilityActions {
+  display: grid;
+  gap: 8px;
+}
+
+.availabilityActions .syncButton {
+  width: 100%;
+  justify-content: center;
+}
+
+.availabilityLoadingPanel,
+.availabilityEmptyState {
+  display: grid;
+  min-height: 280px;
+  padding: 28px;
+  border: 1px dashed #cfd5dd;
+  border-radius: 22px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.8);
+  place-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.availabilityEmptyState strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.availabilityEmptyState span {
+  max-width: 420px;
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.availabilitySurface {
+  overflow-x: auto;
+  border: 1px solid #dde3eb;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 28px rgba(49, 62, 82, 0.08);
+}
+
+.availabilityWeekHeader {
+  display: flex;
+  min-height: 88px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.availabilityWeekHeader span {
+  color: var(--blue);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.availabilityWeekHeader strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1.2rem;
+}
+
+.availabilityWeekHeader p,
+.availabilityWeekHeader em {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.availabilityGrid {
+  display: grid;
+  min-width: 980px;
+  grid-template-columns: 150px repeat(7, minmax(0, 1fr));
+}
+
+.availabilityGridRow {
+  display: contents;
+}
+
+.availabilityGridHead,
+.availabilitySlotLabel,
+.availabilityCell {
+  min-width: 0;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.availabilityGridHead {
+  display: grid;
+  min-height: 74px;
+  padding: 10px;
+  color: #66707a;
+  background: #fbfcfe;
+  place-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.availabilityGridHead.today {
+  background: #eef4ff;
+}
+
+.availabilityGridHead strong {
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.slotCorner,
+.availabilitySlotLabel {
+  display: flex;
+  padding: 10px 12px;
+  color: #4c5460;
+  background: #fbfcfe;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.availabilityCell {
+  display: grid;
+  padding: 8px;
+  background: #fff;
+  gap: 7px;
+}
+
+.availabilityCellButton {
+  display: grid;
+  min-height: 76px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #dde3eb;
+  border-radius: 16px;
+  color: #6b7280;
+  background: #f8fafc;
+  gap: 4px;
+  text-align: left;
+  transition: border 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.availabilityCellButton strong {
+  color: #424851;
+  font-size: 0.71rem;
+}
+
+.availabilityCellButton.active {
+  border-color: #8dc0ff;
+  color: #174ea6;
+  background: linear-gradient(180deg, #edf5ff 0%, #dceaff 100%);
+}
+
+.availabilityCellButton.active strong {
+  color: #174ea6;
+}
+
+.availabilityCellButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.availabilityCellMeta {
+  display: grid;
+  gap: 5px;
+}
+
+.availabilityCellMeta span {
+  color: #5f6368;
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
+.availabilityLegend,
+.availabilityFootnote {
+  display: flex;
+  padding: 14px 18px 18px;
+  color: var(--muted);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.availabilityFootnote {
+  padding-top: 0;
+}
+
+.legendChip {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border: 1px solid #d7dde6;
+  border-radius: 5px;
+  vertical-align: middle;
+  background: #f8fafc;
+}
+
+.legendChip.active {
+  border-color: #8dc0ff;
+  background: #dceaff;
+}
+
+.legendChip.today {
+  border-color: #bfd3ff;
+  background: #eef4ff;
+}
+
 .accountModalBackdrop {
   position: fixed;
   inset: 0;
@@ -1810,6 +2207,34 @@ a:hover {
   .calendarScroller {
     max-height: none;
   }
+
+  .availabilityShell {
+    display: block;
+  }
+
+  .availabilitySidebar {
+    position: relative;
+    top: auto;
+    height: auto;
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .availabilityWorkspace {
+    padding: 14px;
+  }
+
+  .availabilityGrid {
+    min-width: 900px;
+  }
+
+  .availabilityWeekHeader {
+    align-items: start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 600px) {
@@ -1899,6 +2324,77 @@ a:hover {
 
   .loginAside {
     display: none;
+  }
+
+  .availabilitySidebar {
+    grid-template-columns: 1fr;
+    padding: 12px 10px 10px;
+  }
+
+  .availabilityWorkspace {
+    padding: 10px;
+  }
+
+  .availabilityCard {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .availabilityMetrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .availabilityStatusRow,
+  .availabilityCardHeader {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .availabilitySurface {
+    border-radius: 18px;
+  }
+
+  .availabilityWeekHeader {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .availabilityWeekHeader strong {
+    font-size: 1rem;
+  }
+
+  .availabilityGrid {
+    min-width: 820px;
+    grid-template-columns: 120px repeat(7, minmax(90px, 1fr));
+  }
+
+  .availabilityGridHead {
+    min-height: 68px;
+    padding: 8px;
+  }
+
+  .availabilitySlotLabel,
+  .slotCorner {
+    padding: 8px 10px;
+    font-size: 0.66rem;
+  }
+
+  .availabilityCell {
+    padding: 6px;
+  }
+
+  .availabilityCellButton {
+    min-height: 68px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .availabilityLegend {
+    padding: 12px 14px 0;
+  }
+
+  .availabilityFootnote {
+    padding: 0 14px 14px;
   }
 }
 
