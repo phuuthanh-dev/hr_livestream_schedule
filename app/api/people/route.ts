@@ -10,6 +10,7 @@ export async function GET() {
       id: person.id,
       name: person.name,
       role: person.role,
+      level: person.level,
       workLocation: person.workLocation
     });
     return NextResponse.json({

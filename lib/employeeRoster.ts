@@ -1,8 +1,11 @@
 import { randomUUID } from "crypto";
 import type { Collection } from "mongodb";
-import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
+import { EMPLOYEE_MIGRATION_SEED, EMPLOYEE_MIGRATION_SOURCE } from "@/lib/employeeSeed";
+import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
+import { getMongoDatabase } from "@/lib/mongodb";
 import type { EmployeeRole, HostWorkLocation, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
+import { syncEmployeeAccountProfile } from "@/lib/userAccounts";
 
 type SchedulePersonDocument = {
   personKey: string;
@@ -12,19 +15,57 @@ type SchedulePersonDocument = {
   role: EmployeeRole;
   level: string;
   workLocation?: HostWorkLocation | "";
+  phone?: string;
+  cvReference?: string;
+  cashOffer?: string;
+  castStatus?: string;
+  experience?: string;
+  trainingStatus?: string;
+  notes?: string;
+  achievements?: string;
+  zaloStatus?: string;
+  liveAccountType?: string;
+  liveChannelId?: string;
   active: boolean;
   source: string;
-  syncBatchId: string;
+  syncBatchId?: string;
   firstSyncedAt: Date;
   lastSeenAt: Date;
+  createdAt?: Date;
+  createdBy?: string;
   updatedAt: Date;
+  updatedBy?: string;
   deactivatedAt?: Date | null;
+};
+
+export type SchedulePersonMutation = {
+  id: string;
+  role: EmployeeRole;
+  name?: string;
+  level?: string;
+  workLocation?: string;
+  phone?: string;
+  cvReference?: string;
+  cashOffer?: string;
+  castStatus?: string;
+  experience?: string;
+  trainingStatus?: string;
+  notes?: string;
+  achievements?: string;
+  zaloStatus?: string;
+  liveAccountType?: string;
+  liveChannelId?: string;
+  active?: boolean;
 };
 
 let rosterIndexesPromise: Promise<unknown> | null = null;
 
+function normalizeText(value: unknown) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : value == null ? "" : String(value).trim();
+}
+
 function normalizeEmployeeId(employeeId: string) {
-  return employeeId.trim().toLowerCase();
+  return normalizeText(employeeId).toLowerCase();
 }
 
 function buildPersonKey(role: EmployeeRole, employeeId: string) {
@@ -35,14 +76,75 @@ function normalizeHostWorkLocation(value: unknown): HostWorkLocation | undefined
   return normalizeLocationCode(value) || undefined;
 }
 
+function normalizePhone(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+  if (raw.startsWith("+")) return `+${raw.slice(1).replace(/\D/g, "")}`;
+  return raw.replace(/\D/g, "");
+}
+
 function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
   return {
     id: document.employeeId,
     name: document.name || document.employeeId,
     role: document.role,
     level: document.level || undefined,
-    workLocation: document.role === "host" ? normalizeHostWorkLocation(document.workLocation) : undefined
+    workLocation: document.role === "host" ? normalizeHostWorkLocation(document.workLocation) : undefined,
+    phone: document.phone || undefined,
+    cvReference: document.cvReference || undefined,
+    cashOffer: document.cashOffer || undefined,
+    castStatus: document.castStatus || undefined,
+    experience: document.experience || undefined,
+    trainingStatus: document.trainingStatus || undefined,
+    notes: document.notes || undefined,
+    achievements: document.achievements || undefined,
+    zaloStatus: document.zaloStatus || undefined,
+    liveAccountType: document.liveAccountType || undefined,
+    liveChannelId: document.liveChannelId || undefined,
+    active: document.active,
+    source: document.source,
+    createdAt: (document.createdAt || document.firstSyncedAt)?.toISOString(),
+    updatedAt: document.updatedAt?.toISOString()
   };
+}
+
+function personFields(input: SchedulePersonMutation) {
+  return {
+    name: normalizeText(input.name),
+    level: normalizeText(input.level),
+    workLocation: input.role === "host" ? normalizeLocationCode(input.workLocation) : "",
+    phone: normalizePhone(input.phone),
+    cvReference: normalizeText(input.cvReference),
+    cashOffer: normalizeText(input.cashOffer),
+    castStatus: normalizeText(input.castStatus),
+    experience: normalizeText(input.experience),
+    trainingStatus: normalizeText(input.trainingStatus),
+    notes: normalizeText(input.notes),
+    achievements: input.role === "host" ? normalizeText(input.achievements) : "",
+    zaloStatus: input.role === "host" ? normalizeText(input.zaloStatus) : "",
+    liveAccountType: input.role === "host" ? normalizeText(input.liveAccountType) : "",
+    liveChannelId: input.role === "host" ? normalizeText(input.liveChannelId) : ""
+  };
+}
+
+function sortPeople(left: SchedulePerson, right: SchedulePerson) {
+  if (left.role !== right.role) return left.role.localeCompare(right.role);
+  return [left.name, left.id].join("__").localeCompare([right.name, right.id].join("__"), "vi");
+}
+
+async function assertPersonInput(input: SchedulePersonMutation, active: boolean) {
+  const employeeId = normalizeText(input.id);
+  const name = normalizeText(input.name);
+  if (input.role !== "host" && input.role !== "support") throw new Error("Vai trò nhân viên không hợp lệ.");
+  if (!employeeId) throw new Error("Mã nhân viên không được để trống.");
+  if (!name) throw new Error("Họ tên nhân viên không được để trống.");
+  if (active && input.role === "host") {
+    const workLocation = normalizeLocationCode(input.workLocation);
+    if (!workLocation) throw new Error("Host phải được cấu hình địa điểm.");
+    if (!await findActiveScheduleLocation(workLocation)) {
+      throw new Error("Địa điểm của Host không tồn tại hoặc đã tạm ngưng.");
+    }
+  }
 }
 
 async function getRosterCollection(): Promise<Collection<SchedulePersonDocument>> {
@@ -51,7 +153,8 @@ async function getRosterCollection(): Promise<Collection<SchedulePersonDocument>
   if (!rosterIndexesPromise) {
     rosterIndexesPromise = Promise.all([
       collection.createIndex({ personKey: 1 }, { unique: true }),
-      collection.createIndex({ active: 1, role: 1, name: 1 })
+      collection.createIndex({ active: 1, role: 1, name: 1 }),
+      collection.createIndex({ normalizedEmployeeId: 1, role: 1 })
     ]).catch((error) => {
       rosterIndexesPromise = null;
       throw error;
@@ -65,10 +168,8 @@ export async function getSchedulePeopleFromMongo(): Promise<PeoplePayload> {
   const collection = await getRosterCollection();
   const documents = await collection.find({ active: true }).toArray();
   const people = documents.map(toSchedulePerson);
-  const byName = (left: SchedulePerson, right: SchedulePerson) =>
-    [left.name, left.id].join("__").localeCompare([right.name, right.id].join("__"), "vi");
-  const hosts = people.filter((person) => person.role === "host").sort(byName);
-  const supports = people.filter((person) => person.role === "support").sort(byName);
+  const hosts = people.filter((person) => person.role === "host").sort(sortPeople);
+  const supports = people.filter((person) => person.role === "support").sort(sortPeople);
   const latestSync = documents.reduce<Date | null>(
     (latest, document) => !latest || document.lastSeenAt > latest ? document.lastSeenAt : latest,
     null
@@ -82,109 +183,142 @@ export async function getSchedulePeopleFromMongo(): Promise<PeoplePayload> {
     total: people.length,
     hosts,
     supports,
-    message: people.length === 0 ? "Danh sách nhân viên chưa được Admin đồng bộ từ Google Sheet." : undefined
+    message: people.length === 0 ? "Danh sách nhân viên chưa có dữ liệu. Admin hãy mở mục Nhân viên để khởi tạo." : undefined
   };
+}
+
+export async function listSchedulePeopleForAdmin() {
+  const collection = await getRosterCollection();
+  const documents = await collection.find({}).toArray();
+  return documents.map(toSchedulePerson).sort(sortPeople);
 }
 
 export async function findActiveSchedulePerson(role: EmployeeRole, employeeId: string): Promise<SchedulePerson | null> {
   const collection = await getRosterCollection();
-  const document = await collection.findOne({
-    personKey: buildPersonKey(role, employeeId),
-    active: true
-  });
+  const document = await collection.findOne({ personKey: buildPersonKey(role, employeeId), active: true });
   return document ? toSchedulePerson(document) : null;
 }
 
-export async function syncSchedulePeopleToMongo(payload: PeoplePayload): Promise<PeopleSyncPayload> {
-  if (!Array.isArray(payload.hosts) || !Array.isArray(payload.supports) || payload.fallback) {
-    throw new Error("Apps Script chưa trả roster từ Portfolio_Master / Support_Master. Hãy deploy WebApi.gs phiên bản mới.");
-  }
-  if (payload.hosts.length === 0 || payload.supports.length === 0) {
-    throw new Error("Portfolio_Master hoặc Support_Master đang rỗng; MongoDB được giữ nguyên để tránh vô hiệu hóa nhầm nhân viên.");
-  }
-
-  const peopleByKey = new Map<string, SchedulePerson>();
-  [...payload.hosts, ...payload.supports].forEach((person) => {
-    const id = person.id?.trim();
-    if (!id || (person.role !== "host" && person.role !== "support")) return;
-    peopleByKey.set(buildPersonKey(person.role, id), {
-      id,
-      name: person.name?.trim() || id,
-      role: person.role,
-      level: person.level?.trim() || undefined
-    });
-  });
-
-  const normalizedPeople = Array.from(peopleByKey.values());
-  if (
-    normalizedPeople.filter((person) => person.role === "host").length === 0 ||
-    normalizedPeople.filter((person) => person.role === "support").length === 0
-  ) {
-    throw new Error("Roster Google Sheet thiếu host hoặc support hợp lệ; MongoDB được giữ nguyên để tránh vô hiệu hóa nhầm nhân viên.");
-  }
-
+export async function createSchedulePerson(input: SchedulePersonMutation, actorAccountKey: string) {
+  const active = input.active !== false;
+  await assertPersonInput(input, active);
   const collection = await getRosterCollection();
-  const client = await getMongoClient();
-  const mongoSession = client.startSession();
   const now = new Date();
-  const syncBatchId = randomUUID();
-  const source = payload.source || "Portfolio_Master / Support_Master";
-  let inserted = 0;
-  let updated = 0;
-  let deactivated = 0;
+  const employeeId = normalizeText(input.id);
+  const document: SchedulePersonDocument = {
+    personKey: buildPersonKey(input.role, employeeId),
+    employeeId,
+    normalizedEmployeeId: normalizeEmployeeId(employeeId),
+    role: input.role,
+    ...personFields(input),
+    active,
+    source: "Admin API",
+    firstSyncedAt: now,
+    lastSeenAt: now,
+    createdAt: now,
+    createdBy: actorAccountKey,
+    updatedAt: now,
+    updatedBy: actorAccountKey,
+    deactivatedAt: active ? null : now
+  };
 
   try {
-    await mongoSession.withTransaction(async () => {
-      const operations = Array.from(peopleByKey.entries()).map(([personKey, person]) => ({
-        updateOne: {
-          filter: { personKey },
-          update: {
-            $set: {
-              employeeId: person.id,
-              normalizedEmployeeId: normalizeEmployeeId(person.id),
-              name: person.name,
-              role: person.role,
-              level: person.level || "",
-              active: true,
-              source,
-              syncBatchId,
-              lastSeenAt: now,
-              updatedAt: now,
-              deactivatedAt: null
-            },
-            $setOnInsert: {
-              personKey,
-              firstSyncedAt: now
-            }
-          },
-          upsert: true
-        }
-      }));
-
-      const bulkResult = await collection.bulkWrite(operations, { ordered: false, session: mongoSession });
-      inserted = bulkResult.upsertedCount;
-      updated = bulkResult.matchedCount;
-
-      const deactivatedResult = await collection.updateMany(
-        { active: true, syncBatchId: { $ne: syncBatchId } },
-        { $set: { active: false, deactivatedAt: now, updatedAt: now } },
-        { session: mongoSession }
-      );
-      deactivated = deactivatedResult.modifiedCount;
-    });
-  } finally {
-    await mongoSession.endSession();
+    await collection.insertOne(document);
+    const person = toSchedulePerson(document);
+    await syncEmployeeAccountProfile({ person, actorAccountKey });
+    return person;
+  } catch (error) {
+    if (error instanceof Error && /duplicate key/i.test(error.message)) {
+      throw new Error("Mã nhân viên đã tồn tại trong vai trò này.");
+    }
+    throw error;
   }
+}
 
+export async function updateSchedulePerson(input: SchedulePersonMutation, actorAccountKey: string) {
+  const collection = await getRosterCollection();
+  const personKey = buildPersonKey(input.role, input.id);
+  const existing = await collection.findOne({ personKey });
+  if (!existing) throw new Error("Không tìm thấy nhân viên.");
+  const merged: SchedulePersonMutation = {
+    ...toSchedulePerson(existing),
+    ...input,
+    id: existing.employeeId,
+    role: existing.role
+  };
+  const active = input.active === undefined ? existing.active : input.active;
+  await assertPersonInput(merged, active);
+  const now = new Date();
+
+  const updated = await collection.findOneAndUpdate(
+    { personKey },
+    {
+      $set: {
+        ...personFields(merged),
+        active,
+        lastSeenAt: now,
+        updatedAt: now,
+        updatedBy: actorAccountKey,
+        deactivatedAt: active ? null : now
+      }
+    },
+    { returnDocument: "after" }
+  );
+  if (!updated) throw new Error("Không tìm thấy nhân viên.");
+  const person = toSchedulePerson(updated);
+  await syncEmployeeAccountProfile({ person, actorAccountKey });
+  return person;
+}
+
+export async function bootstrapSchedulePeople(): Promise<PeopleSyncPayload> {
+  const collection = await getRosterCollection();
+  const now = new Date();
+  const syncBatchId = randomUUID();
+  const operations = EMPLOYEE_MIGRATION_SEED.map((person) => {
+    const input: SchedulePersonMutation = { ...person, active: true };
+    return {
+      updateOne: {
+        filter: { personKey: buildPersonKey(person.role, person.id) },
+        update: {
+          $set: {
+            employeeId: person.id,
+            normalizedEmployeeId: normalizeEmployeeId(person.id),
+            role: person.role,
+            ...personFields(input),
+            active: true,
+            source: EMPLOYEE_MIGRATION_SOURCE,
+            syncBatchId,
+            lastSeenAt: now,
+            updatedAt: now,
+            updatedBy: "migration",
+            deactivatedAt: null
+          },
+          $setOnInsert: {
+            personKey: buildPersonKey(person.role, person.id),
+            firstSyncedAt: now,
+            createdAt: now,
+            createdBy: "migration"
+          }
+        },
+        upsert: true
+      }
+    };
+  });
+  const result = await collection.bulkWrite(operations, { ordered: false });
+  await Promise.all(EMPLOYEE_MIGRATION_SEED.map((person) => syncEmployeeAccountProfile({
+    person: { ...person, active: true },
+    actorAccountKey: "migration"
+  })));
   const roster = await getSchedulePeopleFromMongo();
+
   return {
     ...roster,
     syncedAt: now.toISOString(),
     generatedAt: now.toISOString(),
-    inserted,
-    updated,
-    deactivated,
+    inserted: result.upsertedCount,
+    updated: result.matchedCount,
+    deactivated: 0,
     total: roster.total || 0,
-    message: `Đã đồng bộ ${roster.total || 0} nhân viên vào MongoDB.`
+    message: `Đã nạp ${EMPLOYEE_MIGRATION_SEED.length} hồ sơ nguồn; giữ nguyên nhân sự khác trong MongoDB.`
   };
 }

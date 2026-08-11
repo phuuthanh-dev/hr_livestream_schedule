@@ -3,7 +3,7 @@
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
-import type { ConfirmRole, PeopleSyncPayload, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
+import type { ConfirmRole, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
 
 type ScheduleDashboardProps = {
   username: string;
@@ -278,7 +278,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [readingSchedule, setReadingSchedule] = useState(false);
-  const [peopleSyncing, setPeopleSyncing] = useState(false);
   const [mobileDayKey, setMobileDayKey] = useState(() => toDateKey(new Date()));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -393,28 +392,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
-  async function syncPeopleFromSheet() {
-    setPeopleSyncing(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/people/sync", { method: "POST" });
-      const payload = (await response.json()) as PeopleSyncPayload;
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.message || payload.error || "Không cập nhật được danh sách nhân viên.");
-      }
-      setMessage(
-        `Đã cập nhật ${payload.total} nhân viên vào MongoDB` +
-        ` · ${payload.inserted} mới · ${payload.updated} cập nhật · ${payload.deactivated} ngừng hoạt động.`
-      );
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Không cập nhật được danh sách nhân viên.");
-    } finally {
-      setPeopleSyncing(false);
-    }
-  }
-
   async function confirmSession(session: ScheduleSession, role: ConfirmRole, confirmed: boolean) {
     if (!isAdmin && session.dateKey < todayKey) {
       setError(`Bạn không thể thay đổi xác nhận của ngày đã qua (${session.dateLabel}).`);
@@ -517,20 +494,18 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   function renderAdminActions(variant: "desktop" | "mobile") {
     return (
       <div className={`adminActions adminActions${variant === "desktop" ? "Desktop" : "Mobile"}`} aria-label="Công cụ Admin">
-        <button
-          className={`syncButton peopleSyncButton ${peopleSyncing ? "isLoading" : ""}`}
-          onClick={syncPeopleFromSheet}
-          disabled={peopleSyncing || refreshing || readingSchedule}
-          title="Đồng bộ Portfolio_Master và Support_Master vào MongoDB"
-          type="button"
+        <a
+          className="syncButton peopleSyncButton"
+          href="/employees"
+          title="Quản lý và đồng bộ hồ sơ nhân viên trong MongoDB"
         >
           <Icon name="users" />
-          <span>{peopleSyncing ? "Đang đồng bộ..." : "Cập nhật nhân viên"}</span>
-        </button>
+          <span>Nhân viên</span>
+        </a>
         <button
           className={`syncButton readSyncButton ${readingSchedule ? "isLoading" : ""}`}
           onClick={readScheduleFromSheet}
-          disabled={readingSchedule || refreshing || peopleSyncing}
+          disabled={readingSchedule || refreshing}
           title="Đọc nguyên trạng Live_Session_Master vào website, không chạy lại logic xếp lịch"
           type="button"
         >
@@ -540,7 +515,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         <button
           className={`syncButton ${refreshing ? "isLoading" : ""}`}
           onClick={refreshFromSheet}
-          disabled={refreshing || peopleSyncing || readingSchedule}
+          disabled={refreshing || readingSchedule}
           title="Đồng bộ và xếp lại lịch từ Google Sheet"
           type="button"
         >

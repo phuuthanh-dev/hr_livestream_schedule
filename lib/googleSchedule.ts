@@ -1,4 +1,4 @@
-import type { ConfirmRole, PeoplePayload, SchedulePayload } from "@/lib/types";
+import type { ConfirmRole, SchedulePayload } from "@/lib/types";
 
 type ScheduleRange = {
   from?: string;
@@ -52,19 +52,6 @@ async function parseGoogleResponse<T extends GoogleApiPayload>(response: Respons
     throw new Error(payload.error || payload.message || "Google Schedule API request failed.");
   }
 
-  return payload;
-}
-
-export async function fetchSchedulePeopleFromGoogle() {
-  const { apiUrl, token } = getGoogleScheduleConfig();
-  const url = new URL(apiUrl);
-  url.searchParams.set("action", "people");
-  url.searchParams.set("token", token);
-  const response = await fetch(url, { method: "GET", cache: "no-store" });
-  const payload = await parseGoogleResponse<PeoplePayload & SchedulePayload>(response);
-  if (!Array.isArray(payload.hosts) || !Array.isArray(payload.supports) || payload.fallback) {
-    throw new Error("Apps Script deployment chưa hỗ trợ roster master. Hãy deploy WebApi.gs phiên bản mới rồi thử lại.");
-  }
   return payload;
 }
 

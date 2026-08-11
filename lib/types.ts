@@ -27,6 +27,36 @@ export type SchedulePerson = {
   role: EmployeeRole;
   level?: string;
   workLocation?: HostWorkLocation;
+  phone?: string;
+  cvReference?: string;
+  cashOffer?: string;
+  castStatus?: string;
+  experience?: string;
+  trainingStatus?: string;
+  notes?: string;
+  achievements?: string;
+  zaloStatus?: string;
+  liveAccountType?: string;
+  liveChannelId?: string;
+  active?: boolean;
+  source?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type EmployeeAdminPayload = {
+  success: boolean;
+  employees?: SchedulePerson[];
+  employee?: SchedulePerson;
+  total?: number;
+  activeTotal?: number;
+  hosts?: number;
+  supports?: number;
+  incomplete?: number;
+  inserted?: number;
+  updated?: number;
+  deactivated?: number;
+  message?: string;
 };
 
 export type PeoplePayload = {

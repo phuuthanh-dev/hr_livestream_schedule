@@ -53,6 +53,10 @@ function employeeAccountKey(role: EmployeeRole, employeeId: string) {
   return `employee:${role}:${normalizeEmployeeId(employeeId)}`;
 }
 
+function isRosterLock(account: Pick<UserAccount, "lockedBy">) {
+  return account.lockedBy?.startsWith("roster:") === true;
+}
+
 function getSessionVersion(account: Pick<UserAccount, "sessionVersion">) {
   return Number.isInteger(account.sessionVersion) && Number(account.sessionVersion) > 0
     ? Number(account.sessionVersion)
@@ -327,6 +331,50 @@ export async function listManagedEmployeeAccounts(): Promise<ManagedEmployeeAcco
       locked: Boolean(account.lockedAt)
     }];
   });
+}
+
+export async function syncEmployeeAccountProfile(input: {
+  person: Pick<SchedulePerson, "id" | "name" | "role" | "active">;
+  actorAccountKey: string;
+}): Promise<void> {
+  const collection = await getAccountsCollection();
+  const account = await collection.findOne({
+    accountKey: employeeAccountKey(input.person.role, input.person.id),
+    accountType: "employee"
+  });
+  if (!account) return;
+
+  const now = new Date();
+  const active = input.person.active !== false;
+  const rosterLocked = isRosterLock(account);
+  const shouldLock = !active && !account.lockedAt;
+  const shouldUnlock = active && rosterLocked;
+  const sessionVersion = shouldLock || shouldUnlock
+    ? getSessionVersion(account) + 1
+    : getSessionVersion(account);
+  const lockFields = shouldLock
+    ? { lockedAt: now, lockedBy: `roster:${input.actorAccountKey}` }
+    : shouldUnlock
+      ? { lockedAt: null, lockedBy: null }
+      : {};
+
+  const result = await collection.updateOne(
+    accountVersionFilter(account),
+    {
+      $set: {
+        displayName: input.person.name,
+        employeeId: input.person.id,
+        role: input.person.role,
+        sessionVersion,
+        ...lockFields,
+        updatedAt: now,
+        updatedBy: input.actorAccountKey
+      }
+    }
+  );
+  if (result.matchedCount !== 1) {
+    throw new Error("Tài khoản nhân viên vừa được thay đổi ở nơi khác. Vui lòng thử lại.");
+  }
 }
 
 export async function resetEmployeePassword(input: {
