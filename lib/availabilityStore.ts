@@ -515,7 +515,9 @@ export async function getAvailabilityAdminDashboard(
         slot,
         peopleAvailable: 0,
         hostAvailable: 0,
-        supportAvailable: 0
+        supportAvailable: 0,
+        hostEmployeeIds: [],
+        supportEmployeeIds: []
       });
     });
   });
@@ -524,9 +526,16 @@ export async function getAvailabilityAdminDashboard(
     if (!visiblePersonKeys.has(document.personKey)) return;
     const summary = slotSummaries.get(`${document.dateKey}__${document.slot}`);
     if (!summary) return;
-    summary.peopleAvailable += 1;
-    if (document.role === "host") summary.hostAvailable += 1;
-    if (document.role === "support") summary.supportAvailable += 1;
+    const employeeIds = document.role === "host" ? summary.hostEmployeeIds : summary.supportEmployeeIds;
+    if (!employeeIds.includes(document.employeeId)) employeeIds.push(document.employeeId);
+  });
+
+  slotSummaries.forEach((summary) => {
+    summary.hostEmployeeIds.sort((left, right) => left.localeCompare(right, "vi"));
+    summary.supportEmployeeIds.sort((left, right) => left.localeCompare(right, "vi"));
+    summary.hostAvailable = summary.hostEmployeeIds.length;
+    summary.supportAvailable = summary.supportEmployeeIds.length;
+    summary.peopleAvailable = summary.hostAvailable + summary.supportAvailable;
   });
 
   const submittedPeople = allPeople.filter(

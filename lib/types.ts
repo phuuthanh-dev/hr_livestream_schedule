@@ -175,6 +175,8 @@ export type AvailabilityAdminSlotSummary = {
   peopleAvailable: number;
   hostAvailable: number;
   supportAvailable: number;
+  hostEmployeeIds: string[];
+  supportEmployeeIds: string[];
 };
 
 export type AvailabilityAdminDashboardSummary = {

@@ -4030,6 +4030,47 @@ a:hover {
   text-align: right;
 }
 
+.availabilityCoverageLegend {
+  display: flex;
+  min-height: 48px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e6ecee;
+  color: #53676a;
+  background: #fbfdfd;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.59rem;
+  font-weight: 800;
+}
+
+.availabilityCoverageLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.availabilityCoverageLegend > span i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.availabilityCoverageLegend > span i.host {
+  background: #2f7ebc;
+}
+
+.availabilityCoverageLegend > span i.support {
+  background: #d88918;
+}
+
+.availabilityCoverageLegend small {
+  margin-left: auto;
+  color: #7c8b8d;
+  font-size: 0.56rem;
+  font-weight: 650;
+}
+
 .availabilityHeatmapDesktop {
   overflow-x: auto;
   scrollbar-color: #b8c9cb transparent;
@@ -4091,26 +4132,139 @@ a:hover {
 
 .availabilityHeatmapCell {
   display: grid;
-  min-height: 68px;
+  min-height: 96px;
   padding: 8px;
   color: #8b989b;
   background: #fff;
   place-items: center;
-  gap: 2px;
+  align-content: center;
+  gap: 3px;
+  transition: background-color 180ms ease, color 180ms ease;
 }
 
 .availabilityHeatmapCell strong {
-  font-size: 1rem;
+  font-family: "Fraunces", serif;
+  font-size: 1.16rem;
+  line-height: 1;
 }
 
-.availabilityHeatmapCell span {
+.availabilityHeatmapCell > .availabilityCoverageBreakdown {
+  color: currentColor;
   font-size: 0.51rem;
   font-weight: 800;
+  opacity: 0.82;
 }
 
 .availabilityHeatmapCell.hasPeople {
+  color: #173d55;
+  text-shadow: none;
+}
+
+.availabilityHeatmapCell.coverage-host.tone-1 {
+  background: #eaf4ff;
+}
+
+.availabilityHeatmapCell.coverage-host.tone-2 {
+  background: #c9e3fa;
+}
+
+.availabilityHeatmapCell.coverage-host.tone-3 {
+  color: #103d63;
+  background: #85bee9;
+}
+
+.availabilityHeatmapCell.coverage-host.tone-4 {
   color: #fff;
-  text-shadow: 0 1px 2px rgba(6, 61, 57, 0.28);
+  background: #236fa9;
+}
+
+.availabilityHeatmapCell.coverage-support.tone-1 {
+  color: #75470a;
+  background: #fff5dc;
+}
+
+.availabilityHeatmapCell.coverage-support.tone-2 {
+  color: #684006;
+  background: #fee1a2;
+}
+
+.availabilityHeatmapCell.coverage-support.tone-3 {
+  color: #593400;
+  background: #f4ba55;
+}
+
+.availabilityHeatmapCell.coverage-support.tone-4 {
+  color: #fff;
+  background: #b76c08;
+}
+
+.availabilityHeatmapCell.coverage-all.tone-1 {
+  color: #155b54;
+  background: #e3f6f1;
+}
+
+.availabilityHeatmapCell.coverage-all.tone-2 {
+  color: #124f4a;
+  background: #b8e7dc;
+}
+
+.availabilityHeatmapCell.coverage-all.tone-3 {
+  color: #0d4541;
+  background: #70c9b9;
+}
+
+.availabilityHeatmapCell.coverage-all.tone-4 {
+  color: #fff;
+  background: #13766e;
+}
+
+.availabilityCoverageCodes {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.availabilityHeatmapCell > .availabilityCoverageCodes {
+  margin-top: 2px;
+}
+
+.availabilityCoverageCode {
+  display: inline-flex;
+  min-height: 18px;
+  padding: 2px 5px 2px 3px;
+  border: 1px solid rgba(31, 65, 82, 0.13);
+  border-radius: 6px;
+  color: #203f51;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 2px 5px rgba(25, 57, 73, 0.07);
+  align-items: center;
+  gap: 3px;
+  font-size: 0.48rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.availabilityCoverageCode b {
+  display: grid;
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  place-items: center;
+  font-size: 0.43rem;
+}
+
+.availabilityCoverageCode.host b {
+  color: #15558a;
+  background: #d9ebfb;
+}
+
+.availabilityCoverageCode.support b {
+  color: #875006;
+  background: #ffe8b9;
 }
 
 .availabilityHeatmapMobile {
@@ -4298,6 +4452,18 @@ a:hover {
     padding: 12px;
   }
 
+  .availabilityCoverageLegend {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .availabilityCoverageLegend small {
+    width: 100%;
+    margin-left: 0;
+    line-height: 1.5;
+  }
+
   .availabilitySummaryHero {
     min-height: auto;
     padding: 24px;
@@ -4379,7 +4545,7 @@ a:hover {
     gap: 8px;
   }
 
-  .availabilityMobileCoverageSlot > span {
+  .availabilityMobileCoverageSlot > span:first-child {
     color: #667679;
     font-size: 0.54rem;
     font-weight: 750;
@@ -4399,10 +4565,24 @@ a:hover {
     background: linear-gradient(90deg, #0f766e, #5eead4);
   }
 
+  .availabilityMobileCoverageSlot.coverage-host > i b {
+    background: linear-gradient(90deg, #236fa9, #85bee9);
+  }
+
+  .availabilityMobileCoverageSlot.coverage-support > i b {
+    background: linear-gradient(90deg, #b76c08, #f4ba55);
+  }
+
   .availabilityMobileCoverageSlot > strong {
     color: #234548;
     font-size: 0.67rem;
     text-align: right;
+  }
+
+  .availabilityMobileCoverageSlot > .availabilityCoverageCodes {
+    padding: 2px 0 7px 90px;
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 }
 

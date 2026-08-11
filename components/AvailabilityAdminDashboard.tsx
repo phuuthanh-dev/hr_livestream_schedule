@@ -100,6 +100,24 @@ function slotKey(dateKey: string, slot: string) {
   return `${dateKey}__${slot}`;
 }
 
+function coverageTone(count: number, totalPeople: number) {
+  if (count <= 0) return 0;
+  return Math.min(4, Math.max(1, Math.ceil((count / Math.max(totalPeople, 1)) * 4)));
+}
+
+function AvailabilityCoverageCodes({ cell }: { cell?: AvailabilityAdminSlotSummary }) {
+  const hostIds = cell?.hostEmployeeIds || [];
+  const supportIds = cell?.supportEmployeeIds || [];
+  if (hostIds.length === 0 && supportIds.length === 0) return null;
+
+  return (
+    <span className="availabilityCoverageCodes">
+      {hostIds.map((employeeId) => <span className="availabilityCoverageCode host" key={`host-${employeeId}`}><b>H</b>{employeeId}</span>)}
+      {supportIds.map((employeeId) => <span className="availabilityCoverageCode support" key={`support-${employeeId}`}><b>S</b>{employeeId}</span>)}
+    </span>
+  );
+}
+
 export default function AvailabilityAdminDashboard({ username, initialWeekStartKey, initialRoleFilter }: AvailabilityAdminDashboardProps) {
   const [weekStartKey, setWeekStartKey] = useState(() => getScheduleWeekStartKey(initialWeekStartKey));
   const [roleFilter, setRoleFilter] = useState<AvailabilityAdminRoleFilter>(initialRoleFilter || "all");
@@ -288,6 +306,12 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <p>Mỗi ô hiển thị số người rảnh trong {summary?.visiblePeople || 0} nhân sự theo bộ lọc trạng thái.</p>
             </div>
 
+            <div className="availabilityCoverageLegend">
+              <span><i className="host" /> Host</span>
+              <span><i className="support" /> Support Live</span>
+              <small>Màu càng đậm, số nhân sự rảnh trong slot càng cao. Mỗi nhãn bên dưới là mã nhân viên.</small>
+            </div>
+
             <div className="availabilityHeatmapDesktop">
               <div className="availabilityHeatmapGrid">
                 <div className="availabilityHeatmapCorner">Khung giờ</div>
@@ -303,16 +327,17 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                     {weekDays.map((day) => {
                       const cell = slotMap.get(slotKey(day.dateKey, slot));
                       const count = cell?.peopleAvailable || 0;
-                      const intensity = count / visibleDenominator;
+                      const tone = coverageTone(count, visibleDenominator);
+                      const employeeCodes = [...(cell?.hostEmployeeIds || []), ...(cell?.supportEmployeeIds || [])];
                       return (
                         <div
-                          className={`availabilityHeatmapCell ${count > 0 ? "hasPeople" : ""}`}
+                          className={`availabilityHeatmapCell ${count > 0 ? "hasPeople" : ""} coverage-${roleFilter} tone-${tone}`}
                           key={`${day.dateKey}-${slot}`}
-                          style={{ backgroundColor: count > 0 ? `rgba(15, 118, 110, ${0.1 + intensity * 0.72})` : undefined }}
-                          title={`${day.label} ${formatShortDate(day.dateKey)}, ${slot}: ${count} người rảnh`}
+                          title={`${day.label} ${formatShortDate(day.dateKey)}, ${slot}: ${count} người rảnh${employeeCodes.length ? ` · ${employeeCodes.join(", ")}` : ""}`}
                         >
                           <strong>{count}</strong>
-                          {roleFilter === "all" && count > 0 ? <span>H{cell?.hostAvailable || 0} · S{cell?.supportAvailable || 0}</span> : null}
+                          {count > 0 ? <span className="availabilityCoverageBreakdown">Host {cell?.hostAvailable || 0} · Support {cell?.supportAvailable || 0}</span> : null}
+                          <AvailabilityCoverageCodes cell={cell} />
                         </div>
                       );
                     })}
@@ -329,11 +354,13 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                     {DEFAULT_SCHEDULE_SLOTS.map((slot) => {
                       const cell = slotMap.get(slotKey(day.dateKey, slot));
                       const count = cell?.peopleAvailable || 0;
+                      const tone = coverageTone(count, visibleDenominator);
                       return (
-                        <div className="availabilityMobileCoverageSlot" key={slot}>
+                        <div className={`availabilityMobileCoverageSlot ${count > 0 ? "hasPeople" : ""} coverage-${roleFilter} tone-${tone}`} key={slot}>
                           <span>{slot}</span>
                           <i><b style={{ width: `${Math.min(100, (count / visibleDenominator) * 100)}%` }} /></i>
                           <strong>{count}</strong>
+                          <AvailabilityCoverageCodes cell={cell} />
                         </div>
                       );
                     })}
