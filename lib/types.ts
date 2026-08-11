@@ -1,12 +1,14 @@
 export type ConfirmRole = "host" | "support" | "both";
 export type EmployeeRole = "host" | "support";
 export type AccountType = "admin" | "employee";
+export type HostWorkLocation = "home" | "studio";
 
 export type SchedulePerson = {
   id: string;
   name: string;
   role: EmployeeRole;
   level?: string;
+  workLocation?: HostWorkLocation;
 };
 
 export type PeoplePayload = {
@@ -105,7 +107,7 @@ export type SchedulePayload = {
 };
 
 export type AvailabilityWeekStatus = "draft" | "submitted" | "locked";
-export type AvailabilityLocationPreference = "home" | "studio" | "both";
+export type AvailabilityLocationPreference = HostWorkLocation;
 
 export type AvailabilitySlot = {
   dateKey: string;
@@ -121,6 +123,7 @@ export type AvailabilityWeek = {
   role: EmployeeRole;
   employeeId: string;
   employeeName: string;
+  workLocation?: HostWorkLocation;
   status: AvailabilityWeekStatus;
   submittedAt?: string;
   lockedAt?: string;
@@ -133,7 +136,6 @@ export type AvailabilitySummary = {
   availableSlots: number;
   availableHome: number;
   availableStudio: number;
-  availableBoth: number;
 };
 
 export type AvailabilityPayload = {
@@ -142,10 +144,58 @@ export type AvailabilityPayload = {
     role: EmployeeRole;
     employeeId: string;
     employeeName: string;
+    workLocation?: HostWorkLocation;
   };
   week?: AvailabilityWeek;
   summary?: AvailabilitySummary;
   canEdit?: boolean;
   error?: string;
+  message?: string;
+};
+
+export type AvailabilityAdminRoleFilter = "all" | EmployeeRole;
+export type AvailabilityAdminStatusFilter = "all" | "submitted" | "not_submitted";
+export type AvailabilitySubmissionState = "not_started" | "draft" | "submitted" | "locked";
+
+export type AvailabilityAdminPerson = {
+  employeeId: string;
+  employeeName: string;
+  role: EmployeeRole;
+  level?: string;
+  workLocation?: HostWorkLocation;
+  submissionState: AvailabilitySubmissionState;
+  availableSlots: number;
+  submittedAt?: string;
+  updatedAt?: string;
+};
+
+export type AvailabilityAdminSlotSummary = {
+  dateKey: string;
+  slot: string;
+  peopleAvailable: number;
+  hostAvailable: number;
+  supportAvailable: number;
+};
+
+export type AvailabilityAdminDashboardSummary = {
+  totalPeople: number;
+  submittedPeople: number;
+  notSubmittedPeople: number;
+  draftPeople: number;
+  notStartedPeople: number;
+  lockedPeople: number;
+  visiblePeople: number;
+  visibleAvailableSlots: number;
+};
+
+export type AvailabilityAdminDashboardPayload = {
+  success: boolean;
+  weekStartKey?: string;
+  roleFilter?: AvailabilityAdminRoleFilter;
+  statusFilter?: AvailabilityAdminStatusFilter;
+  generatedAt?: string;
+  summary?: AvailabilityAdminDashboardSummary;
+  people?: AvailabilityAdminPerson[];
+  slots?: AvailabilityAdminSlotSummary[];
   message?: string;
 };

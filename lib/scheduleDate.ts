@@ -55,3 +55,30 @@ export function getScheduleWeekStartKey(anchor: Date | string = new Date()) {
 export function getScheduleWeekDateKeys(weekStartKey: string) {
   return Array.from({ length: 7 }, (_, index) => addDaysToScheduleDateKey(weekStartKey, index)).filter(Boolean);
 }
+
+function getScheduleClockMinutes(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return Number(values.hour) * 60 + Number(values.minute);
+}
+
+export function isScheduleSlotInPast(
+  dateKey: string,
+  slot: string,
+  now = new Date(),
+  timeZone = DEFAULT_SCHEDULE_TIME_ZONE
+) {
+  if (!isValidScheduleDateKey(dateKey)) return true;
+  const match = slot.match(/^\s*(\d{1,2}):(\d{2})\s*-/);
+  if (!match) return true;
+  const todayKey = formatScheduleDateKey(now, timeZone);
+  if (dateKey < todayKey) return true;
+  if (dateKey > todayKey) return false;
+  const startMinutes = Number(match[1]) * 60 + Number(match[2]);
+  return startMinutes <= getScheduleClockMinutes(now, timeZone);
+}

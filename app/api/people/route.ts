@@ -9,7 +9,8 @@ export async function GET() {
     const toPublicPerson = (person: NonNullable<typeof payload.hosts>[number]) => ({
       id: person.id,
       name: person.name,
-      role: person.role
+      role: person.role,
+      workLocation: person.workLocation
     });
     return NextResponse.json({
       success: payload.success,

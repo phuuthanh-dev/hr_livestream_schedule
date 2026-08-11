@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
-import { saveAvailabilityWeek, submitAvailabilityWeek } from "@/lib/availabilityStore";
+import { hasEditableAvailabilitySlots, saveAvailabilityWeek, submitAvailabilityWeek } from "@/lib/availabilityStore";
 import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type { AvailabilitySlot, EmployeeRole } from "@/lib/types";
 
@@ -44,6 +44,12 @@ export async function POST(request: Request) {
   if (!session) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
   }
+  if (session.accountType !== "employee") {
+    return NextResponse.json(
+      { success: false, message: "Chỉ nhân viên được gửi lịch rảnh. Admin chỉ có thể lưu thay đổi." },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = (await request.json().catch(() => ({}))) as {
@@ -61,7 +67,7 @@ export async function POST(request: Request) {
         weekStartKey: body.weekStartKey || getScheduleWeekStartKey(),
         slots: body.slots,
         actorAccountKey: session.accountKey,
-        allowLockedOverwrite: session.accountType === "admin"
+        allowLockedOverwrite: false
       });
     }
     const payload = await submitAvailabilityWeek({
@@ -69,12 +75,14 @@ export async function POST(request: Request) {
       employeeId: target.employeeId,
       weekStartKey: body.weekStartKey || getScheduleWeekStartKey(),
       actorAccountKey: session.accountKey,
-      allowLockedOverwrite: session.accountType === "admin"
+      allowLockedOverwrite: false
     });
 
     return NextResponse.json({
       ...payload,
-      canEdit: session.accountType === "admin" || payload.week?.status !== "locked",
+      canEdit: hasEditableAvailabilitySlots(body.weekStartKey || getScheduleWeekStartKey()) &&
+        (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+        payload.week?.status !== "locked",
       message: "Đã gửi lịch rảnh cho admin."
     });
   } catch (error) {

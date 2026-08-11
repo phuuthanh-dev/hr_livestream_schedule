@@ -2,16 +2,16 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
-import { DEFAULT_HOST_LOCATION_PREFERENCE, DEFAULT_SCHEDULE_SLOTS, HOST_AVAILABILITY_LOCATION_OPTIONS } from "@/lib/scheduleConfig";
+import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
 import {
   addDaysToScheduleDateKey,
   getScheduleTodayKey,
   getScheduleWeekDateKeys,
   getScheduleWeekStartKey,
+  isScheduleSlotInPast,
   parseScheduleDateKey
 } from "@/lib/scheduleDate";
 import type {
-  AvailabilityLocationPreference,
   AvailabilityPayload,
   AvailabilitySlot,
   AvailabilitySummary,
@@ -25,6 +25,9 @@ type AvailabilityBoardProps = {
   isAdmin: boolean;
   employeeRole?: EmployeeRole;
   employeeId?: string;
+  initialWeekStartKey?: string;
+  initialAdminRole?: EmployeeRole;
+  initialAdminEmployeeId?: string;
 };
 
 type PeopleResponse = {
@@ -34,7 +37,7 @@ type PeopleResponse = {
   message?: string;
 };
 
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "logout" | "warning";
+type IconName = "account" | "calendar" | "chart" | "check" | "chevronLeft" | "chevronRight" | "logout" | "warning";
 
 const DAY_NAMES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 
@@ -56,6 +59,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "calendar") {
     return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" /></svg>;
+  }
+  if (name === "chart") {
+    return <svg {...common}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>;
   }
   if (name === "check") {
     return <svg {...common}><path d="m5 12 4 4L19 6" /></svg>;
@@ -114,15 +120,13 @@ function buildSummary(slots: AvailabilitySlot[]): AvailabilitySummary {
       summary.availableSlots += 1;
       if (slot.locationPreference === "home") summary.availableHome += 1;
       if (slot.locationPreference === "studio") summary.availableStudio += 1;
-      if (slot.locationPreference === "both" || !slot.locationPreference) summary.availableBoth += 1;
       return summary;
     },
     {
       totalSlots: DEFAULT_SCHEDULE_SLOTS.length * 7,
       availableSlots: 0,
       availableHome: 0,
-      availableStudio: 0,
-      availableBoth: 0
+      availableStudio: 0
     }
   );
 }
@@ -133,10 +137,10 @@ function statusLabel(status: AvailabilityWeek["status"]) {
   return "Bản nháp";
 }
 
-function locationLabel(value?: AvailabilityLocationPreference) {
-  if (value === "home") return "Home";
+function locationLabel(value?: "home" | "studio") {
   if (value === "studio") return "Studio";
-  return "Home + Studio";
+  if (value === "home") return "Home";
+  return "Chưa cấu hình";
 }
 
 function buildSlotKey(dateKey: string, slot: string) {
@@ -147,15 +151,18 @@ export default function AvailabilityBoard({
   username,
   isAdmin,
   employeeRole,
-  employeeId
+  employeeId,
+  initialWeekStartKey,
+  initialAdminRole,
+  initialAdminEmployeeId
 }: AvailabilityBoardProps) {
-  const [weekStartKey, setWeekStartKey] = useState(getScheduleWeekStartKey);
+  const [weekStartKey, setWeekStartKey] = useState(() => getScheduleWeekStartKey(initialWeekStartKey));
   const [week, setWeek] = useState<AvailabilityWeek | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
   const [supports, setSupports] = useState<SchedulePerson[]>([]);
-  const [selectedRole, setSelectedRole] = useState<EmployeeRole>(employeeRole || "host");
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(employeeId || "");
+  const [selectedRole, setSelectedRole] = useState<EmployeeRole>(initialAdminRole || employeeRole || "host");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(initialAdminEmployeeId || employeeId || "");
   const [loadingPeople, setLoadingPeople] = useState(isAdmin);
   const [loadingWeek, setLoadingWeek] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -178,7 +185,15 @@ export default function AvailabilityBoard({
   const todayKey = getScheduleTodayKey();
   const selectedPeople = selectedRole === "host" ? hosts : supports;
   const selectedPerson = selectedPeople.find((person) => person.id === selectedEmployeeId) || null;
+  const activeRole = isAdmin ? selectedRole : employeeRole;
+  const activeWorkLocation = activeRole === "host"
+    ? selectedPerson?.workLocation || week?.workLocation
+    : undefined;
+  const hasValidTargetLocation = activeRole !== "host" || Boolean(activeWorkLocation);
   const hasTargetSelection = Boolean((isAdmin ? selectedRole : employeeRole) && (isAdmin ? selectedEmployeeId : employeeId));
+  const hasEditableSlots = weekDays.some((day) =>
+    DEFAULT_SCHEDULE_SLOTS.some((slot) => !isScheduleSlotInPast(day.dateKey, slot))
+  );
   const summary = useMemo(() => buildSummary(slots), [slots]);
   const slotMap = useMemo(() => {
     const nextMap = new Map<string, AvailabilitySlot>();
@@ -220,16 +235,12 @@ export default function AvailabilityBoard({
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || loadingPeople) return;
     const nextPeople = selectedRole === "host" ? hosts : supports;
-    if (nextPeople.length === 0) {
+    if (selectedEmployeeId && !nextPeople.some((person) => person.id === selectedEmployeeId)) {
       setSelectedEmployeeId("");
-      return;
     }
-    if (!nextPeople.some((person) => person.id === selectedEmployeeId)) {
-      setSelectedEmployeeId(nextPeople[0].id);
-    }
-  }, [hosts, isAdmin, selectedEmployeeId, selectedRole, supports]);
+  }, [hosts, isAdmin, loadingPeople, selectedEmployeeId, selectedRole, supports]);
 
   useEffect(() => {
     const role = isAdmin ? selectedRole : employeeRole;
@@ -327,7 +338,7 @@ export default function AvailabilityBoard({
   }
 
   function toggleSlot(dateKey: string, slot: string) {
-    if (!canEdit) return;
+    if (!canEdit || !hasValidTargetLocation || isScheduleSlotInPast(dateKey, slot)) return;
     setSlots((current) => {
       const existingKey = buildSlotKey(dateKey, slot);
       const existing = current.find((item) => buildSlotKey(item.dateKey, item.slot) === existingKey);
@@ -337,10 +348,7 @@ export default function AvailabilityBoard({
             dateKey,
             slot,
             available: true,
-            locationPreference:
-              (isAdmin ? selectedRole : employeeRole) === "host"
-                ? DEFAULT_HOST_LOCATION_PREFERENCE
-                : undefined
+            locationPreference: activeRole === "host" ? activeWorkLocation : undefined
           });
       return next.sort((left, right) => {
         if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
@@ -351,16 +359,14 @@ export default function AvailabilityBoard({
     setDirty(true);
   }
 
-  function updateLocationPreference(dateKey: string, slot: string, value: AvailabilityLocationPreference) {
-    if (!canEdit) return;
-    setSlots((current) =>
-      current.map((item) =>
-        item.dateKey === dateKey && item.slot === slot
-          ? { ...item, locationPreference: value }
-          : item
-      )
-    );
-    setDirty(true);
+  function changeAdminRole(role: EmployeeRole) {
+    setSelectedRole(role);
+    setSelectedEmployeeId("");
+    setWeek(null);
+    setSlots([]);
+    setDirty(false);
+    setMessage("");
+    setError("");
   }
 
   async function logout() {
@@ -390,6 +396,7 @@ export default function AvailabilityBoard({
         </div>
 
         <div className="headerActions">
+          {isAdmin ? <a className="todayButton availabilitySummaryShortcut" href={`/availability/summary?role=${selectedRole}&weekStartKey=${weekStartKey}`}><Icon name="chart" size={17} /><span>Tổng hợp</span></a> : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
@@ -415,7 +422,7 @@ export default function AvailabilityBoard({
               <div className="availabilityTargetForm">
                 <label>
                   Vai trò
-                  <select value={selectedRole} onChange={(event) => setSelectedRole(event.target.value as EmployeeRole)} disabled={loadingPeople}>
+                  <select value={selectedRole} onChange={(event) => changeAdminRole(event.target.value as EmployeeRole)} disabled={loadingPeople}>
                     <option value="host">Host</option>
                     <option value="support">Support Live</option>
                   </select>
@@ -423,12 +430,10 @@ export default function AvailabilityBoard({
                 <label>
                   Nhân viên
                   <select value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)} disabled={loadingPeople || selectedPeople.length === 0}>
-                    {selectedPeople.length === 0 ? (
-                      <option value="">{loadingPeople ? "Đang tải..." : "Chưa có nhân sự"}</option>
-                    ) : null}
+                    <option value="">{loadingPeople ? "Đang tải..." : selectedPeople.length === 0 ? "Chưa có nhân sự" : "Chọn nhân sự để xem lịch"}</option>
                     {selectedPeople.map((person) => (
                       <option key={person.id} value={person.id}>
-                        {person.name} · {person.id}
+                        {person.name} · {person.id}{person.role === "host" ? ` · ${locationLabel(person.workLocation)}` : ""}
                       </option>
                     ))}
                   </select>
@@ -442,49 +447,54 @@ export default function AvailabilityBoard({
             )}
           </section>
 
-          <section className="availabilityCard">
-            <div className="availabilityCardHeader">
-              <strong>Trạng thái tuần</strong>
-              <span>{week ? formatWeekRange(week.weekStartKey) : formatWeekRange(weekStartKey)}</span>
-            </div>
-            <div className="availabilityStatusRow">
-              <span className={`availabilityStatusBadge ${week?.status || "draft"}`}>{statusLabel(week?.status || "draft")}</span>
-              {dirty ? <em className="availabilityDirtyFlag">Chưa lưu</em> : null}
-            </div>
-            {week?.submittedAt ? <p className="availabilityMetaLine">Đã gửi lúc {new Date(week.submittedAt).toLocaleString("vi-VN")}</p> : null}
-            {week?.lockedAt ? <p className="availabilityMetaLine danger">Đã khóa lúc {new Date(week.lockedAt).toLocaleString("vi-VN")}</p> : null}
-            {week?.lockedReason ? <p className="availabilityMetaLine danger">{week.lockedReason}</p> : null}
-          </section>
+          {!isAdmin || selectedPerson ? (
+            <>
+              <section className="availabilityCard">
+                <div className="availabilityCardHeader">
+                  <strong>Trạng thái tuần</strong>
+                  <span>{week ? formatWeekRange(week.weekStartKey) : formatWeekRange(weekStartKey)}</span>
+                </div>
+                <div className="availabilityStatusRow">
+                  <span className={`availabilityStatusBadge ${week?.status || "draft"}`}>{statusLabel(week?.status || "draft")}</span>
+                  {dirty ? <em className="availabilityDirtyFlag">Chưa lưu</em> : null}
+                </div>
+                {week?.submittedAt ? <p className="availabilityMetaLine">Đã gửi lúc {new Date(week.submittedAt).toLocaleString("vi-VN")}</p> : null}
+                {week?.lockedAt ? <p className="availabilityMetaLine danger">Đã khóa lúc {new Date(week.lockedAt).toLocaleString("vi-VN")}</p> : null}
+                {week?.lockedReason ? <p className="availabilityMetaLine danger">{week.lockedReason}</p> : null}
+              </section>
 
-          <section className="availabilityCard">
-            <div className="availabilityCardHeader">
-              <strong>Tổng quan tuần</strong>
-              <span>{summary.availableSlots}/{summary.totalSlots} slot rảnh</span>
-            </div>
-            <div className="availabilityMetrics">
-              <div><span>Slot rảnh</span><strong>{summary.availableSlots}</strong></div>
-              <div><span>Home</span><strong>{summary.availableHome}</strong></div>
-              <div><span>Studio</span><strong>{summary.availableStudio}</strong></div>
-              <div><span>Home + Studio</span><strong>{summary.availableBoth}</strong></div>
-            </div>
-          </section>
+              <section className="availabilityCard">
+                <div className="availabilityCardHeader">
+                  <strong>Tổng quan tuần</strong>
+                  <span>{summary.availableSlots}/{summary.totalSlots} slot rảnh</span>
+                </div>
+                <div className={`availabilityMetrics ${activeRole === "support" ? "supportOnly" : ""}`}>
+                  <div><span>Slot rảnh</span><strong>{summary.availableSlots}</strong></div>
+                  {activeRole === "host" ? <div><span>Home</span><strong>{summary.availableHome}</strong></div> : null}
+                  {activeRole === "host" ? <div><span>Studio</span><strong>{summary.availableStudio}</strong></div> : null}
+                </div>
+              </section>
 
-          <section className="availabilityCard availabilitySidebarActions">
-            <div className="availabilityCardHeader">
-              <strong>Thao tác</strong>
-              <span>{canEdit ? "Bạn có thể tiếp tục chỉnh tuần này." : "Tuần này đang khóa chỉnh sửa."}</span>
-            </div>
-            <div className="availabilityActions">
-              <button className="syncButton peopleSyncButton" disabled={!canEdit || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
-                <Icon name="calendar" />
-                <span>{saving ? "Đang lưu..." : "Lưu nháp"}</span>
-              </button>
-              <button className="syncButton" disabled={!canEdit || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
-                <Icon name="check" />
-                <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
-              </button>
-            </div>
-          </section>
+              <section className="availabilityCard availabilitySidebarActions">
+                <div className="availabilityCardHeader">
+                  <strong>Thao tác</strong>
+                  <span>{!hasValidTargetLocation ? "Cần cấu hình Home hoặc Studio trong hồ sơ Host." : canEdit ? "Có thể chỉnh các slot chưa bắt đầu." : "Tuần này không còn slot có thể chỉnh."}</span>
+                </div>
+                <div className="availabilityActions">
+                  <button className="syncButton peopleSyncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
+                    <Icon name="calendar" />
+                    <span>{saving ? "Đang lưu..." : isAdmin ? "Lưu thay đổi" : "Lưu nháp"}</span>
+                  </button>
+                  {!isAdmin ? (
+                    <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
+                      <Icon name="check" />
+                      <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            </>
+          ) : null}
         </aside>
 
         <section className="availabilityWorkspace">
@@ -507,7 +517,7 @@ export default function AvailabilityBoard({
                   <strong>{week?.employeeName || selectedPerson?.name || username}</strong>
                   <p>{formatWeekTitle(weekStartKey)} · {formatWeekRange(weekStartKey)}</p>
                 </div>
-                <em>{(isAdmin ? selectedRole : employeeRole) === "host" ? "Host có thể chọn Home / Studio / Both" : "Support chỉ cần đánh dấu slot rảnh"}</em>
+                <em>{activeRole === "host" ? `Địa điểm của Host: ${locationLabel(activeWorkLocation)}` : "Support Live chỉ cần đánh dấu slot rảnh"}</em>
               </div>
 
               <div className="availabilityDesktopBoard">
@@ -526,32 +536,20 @@ export default function AvailabilityBoard({
                       {weekDays.map((day) => {
                         const currentSlot = slotMap.get(buildSlotKey(day.dateKey, slot));
                         const active = Boolean(currentSlot);
+                        const past = isScheduleSlotInPast(day.dateKey, slot);
                         return (
-                          <div className="availabilityCell" key={`${day.dateKey}-${slot}`}>
+                          <div className={`availabilityCell ${past ? "past" : ""}`} key={`${day.dateKey}-${slot}`}>
                             <button
                               aria-pressed={active}
-                              className={`availabilityCellButton ${active ? "active" : ""}`}
-                              disabled={!canEdit}
+                              className={`availabilityCellButton ${active ? "active" : ""} ${past ? "past" : ""}`}
+                              disabled={!canEdit || !hasValidTargetLocation || past}
                               onClick={() => toggleSlot(day.dateKey, slot)}
+                              title={past ? "Khung giờ đã bắt đầu và không thể chỉnh sửa" : undefined}
                               type="button"
                             >
-                              <span>{active ? "Sẵn sàng" : "Để trống"}</span>
-                              <strong>{active ? locationLabel(currentSlot?.locationPreference) : "Chưa đăng ký"}</strong>
+                              <span>{active ? "Sẵn sàng" : past ? "Đã qua" : "Để trống"}</span>
+                              <strong>{active ? activeRole === "host" ? locationLabel(currentSlot?.locationPreference || activeWorkLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chưa đăng ký"}</strong>
                             </button>
-                            {active && (isAdmin ? selectedRole : employeeRole) === "host" ? (
-                              <label className="availabilityCellMeta">
-                                <span>Nơi live</span>
-                                <select
-                                  value={currentSlot?.locationPreference || DEFAULT_HOST_LOCATION_PREFERENCE}
-                                  disabled={!canEdit}
-                                  onChange={(event) => updateLocationPreference(day.dateKey, slot, event.target.value as AvailabilityLocationPreference)}
-                                >
-                                  {HOST_AVAILABILITY_LOCATION_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
-                              </label>
-                            ) : null}
                           </div>
                         );
                       })}
@@ -560,9 +558,10 @@ export default function AvailabilityBoard({
                 </div>
 
                 <div className="availabilityLegend">
-                  <span><i className="legendChip active" /> Slot đã đăng ký</span>
-                  <span><i className="legendChip" /> Slot chưa đăng ký</span>
-                  <span><i className="legendChip today" /> Cột hôm nay</span>
+                <span><i className="legendChip active" /> Slot đã đăng ký</span>
+                <span><i className="legendChip" /> Slot chưa đăng ký</span>
+                <span><i className="legendChip past" /> Slot đã qua</span>
+                <span><i className="legendChip today" /> Cột hôm nay</span>
                 </div>
                 <div className="availabilityFootnote">
                   <p>Ngày chi tiết: {formatLongDate(weekStartKey)} đến {formatLongDate(addDaysToScheduleDateKey(weekStartKey, 6))}</p>
@@ -602,38 +601,26 @@ export default function AvailabilityBoard({
                     if (!selectedMobileDay) return null;
                     const currentSlot = slotMap.get(buildSlotKey(selectedMobileDay.dateKey, slot));
                     const active = Boolean(currentSlot);
+                    const past = isScheduleSlotInPast(selectedMobileDay.dateKey, slot);
                     return (
-                      <article className={`availabilityMobileSlot ${active ? "active" : ""}`} key={slot}>
+                      <article className={`availabilityMobileSlot ${active ? "active" : ""} ${past ? "past" : ""}`} key={slot}>
                         <button
                           aria-pressed={active}
                           className="availabilityMobileSlotToggle"
-                          disabled={!canEdit}
+                          disabled={!canEdit || !hasValidTargetLocation || past}
                           onClick={() => toggleSlot(selectedMobileDay.dateKey, slot)}
+                          title={past ? "Khung giờ đã bắt đầu và không thể chỉnh sửa" : undefined}
                           type="button"
                         >
                           <span className="availabilityMobileSlotTime">{slot}</span>
                           <span className="availabilityMobileSlotState">
                             <i><Icon name="check" size={15} /></i>
                             <span>
-                              <strong>{active ? "Sẵn sàng nhận ca" : "Chưa đăng ký"}</strong>
-                              <small>{active ? locationLabel(currentSlot?.locationPreference) : "Chạm để chọn khung giờ này"}</small>
+                              <strong>{active ? "Sẵn sàng nhận ca" : past ? "Khung giờ đã qua" : "Chưa đăng ký"}</strong>
+                              <small>{active ? activeRole === "host" ? locationLabel(currentSlot?.locationPreference || activeWorkLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chạm để chọn khung giờ này"}</small>
                             </span>
                           </span>
                         </button>
-                        {active && (isAdmin ? selectedRole : employeeRole) === "host" ? (
-                          <label className="availabilityMobileLocation">
-                            <span>Nơi live</span>
-                            <select
-                              value={currentSlot?.locationPreference || DEFAULT_HOST_LOCATION_PREFERENCE}
-                              disabled={!canEdit}
-                              onChange={(event) => updateLocationPreference(selectedMobileDay.dateKey, slot, event.target.value as AvailabilityLocationPreference)}
-                            >
-                              {HOST_AVAILABILITY_LOCATION_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
                       </article>
                     );
                   })}
@@ -644,16 +631,18 @@ export default function AvailabilityBoard({
         </section>
       </div>
 
-      <div className="availabilityMobileActions">
-        <button className="syncButton peopleSyncButton" disabled={!canEdit || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
+      {!isAdmin || selectedPerson ? <div className={`availabilityMobileActions ${isAdmin ? "adminOnly" : ""}`}>
+        <button className="syncButton peopleSyncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
           <Icon name="calendar" />
-          <span>{saving ? "Đang lưu..." : "Lưu nháp"}</span>
+          <span>{saving ? "Đang lưu..." : isAdmin ? "Lưu thay đổi" : "Lưu nháp"}</span>
         </button>
-        <button className="syncButton" disabled={!canEdit || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
-          <Icon name="check" />
-          <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
-        </button>
-      </div>
+        {!isAdmin ? (
+          <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
+            <Icon name="check" />
+            <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
+          </button>
+        ) : null}
+      </div> : null}
 
       {accountPanelOpen ? (
         <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />

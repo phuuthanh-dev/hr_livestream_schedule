@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
-import { getAvailabilityWeekForPerson, saveAvailabilityWeek } from "@/lib/availabilityStore";
+import { getAvailabilityWeekForPerson, hasEditableAvailabilitySlots, saveAvailabilityWeek } from "@/lib/availabilityStore";
 import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type { AvailabilitySlot, EmployeeRole } from "@/lib/types";
 
@@ -56,7 +56,9 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         ...payload,
-        canEdit: session.accountType === "admin" || payload.week?.status !== "locked"
+        canEdit: hasEditableAvailabilitySlots(weekStartKey) &&
+          (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+          (session.accountType === "admin" || payload.week?.status !== "locked")
       },
       {
         headers: { "cache-control": "no-store" }
@@ -96,8 +98,12 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({
       ...payload,
-      canEdit: session.accountType === "admin" || payload.week?.status !== "locked",
-      message: "Đã lưu lịch rảnh cho tuần này."
+      canEdit: hasEditableAvailabilitySlots(body.weekStartKey || getScheduleWeekStartKey()) &&
+        (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+        (session.accountType === "admin" || payload.week?.status !== "locked"),
+      message: session.accountType === "admin"
+        ? "Đã lưu thay đổi lịch rảnh của nhân sự."
+        : "Đã lưu lịch rảnh cho tuần này."
     });
   } catch (error) {
     return NextResponse.json(

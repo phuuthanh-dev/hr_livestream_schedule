@@ -1,21 +1,28 @@
 import type { Collection } from "mongodb";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
-import { findActiveSchedulePerson } from "@/lib/employeeRoster";
-import { DEFAULT_HOST_LOCATION_PREFERENCE, DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
+import { findActiveSchedulePerson, getSchedulePeopleFromMongo } from "@/lib/employeeRoster";
+import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
 import {
   addDaysToScheduleDateKey,
   getScheduleWeekDateKeys,
   getScheduleWeekStartKey,
+  isScheduleSlotInPast,
   isValidScheduleDateKey
 } from "@/lib/scheduleDate";
 import type {
+  AvailabilityAdminDashboardPayload,
+  AvailabilityAdminPerson,
+  AvailabilityAdminRoleFilter,
+  AvailabilityAdminSlotSummary,
+  AvailabilityAdminStatusFilter,
   AvailabilityLocationPreference,
   AvailabilityPayload,
   AvailabilitySlot,
   AvailabilitySummary,
   AvailabilityWeek,
   AvailabilityWeekStatus,
-  EmployeeRole
+  EmployeeRole,
+  HostWorkLocation
 } from "@/lib/types";
 
 const AVAILABILITY_WEEK_COLLECTION = "schedule_availability_weeks";
@@ -44,7 +51,7 @@ type AvailabilitySlotDocument = {
   dateKey: string;
   slot: string;
   available: true;
-  locationPreference?: AvailabilityLocationPreference;
+  locationPreference?: string;
   note?: string;
   updatedAt: Date;
   updatedBy: string;
@@ -65,6 +72,12 @@ type SubmitAvailabilityWeekInput = {
   weekStartKey: string;
   actorAccountKey: string;
   allowLockedOverwrite?: boolean;
+};
+
+type GetAvailabilityAdminDashboardInput = {
+  weekStartKey?: string;
+  roleFilter?: AvailabilityAdminRoleFilter;
+  statusFilter?: AvailabilityAdminStatusFilter;
 };
 
 let availabilityIndexesPromise: Promise<void> | null = null;
@@ -92,16 +105,17 @@ function isValidSlot(value: string) {
   return DEFAULT_SCHEDULE_SLOTS.includes(value as (typeof DEFAULT_SCHEDULE_SLOTS)[number]);
 }
 
-function normalizeLocationPreference(
+function resolveHostWorkLocation(
   role: EmployeeRole,
-  value: unknown
+  workLocation?: HostWorkLocation,
+  storedLocation?: unknown
 ): AvailabilityLocationPreference | undefined {
   if (role !== "host") return undefined;
-  const normalized = normalizeText(value).toLowerCase();
-  if (normalized === "home" || normalized === "studio" || normalized === "both") {
-    return normalized;
-  }
-  return DEFAULT_HOST_LOCATION_PREFERENCE;
+  if (workLocation) return workLocation;
+  const normalizedStoredLocation = normalizeText(storedLocation).toLowerCase();
+  return normalizedStoredLocation === "home" || normalizedStoredLocation === "studio"
+    ? normalizedStoredLocation
+    : undefined;
 }
 
 function compareWeekSlots(left: AvailabilitySlot, right: AvailabilitySlot) {
@@ -118,15 +132,13 @@ function buildAvailabilitySummary(slots: AvailabilitySlot[]): AvailabilitySummar
       summary.availableSlots += 1;
       if (slot.locationPreference === "home") summary.availableHome += 1;
       if (slot.locationPreference === "studio") summary.availableStudio += 1;
-      if (slot.locationPreference === "both" || !slot.locationPreference) summary.availableBoth += 1;
       return summary;
     },
     {
       totalSlots: DEFAULT_SCHEDULE_SLOTS.length * 7,
       availableSlots: 0,
       availableHome: 0,
-      availableStudio: 0,
-      availableBoth: 0
+      availableStudio: 0
     }
   );
 }
@@ -160,6 +172,7 @@ async function getCollections(): Promise<{
 
 function normalizeIncomingSlots(
   role: EmployeeRole,
+  workLocation: HostWorkLocation | undefined,
   weekStartKey: string,
   slots: AvailabilitySlot[]
 ): AvailabilitySlot[] {
@@ -176,7 +189,7 @@ function normalizeIncomingSlots(
       dateKey,
       slot: slotLabel,
       available: true,
-      locationPreference: normalizeLocationPreference(role, slot.locationPreference),
+      locationPreference: resolveHostWorkLocation(role, workLocation),
       note: normalizeText(slot.note) || undefined
     };
     normalizedByKey.set(`${dateKey}__${slotLabel}`, normalizedSlot);
@@ -202,7 +215,7 @@ async function buildAvailabilityWeek(
       dateKey: document.dateKey,
       slot: document.slot,
       available: true,
-      locationPreference: document.locationPreference,
+      locationPreference: resolveHostWorkLocation(role, person.workLocation, document.locationPreference),
       note: document.note,
       updatedAt: document.updatedAt.toISOString()
     }))
@@ -213,6 +226,7 @@ async function buildAvailabilityWeek(
     role,
     employeeId: person.id,
     employeeName: person.name,
+    workLocation: role === "host" ? resolveHostWorkLocation(role, person.workLocation) : undefined,
     status: weekDocument?.status || "draft",
     submittedAt: weekDocument?.submittedAt ? weekDocument.submittedAt.toISOString() : undefined,
     lockedAt: weekDocument?.lockedAt ? weekDocument.lockedAt.toISOString() : undefined,
@@ -242,7 +256,8 @@ export async function getAvailabilityWeekForPerson(
     target: {
       role: week.role,
       employeeId: week.employeeId,
-      employeeName: week.employeeName
+      employeeName: week.employeeName,
+      workLocation: week.workLocation
     },
     week,
     summary: buildAvailabilitySummary(week.slots)
@@ -254,39 +269,80 @@ export async function saveAvailabilityWeek(
 ): Promise<AvailabilityPayload> {
   const weekStartKey = normalizeWeekStartKey(input.weekStartKey);
   const role = input.role;
-  const employeeId = normalizeText(input.employeeId);
+  const requestedEmployeeId = normalizeText(input.employeeId);
+  const person = await findActiveSchedulePerson(role, requestedEmployeeId);
+  if (!person) {
+    throw new Error("Không tìm thấy nhân sự hoạt động cho lịch rảnh.");
+  }
+  if (role === "host" && !person.workLocation) {
+    throw new Error("Host chưa được cấu hình địa điểm Home hoặc Studio trong hồ sơ nhân sự.");
+  }
+  const employeeId = person.id;
   const actorAccountKey = normalizeText(input.actorAccountKey) || "system";
   const personKey = buildPersonKey(role, employeeId);
-  const normalizedSlots = normalizeIncomingSlots(role, weekStartKey, input.slots);
+  const normalizedSlots = normalizeIncomingSlots(role, person.workLocation, weekStartKey, input.slots);
   const { weeks, slots } = await getCollections();
   const client = await getMongoClient();
   const now = new Date();
 
   await client.withSession(async (mongoSession) => {
     await mongoSession.withTransaction(async () => {
-      const existingWeek = await weeks.findOne({ personKey, weekStartKey }, { session: mongoSession });
+      const [existingWeek, existingSlotDocuments] = await Promise.all([
+        weeks.findOne({ personKey, weekStartKey }, { session: mongoSession }),
+        slots.find({ personKey, weekStartKey }, { session: mongoSession }).toArray()
+      ]);
       if (existingWeek?.status === "locked" && !input.allowLockedOverwrite) {
         throw new Error("Tuần này đã bị khóa nên bạn không thể chỉnh lịch rảnh.");
       }
 
+      const existingPastSlots = existingSlotDocuments.filter((slot) =>
+        isScheduleSlotInPast(slot.dateKey, slot.slot, now)
+      );
+      const existingPastKeys = new Set(existingPastSlots.map((slot) => `${slot.dateKey}__${slot.slot}`));
+      const newlyAddedPastSlot = normalizedSlots.find((slot) =>
+        isScheduleSlotInPast(slot.dateKey, slot.slot, now) &&
+        !existingPastKeys.has(`${slot.dateKey}__${slot.slot}`)
+      );
+      if (newlyAddedPastSlot) {
+        throw new Error("Không thể đăng ký khung giờ đã bắt đầu hoặc đã ở trong quá khứ.");
+      }
+
+      const futureSlots = normalizedSlots.filter((slot) => !isScheduleSlotInPast(slot.dateKey, slot.slot, now));
+
       await slots.deleteMany({ personKey, weekStartKey }, { session: mongoSession });
 
-      if (normalizedSlots.length > 0) {
+      if (existingPastSlots.length > 0 || futureSlots.length > 0) {
         await slots.insertMany(
-          normalizedSlots.map((slot) => ({
-            personKey,
-            role,
-            employeeId,
-            normalizedEmployeeId: normalizeEmployeeId(employeeId),
-            weekStartKey,
-            dateKey: slot.dateKey,
-            slot: slot.slot,
-            available: true,
-            locationPreference: slot.locationPreference,
-            note: slot.note,
-            updatedAt: now,
-            updatedBy: actorAccountKey
-          })),
+          [
+            ...existingPastSlots.map((slot) => ({
+              personKey: slot.personKey,
+              role: slot.role,
+              employeeId: slot.employeeId,
+              normalizedEmployeeId: slot.normalizedEmployeeId,
+              weekStartKey: slot.weekStartKey,
+              dateKey: slot.dateKey,
+              slot: slot.slot,
+              available: true as const,
+              locationPreference: slot.locationPreference,
+              note: slot.note,
+              updatedAt: slot.updatedAt,
+              updatedBy: slot.updatedBy
+            })),
+            ...futureSlots.map((slot) => ({
+              personKey,
+              role,
+              employeeId,
+              normalizedEmployeeId: normalizeEmployeeId(employeeId),
+              weekStartKey,
+              dateKey: slot.dateKey,
+              slot: slot.slot,
+              available: true as const,
+              locationPreference: slot.locationPreference,
+              note: slot.note,
+              updatedAt: now,
+              updatedBy: actorAccountKey
+            }))
+          ],
           { session: mongoSession }
         );
       }
@@ -323,7 +379,15 @@ export async function submitAvailabilityWeek(
 ): Promise<AvailabilityPayload> {
   const weekStartKey = normalizeWeekStartKey(input.weekStartKey);
   const role = input.role;
-  const employeeId = normalizeText(input.employeeId);
+  const requestedEmployeeId = normalizeText(input.employeeId);
+  const person = await findActiveSchedulePerson(role, requestedEmployeeId);
+  if (!person) {
+    throw new Error("Không tìm thấy nhân sự hoạt động cho lịch rảnh.");
+  }
+  if (role === "host" && !person.workLocation) {
+    throw new Error("Host chưa được cấu hình địa điểm Home hoặc Studio trong hồ sơ nhân sự.");
+  }
+  const employeeId = person.id;
   const actorAccountKey = normalizeText(input.actorAccountKey) || "system";
   const personKey = buildPersonKey(role, employeeId);
   const { weeks } = await getCollections();
@@ -364,6 +428,130 @@ export async function getAvailabilityWeekDates(weekStartKey?: string) {
   return getScheduleWeekDateKeys(normalizedWeekStartKey);
 }
 
+export function hasEditableAvailabilitySlots(weekStartKey: string, now = new Date()) {
+  const normalizedWeekStartKey = normalizeWeekStartKey(weekStartKey);
+  return getScheduleWeekDateKeys(normalizedWeekStartKey).some((dateKey) =>
+    DEFAULT_SCHEDULE_SLOTS.some((slot) => !isScheduleSlotInPast(dateKey, slot, now))
+  );
+}
+
 export function getNextAvailabilityWeekStartKey(weekStartKey: string, offsetWeeks: number) {
   return addDaysToScheduleDateKey(normalizeWeekStartKey(weekStartKey), offsetWeeks * 7);
+}
+
+function matchesAdminStatusFilter(
+  person: AvailabilityAdminPerson,
+  statusFilter: AvailabilityAdminStatusFilter
+) {
+  if (statusFilter === "submitted") {
+    return person.submissionState === "submitted" || person.submissionState === "locked";
+  }
+  if (statusFilter === "not_submitted") {
+    return person.submissionState === "not_started" || person.submissionState === "draft";
+  }
+  return true;
+}
+
+export async function getAvailabilityAdminDashboard(
+  input: GetAvailabilityAdminDashboardInput = {}
+): Promise<AvailabilityAdminDashboardPayload> {
+  const weekStartKey = normalizeWeekStartKey(input.weekStartKey);
+  const roleFilter = input.roleFilter === "host" || input.roleFilter === "support" ? input.roleFilter : "all";
+  const statusFilter = input.statusFilter === "submitted" || input.statusFilter === "not_submitted"
+    ? input.statusFilter
+    : "all";
+  const roster = await getSchedulePeopleFromMongo();
+  const activePeople = [...(roster.hosts || []), ...(roster.supports || [])]
+    .filter((person) => roleFilter === "all" || person.role === roleFilter);
+  const { weeks, slots } = await getCollections();
+  const roleQuery = roleFilter === "all" ? {} : { role: roleFilter };
+  const [weekDocuments, slotDocuments] = await Promise.all([
+    weeks.find({ weekStartKey, ...roleQuery }).toArray(),
+    slots.find({ weekStartKey, ...roleQuery }).toArray()
+  ]);
+  const weeksByPerson = new Map(weekDocuments.map((document) => [document.personKey, document]));
+  const slotCountByPerson = new Map<string, number>();
+
+  slotDocuments.forEach((document) => {
+    slotCountByPerson.set(document.personKey, (slotCountByPerson.get(document.personKey) || 0) + 1);
+  });
+
+  const stateOrder = { not_started: 0, draft: 1, submitted: 2, locked: 3 } as const;
+  const allPeople = activePeople
+    .map<AvailabilityAdminPerson>((person) => {
+      const personKey = buildPersonKey(person.role, person.id);
+      const weekDocument = weeksByPerson.get(personKey);
+      const submissionState = weekDocument?.status || "not_started";
+      return {
+        employeeId: person.id,
+        employeeName: person.name,
+        role: person.role,
+        level: person.level,
+        workLocation: person.workLocation,
+        submissionState,
+        availableSlots: slotCountByPerson.get(personKey) || 0,
+        submittedAt: weekDocument?.submittedAt?.toISOString(),
+        updatedAt: weekDocument?.updatedAt?.toISOString()
+      };
+    })
+    .sort((left, right) => {
+      const stateDifference = stateOrder[left.submissionState] - stateOrder[right.submissionState];
+      if (stateDifference !== 0) return stateDifference;
+      if (left.role !== right.role) return left.role.localeCompare(right.role);
+      return [left.employeeName, left.employeeId]
+        .join("__")
+        .localeCompare([right.employeeName, right.employeeId].join("__"), "vi");
+    });
+  const visiblePeople = allPeople.filter((person) => matchesAdminStatusFilter(person, statusFilter));
+  const visiblePersonKeys = new Set(
+    visiblePeople.map((person) => buildPersonKey(person.role, person.employeeId))
+  );
+  const slotSummaries = new Map<string, AvailabilityAdminSlotSummary>();
+
+  getScheduleWeekDateKeys(weekStartKey).forEach((dateKey) => {
+    DEFAULT_SCHEDULE_SLOTS.forEach((slot) => {
+      slotSummaries.set(`${dateKey}__${slot}`, {
+        dateKey,
+        slot,
+        peopleAvailable: 0,
+        hostAvailable: 0,
+        supportAvailable: 0
+      });
+    });
+  });
+
+  slotDocuments.forEach((document) => {
+    if (!visiblePersonKeys.has(document.personKey)) return;
+    const summary = slotSummaries.get(`${document.dateKey}__${document.slot}`);
+    if (!summary) return;
+    summary.peopleAvailable += 1;
+    if (document.role === "host") summary.hostAvailable += 1;
+    if (document.role === "support") summary.supportAvailable += 1;
+  });
+
+  const submittedPeople = allPeople.filter(
+    (person) => person.submissionState === "submitted" || person.submissionState === "locked"
+  ).length;
+  const draftPeople = allPeople.filter((person) => person.submissionState === "draft").length;
+  const notStartedPeople = allPeople.filter((person) => person.submissionState === "not_started").length;
+
+  return {
+    success: true,
+    weekStartKey,
+    roleFilter,
+    statusFilter,
+    generatedAt: new Date().toISOString(),
+    summary: {
+      totalPeople: allPeople.length,
+      submittedPeople,
+      notSubmittedPeople: draftPeople + notStartedPeople,
+      draftPeople,
+      notStartedPeople,
+      lockedPeople: allPeople.filter((person) => person.submissionState === "locked").length,
+      visiblePeople: visiblePeople.length,
+      visibleAvailableSlots: visiblePeople.reduce((total, person) => total + person.availableSlots, 0)
+    },
+    people: visiblePeople,
+    slots: Array.from(slotSummaries.values())
+  };
 }

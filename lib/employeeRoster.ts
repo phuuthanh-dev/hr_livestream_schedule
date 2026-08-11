@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Collection } from "mongodb";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
-import type { EmployeeRole, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
+import type { EmployeeRole, HostWorkLocation, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
 
 type SchedulePersonDocument = {
   personKey: string;
@@ -10,6 +10,7 @@ type SchedulePersonDocument = {
   name: string;
   role: EmployeeRole;
   level: string;
+  workLocation?: HostWorkLocation | "";
   active: boolean;
   source: string;
   syncBatchId: string;
@@ -29,12 +30,20 @@ function buildPersonKey(role: EmployeeRole, employeeId: string) {
   return `${role}:${normalizeEmployeeId(employeeId)}`;
 }
 
+function normalizeHostWorkLocation(value: unknown): HostWorkLocation | undefined {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "studio") return "studio";
+  if (normalized === "home") return "home";
+  return undefined;
+}
+
 function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
   return {
     id: document.employeeId,
     name: document.name || document.employeeId,
     role: document.role,
-    level: document.level || undefined
+    level: document.level || undefined,
+    workLocation: document.role === "host" ? normalizeHostWorkLocation(document.workLocation) : undefined
   };
 }
 
