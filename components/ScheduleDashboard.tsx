@@ -13,7 +13,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -64,6 +64,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "logout") {
     return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
+  }
+  if (name === "location") {
+    return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
   }
   if (name === "refresh") {
     return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
@@ -574,6 +577,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             <Icon name="calendar" size={17} />
             <span>{isAdmin ? "Tổng hợp rảnh" : "Lịch rảnh"}</span>
           </a>
+          {isAdmin ? <a className="todayButton availabilityShortcut locationShortcut" href="/locations"><Icon name="location" size={17} /><span>Địa điểm</span></a> : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>

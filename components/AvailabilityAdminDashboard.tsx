@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
+import { formatLocationCode } from "@/lib/locationUtils";
 import {
   addDaysToScheduleDateKey,
   getScheduleWeekDateKeys,
@@ -24,7 +25,7 @@ type AvailabilityAdminDashboardProps = {
   initialRoleFilter?: "host" | "support";
 };
 
-type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "logout" | "refresh" | "users" | "warning";
+type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "location" | "logout" | "refresh" | "users" | "warning";
 
 const DAY_NAMES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 
@@ -47,6 +48,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "chevronLeft") return <svg {...common}><path d="m15 18-6-6 6-6" /></svg>;
   if (name === "chevronRight") return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>;
   if (name === "logout") return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
+  if (name === "location") return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
   if (name === "refresh") return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
   if (name === "warning") return <svg {...common}><path d="M10.3 3.7 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.7a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg>;
@@ -204,6 +206,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
         </div>
 
         <div className="headerActions">
+          <a className="todayButton availabilityLocationShortcut" href="/locations"><Icon name="location" size={17} /><span>Địa điểm</span></a>
           <a className="iconButton" aria-label="Lịch chính" href="/" title="Lịch chính"><Icon name="calendar" /></a>
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} type="button"><Icon name="account" /></button>
@@ -406,7 +409,7 @@ function AvailabilityPersonRow({ person, weekStartKey }: { person: AvailabilityA
   const detailUrl = `/availability?role=${person.role}&employeeId=${encodeURIComponent(person.employeeId)}&weekStartKey=${weekStartKey}`;
   return (
     <tr>
-      <td><span className="availabilityPersonIdentity"><i>{person.employeeName.slice(0, 1).toUpperCase()}</i><span><strong>{person.employeeName}</strong><small>{person.employeeId}{person.level ? ` · ${person.level}` : ""}{person.role === "host" ? ` · ${person.workLocation === "studio" ? "Studio" : person.workLocation === "home" ? "Home" : "Chưa cấu hình"}` : ""}</small></span></span></td>
+      <td><span className="availabilityPersonIdentity"><i>{person.employeeName.slice(0, 1).toUpperCase()}</i><span><strong>{person.employeeName}</strong><small>{person.employeeId}{person.level ? ` · ${person.level}` : ""}{person.role === "host" ? ` · ${formatLocationCode(person.workLocation)}` : ""}</small></span></span></td>
       <td><span className={`availabilityRoleBadge ${person.role}`}>{person.role === "host" ? "Host" : "Support"}</span></td>
       <td><span className={`availabilitySubmissionBadge ${person.submissionState}`}>{submissionLabel(person.submissionState)}</span></td>
       <td><strong className="availabilitySlotCount">{person.availableSlots}</strong></td>

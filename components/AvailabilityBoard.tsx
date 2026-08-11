@@ -3,6 +3,7 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
+import { formatLocationCode, getDefaultAvailabilityLocation, normalizeLocationCode } from "@/lib/locationUtils";
 import {
   addDaysToScheduleDateKey,
   getScheduleTodayKey,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/scheduleDate";
 import type {
   AvailabilityPayload,
+  AvailabilityLocationPreference,
   AvailabilitySlot,
   AvailabilitySummary,
   AvailabilityWeek,
@@ -118,15 +120,16 @@ function buildSummary(slots: AvailabilitySlot[]): AvailabilitySummary {
     (summary, slot) => {
       if (!slot.available) return summary;
       summary.availableSlots += 1;
-      if (slot.locationPreference === "home") summary.availableHome += 1;
-      if (slot.locationPreference === "studio") summary.availableStudio += 1;
+      if (slot.locationPreference) {
+        summary.availableByLocation[slot.locationPreference] =
+          (summary.availableByLocation[slot.locationPreference] || 0) + 1;
+      }
       return summary;
     },
     {
       totalSlots: DEFAULT_SCHEDULE_SLOTS.length * 7,
       availableSlots: 0,
-      availableHome: 0,
-      availableStudio: 0
+      availableByLocation: {}
     }
   );
 }
@@ -137,14 +140,14 @@ function statusLabel(status: AvailabilityWeek["status"]) {
   return "Bản nháp";
 }
 
-function locationLabel(value?: "home" | "studio") {
-  if (value === "studio") return "Studio";
-  if (value === "home") return "Home";
-  return "Chưa cấu hình";
-}
-
 function buildSlotKey(dateKey: string, slot: string) {
   return `${dateKey}__${slot}`;
+}
+
+function availabilityLocationLabel(value?: AvailabilityLocationPreference) {
+  if (value === "studio") return "Studio";
+  if (value === "home") return "Home";
+  return "Chưa xác định";
 }
 
 export default function AvailabilityBoard({
@@ -189,7 +192,11 @@ export default function AvailabilityBoard({
   const activeWorkLocation = activeRole === "host"
     ? selectedPerson?.workLocation || week?.workLocation
     : undefined;
-  const hasValidTargetLocation = activeRole !== "host" || Boolean(activeWorkLocation);
+  const defaultAvailabilityLocation = activeRole === "host"
+    ? getDefaultAvailabilityLocation(activeWorkLocation)
+    : undefined;
+  const canAdminOverrideLocation = isAdmin && activeRole === "host" && normalizeLocationCode(activeWorkLocation) === "both";
+  const hasValidTargetLocation = activeRole !== "host" || (Boolean(activeWorkLocation) && week?.workLocationActive !== false);
   const hasTargetSelection = Boolean((isAdmin ? selectedRole : employeeRole) && (isAdmin ? selectedEmployeeId : employeeId));
   const hasEditableSlots = weekDays.some((day) =>
     DEFAULT_SCHEDULE_SLOTS.some((slot) => !isScheduleSlotInPast(day.dateKey, slot))
@@ -203,6 +210,13 @@ export default function AvailabilityBoard({
     return nextMap;
   }, [slots]);
   const selectedMobileDay = weekDays.find((day) => day.dateKey === selectedMobileDateKey) || weekDays[0];
+  const workLocationGuidance = activeRole !== "host"
+    ? "Support Live chỉ cần đánh dấu slot rảnh"
+    : normalizeLocationCode(activeWorkLocation) === "both"
+      ? isAdmin
+        ? "Both: slot mới mặc định Home; Admin có thể chuyển sang Studio."
+        : "Both: các slot mới mặc định đăng ký tại Home."
+      : `Hồ sơ: ${formatLocationCode(activeWorkLocation)} · Đăng ký tại ${availabilityLocationLabel(defaultAvailabilityLocation)}`;
 
   useEffect(() => {
     const dateKeys = getScheduleWeekDateKeys(weekStartKey);
@@ -348,7 +362,7 @@ export default function AvailabilityBoard({
             dateKey,
             slot,
             available: true,
-            locationPreference: activeRole === "host" ? activeWorkLocation : undefined
+            locationPreference: activeRole === "host" ? defaultAvailabilityLocation : undefined
           });
       return next.sort((left, right) => {
         if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
@@ -356,6 +370,15 @@ export default function AvailabilityBoard({
           DEFAULT_SCHEDULE_SLOTS.indexOf(right.slot as (typeof DEFAULT_SCHEDULE_SLOTS)[number]);
       });
     });
+    setDirty(true);
+  }
+
+  function updateSlotLocation(dateKey: string, slot: string, locationPreference: AvailabilityLocationPreference) {
+    if (!canAdminOverrideLocation || !canEdit || !hasValidTargetLocation || isScheduleSlotInPast(dateKey, slot)) return;
+    const slotKey = buildSlotKey(dateKey, slot);
+    setSlots((current) => current.map((item) =>
+      buildSlotKey(item.dateKey, item.slot) === slotKey ? { ...item, locationPreference } : item
+    ));
     setDirty(true);
   }
 
@@ -433,7 +456,7 @@ export default function AvailabilityBoard({
                     <option value="">{loadingPeople ? "Đang tải..." : selectedPeople.length === 0 ? "Chưa có nhân sự" : "Chọn nhân sự để xem lịch"}</option>
                     {selectedPeople.map((person) => (
                       <option key={person.id} value={person.id}>
-                        {person.name} · {person.id}{person.role === "host" ? ` · ${locationLabel(person.workLocation)}` : ""}
+                        {person.name} · {person.id}{person.role === "host" ? ` · ${formatLocationCode(person.workLocation)}` : ""}
                       </option>
                     ))}
                   </select>
@@ -469,16 +492,16 @@ export default function AvailabilityBoard({
                   <span>{summary.availableSlots}/{summary.totalSlots} slot rảnh</span>
                 </div>
                 <div className={`availabilityMetrics ${activeRole === "support" ? "supportOnly" : ""}`}>
-                  <div><span>Slot rảnh</span><strong>{summary.availableSlots}</strong></div>
-                  {activeRole === "host" ? <div><span>Home</span><strong>{summary.availableHome}</strong></div> : null}
-                  {activeRole === "host" ? <div><span>Studio</span><strong>{summary.availableStudio}</strong></div> : null}
+                  {activeRole === "host" ? <div><span>Home</span><strong>{summary.availableByLocation.home || 0}</strong></div> : null}
+                  {activeRole === "host" ? <div><span>Studio</span><strong>{summary.availableByLocation.studio || 0}</strong></div> : null}
+                  {activeRole === "support" ? <div><span>Slot rảnh</span><strong>{summary.availableSlots}</strong></div> : null}
                 </div>
               </section>
 
               <section className="availabilityCard availabilitySidebarActions">
                 <div className="availabilityCardHeader">
                   <strong>Thao tác</strong>
-                  <span>{!hasValidTargetLocation ? "Cần cấu hình Home hoặc Studio trong hồ sơ Host." : canEdit ? "Có thể chỉnh các slot chưa bắt đầu." : "Tuần này không còn slot có thể chỉnh."}</span>
+                  <span>{!activeWorkLocation ? "Cần cấu hình địa điểm trong hồ sơ Host." : week?.workLocationActive === false ? "Địa điểm của Host đang tạm ngưng." : canEdit ? "Có thể chỉnh các slot chưa bắt đầu." : "Tuần này không còn slot có thể chỉnh."}</span>
                 </div>
                 <div className="availabilityActions">
                   <button className="syncButton peopleSyncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || saving || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("save")} type="button">
@@ -517,7 +540,7 @@ export default function AvailabilityBoard({
                   <strong>{week?.employeeName || selectedPerson?.name || username}</strong>
                   <p>{formatWeekTitle(weekStartKey)} · {formatWeekRange(weekStartKey)}</p>
                 </div>
-                <em>{activeRole === "host" ? `Địa điểm của Host: ${locationLabel(activeWorkLocation)}` : "Support Live chỉ cần đánh dấu slot rảnh"}</em>
+                <em>{workLocationGuidance}</em>
               </div>
 
               <div className="availabilityDesktopBoard">
@@ -548,8 +571,24 @@ export default function AvailabilityBoard({
                               type="button"
                             >
                               <span>{active ? "Sẵn sàng" : past ? "Đã qua" : "Để trống"}</span>
-                              <strong>{active ? activeRole === "host" ? locationLabel(currentSlot?.locationPreference || activeWorkLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chưa đăng ký"}</strong>
+                              <strong>{active ? activeRole === "host" ? availabilityLocationLabel(currentSlot?.locationPreference || defaultAvailabilityLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chưa đăng ký"}</strong>
                             </button>
+                            {canAdminOverrideLocation && active && !past ? (
+                              <div className="availabilitySlotLocationSelector" role="group" aria-label={`Địa điểm đăng ký ${day.dateKey} ${slot}`}>
+                                {(["home", "studio"] as const).map((location) => (
+                                  <button
+                                    aria-pressed={(currentSlot?.locationPreference || "home") === location}
+                                    className={(currentSlot?.locationPreference || "home") === location ? `active ${location}` : ""}
+                                    disabled={!canEdit || !hasValidTargetLocation}
+                                    key={location}
+                                    onClick={() => updateSlotLocation(day.dateKey, slot, location)}
+                                    type="button"
+                                  >
+                                    {availabilityLocationLabel(location)}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -617,10 +656,29 @@ export default function AvailabilityBoard({
                             <i><Icon name="check" size={15} /></i>
                             <span>
                               <strong>{active ? "Sẵn sàng nhận ca" : past ? "Khung giờ đã qua" : "Chưa đăng ký"}</strong>
-                              <small>{active ? activeRole === "host" ? locationLabel(currentSlot?.locationPreference || activeWorkLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chạm để chọn khung giờ này"}</small>
+                              <small>{active ? activeRole === "host" ? availabilityLocationLabel(currentSlot?.locationPreference || defaultAvailabilityLocation) : "Đã đăng ký" : past ? "Không thể đăng ký" : "Chạm để chọn khung giờ này"}</small>
                             </span>
                           </span>
                         </button>
+                        {canAdminOverrideLocation && active && !past ? (
+                          <div className="availabilityMobileLocation">
+                            <span>Admin xếp tại</span>
+                            <div className="availabilitySlotLocationSelector" role="group" aria-label={`Địa điểm đăng ký ${selectedMobileDay.dateKey} ${slot}`}>
+                              {(["home", "studio"] as const).map((location) => (
+                                <button
+                                  aria-pressed={(currentSlot?.locationPreference || "home") === location}
+                                  className={(currentSlot?.locationPreference || "home") === location ? `active ${location}` : ""}
+                                  disabled={!canEdit || !hasValidTargetLocation}
+                                  key={location}
+                                  onClick={() => updateSlotLocation(selectedMobileDay.dateKey, slot, location)}
+                                  type="button"
+                                >
+                                  {availabilityLocationLabel(location)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </article>
                     );
                   })}

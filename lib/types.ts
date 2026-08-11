@@ -1,7 +1,25 @@
 export type ConfirmRole = "host" | "support" | "both";
 export type EmployeeRole = "host" | "support";
 export type AccountType = "admin" | "employee";
-export type HostWorkLocation = "home" | "studio";
+export type HostWorkLocation = string;
+
+export type ScheduleLocation = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  system: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ScheduleLocationsPayload = {
+  success: boolean;
+  locations?: ScheduleLocation[];
+  location?: ScheduleLocation;
+  message?: string;
+};
 
 export type SchedulePerson = {
   id: string;
@@ -107,7 +125,7 @@ export type SchedulePayload = {
 };
 
 export type AvailabilityWeekStatus = "draft" | "submitted" | "locked";
-export type AvailabilityLocationPreference = HostWorkLocation;
+export type AvailabilityLocationPreference = "home" | "studio";
 
 export type AvailabilitySlot = {
   dateKey: string;
@@ -124,6 +142,7 @@ export type AvailabilityWeek = {
   employeeId: string;
   employeeName: string;
   workLocation?: HostWorkLocation;
+  workLocationActive?: boolean;
   status: AvailabilityWeekStatus;
   submittedAt?: string;
   lockedAt?: string;
@@ -134,8 +153,7 @@ export type AvailabilityWeek = {
 export type AvailabilitySummary = {
   totalSlots: number;
   availableSlots: number;
-  availableHome: number;
-  availableStudio: number;
+  availableByLocation: Record<string, number>;
 };
 
 export type AvailabilityPayload = {
@@ -145,6 +163,7 @@ export type AvailabilityPayload = {
     employeeId: string;
     employeeName: string;
     workLocation?: HostWorkLocation;
+    workLocationActive?: boolean;
   };
   week?: AvailabilityWeek;
   summary?: AvailabilitySummary;

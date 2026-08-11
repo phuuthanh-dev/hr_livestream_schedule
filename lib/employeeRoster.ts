@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Collection } from "mongodb";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
+import { normalizeLocationCode } from "@/lib/locationUtils";
 import type { EmployeeRole, HostWorkLocation, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
 
 type SchedulePersonDocument = {
@@ -31,10 +32,7 @@ function buildPersonKey(role: EmployeeRole, employeeId: string) {
 }
 
 function normalizeHostWorkLocation(value: unknown): HostWorkLocation | undefined {
-  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (normalized === "studio") return "studio";
-  if (normalized === "home") return "home";
-  return undefined;
+  return normalizeLocationCode(value) || undefined;
 }
 
 function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {

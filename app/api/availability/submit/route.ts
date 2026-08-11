@@ -67,7 +67,8 @@ export async function POST(request: Request) {
         weekStartKey: body.weekStartKey || getScheduleWeekStartKey(),
         slots: body.slots,
         actorAccountKey: session.accountKey,
-        allowLockedOverwrite: false
+        allowLockedOverwrite: false,
+        allowLocationOverride: false
       });
     }
     const payload = await submitAvailabilityWeek({
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
       ...payload,
       canEdit: hasEditableAvailabilitySlots(body.weekStartKey || getScheduleWeekStartKey()) &&
         (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+        payload.target?.workLocationActive !== false &&
         payload.week?.status !== "locked",
       message: "Đã gửi lịch rảnh cho admin."
     });

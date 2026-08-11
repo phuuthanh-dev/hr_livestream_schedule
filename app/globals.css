@@ -628,6 +628,64 @@ a:hover {
   transform: translateY(-1px);
 }
 
+.availabilitySlotLocationSelector {
+  display: grid;
+  width: 100%;
+  padding: 3px;
+  border: 1px solid #d4e1e1;
+  border-radius: 10px;
+  background: #f4f8f8;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.availabilitySlotLocationSelector button {
+  min-width: 0;
+  min-height: 27px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  color: #758285;
+  background: transparent;
+  font-size: 0.55rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.availabilitySlotLocationSelector button.active.home {
+  color: #0f615b;
+  background: #dff5f0;
+  box-shadow: 0 2px 7px rgba(15, 118, 110, 0.12);
+}
+
+.availabilitySlotLocationSelector button.active.studio {
+  color: #7a4d00;
+  background: #fff0ca;
+  box-shadow: 0 2px 7px rgba(183, 108, 8, 0.12);
+}
+
+.availabilitySlotLocationSelector button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.locationShortcut,
+.availabilityLocationShortcut {
+  border-color: #e3b45e;
+  color: #70440a;
+  background: linear-gradient(135deg, #fff5d9, #f9d791);
+  box-shadow: 0 7px 18px rgba(180, 106, 8, 0.14);
+  white-space: nowrap;
+}
+
+.locationShortcut:hover,
+.availabilityLocationShortcut:hover {
+  border-color: #d89b34;
+  color: #5f3907;
+  background: linear-gradient(135deg, #ffefc2, #f4ca70);
+  text-decoration: none;
+}
+
 .availabilityCellMeta {
   display: grid;
   gap: 5px;
@@ -3522,6 +3580,10 @@ a:hover {
     font-weight: 700;
   }
 
+  .availabilityMobileLocation .availabilitySlotLocationSelector {
+    min-width: 0;
+  }
+
   .availabilityMobileActions {
     position: fixed;
     right: 10px;
@@ -4722,6 +4784,597 @@ a:hover {
 
   .availabilitySummaryShortcut span {
     display: none;
+  }
+
+  .availabilityLocationShortcut {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .availabilityLocationShortcut span {
+    display: none;
+  }
+}
+
+.availabilityLocationValue {
+  font-family: inherit !important;
+  font-size: 0.84rem !important;
+  line-height: 1.15 !important;
+}
+
+/* Location management */
+.locationAdminApp {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 10%, rgba(20, 184, 166, 0.12), transparent 24rem),
+    radial-gradient(circle at 94% 20%, rgba(245, 158, 11, 0.1), transparent 22rem),
+    linear-gradient(180deg, #f7faf9 0%, #eef4f3 100%);
+}
+
+.locationAdminHeader {
+  grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr);
+}
+
+.locationHeaderNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.locationAdminWorkspace {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.locationAdminHero {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  min-height: 220px;
+  padding: clamp(26px, 4vw, 46px);
+  border-radius: 28px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(251, 191, 36, 0.24), transparent 15rem),
+    linear-gradient(130deg, #17344a 0%, #0b6664 62%, #138074 100%);
+  box-shadow: 0 24px 60px rgba(24, 61, 72, 0.18);
+  grid-template-columns: minmax(320px, 1fr) minmax(390px, 0.7fr);
+  align-items: center;
+  gap: 36px;
+}
+
+.locationAdminHero::after {
+  position: absolute;
+  right: -80px;
+  bottom: -110px;
+  width: 310px;
+  height: 310px;
+  border: 34px solid rgba(255, 255, 255, 0.055);
+  border-radius: 50%;
+  content: "";
+}
+
+.locationAdminHero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.locationAdminHero > div:first-child > span,
+.locationSectionHeading > span {
+  color: #6ee7d5;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.locationAdminHero h1 {
+  max-width: 680px;
+  margin: 8px 0 10px;
+  font-family: "Fraunces", serif;
+  font-size: clamp(2rem, 4vw, 3.45rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.locationAdminHero p {
+  max-width: 650px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.76rem;
+  line-height: 1.7;
+}
+
+.locationAdminStats {
+  display: grid;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  backdrop-filter: blur(18px);
+}
+
+.locationAdminStats article {
+  display: grid;
+  min-height: 108px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  background: rgba(5, 45, 50, 0.16);
+  align-content: space-between;
+  gap: 12px;
+}
+
+.locationAdminStats span {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.57rem;
+  font-weight: 750;
+}
+
+.locationAdminStats strong {
+  color: #fff;
+  font-family: "Fraunces", serif;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.locationAdminWorkspace > .notice {
+  margin-top: 14px;
+}
+
+.locationAdminGrid {
+  display: grid;
+  margin-top: 16px;
+  grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.locationCreateCard,
+.locationTableCard {
+  border: 1px solid #d9e4e4;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 34px rgba(36, 68, 75, 0.07);
+}
+
+.locationCreateCard {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  padding: 22px;
+  gap: 15px;
+}
+
+.locationSectionHeading {
+  display: grid;
+  gap: 4px;
+}
+
+.locationSectionHeading > span {
+  color: #0f766e;
+}
+
+.locationSectionHeading h2 {
+  margin: 0;
+  color: #213f42;
+  font-size: 1.15rem;
+  letter-spacing: -0.025em;
+}
+
+.locationSectionHeading p {
+  margin: 2px 0 0;
+  color: #778689;
+  font-size: 0.62rem;
+  line-height: 1.55;
+}
+
+.locationCreateCard label {
+  display: grid;
+  color: #53676a;
+  gap: 6px;
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+
+.locationCreateCard label > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.locationCreateCard label small {
+  color: #96a2a4;
+  font-size: 0.53rem;
+  font-weight: 650;
+}
+
+.locationCreateCard input,
+.locationInlineName,
+.locationInlineNumber {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d5dfe0;
+  border-radius: 11px;
+  color: #263f42;
+  background: #fbfdfd;
+  outline: none;
+  font: inherit;
+}
+
+.locationCreateCard input:focus,
+.locationInlineName:focus,
+.locationInlineNumber:focus {
+  border-color: #59b9ae;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+}
+
+.locationCodePreview {
+  display: flex;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px dashed #c9d8d9;
+  border-radius: 10px;
+  color: #829093;
+  background: #f7faf9;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.56rem;
+  font-weight: 700;
+}
+
+.locationCodePreview code,
+.locationTable code {
+  color: #0d615b;
+  font-family: "Space Mono", monospace;
+  font-size: 0.61rem;
+  font-weight: 700;
+}
+
+.locationPrimaryButton,
+.locationRefreshButton,
+.locationRowActions button {
+  display: inline-flex;
+  border: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.locationPrimaryButton {
+  min-height: 44px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #0f766e, #0b6475);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.2);
+  font-size: 0.67rem;
+}
+
+.locationPrimaryButton:disabled,
+.locationRefreshButton:disabled,
+.locationRowActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.locationTableCard {
+  overflow: hidden;
+}
+
+.locationTableHeader {
+  display: flex;
+  min-height: 88px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e4ebec;
+  background: linear-gradient(120deg, #fbfdfd, #f0f8f6);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.locationRefreshButton {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #c9dcda;
+  border-radius: 10px;
+  color: #0f615b;
+  background: #edf9f6;
+  font-size: 0.61rem;
+}
+
+.locationTableWrap {
+  overflow-x: auto;
+}
+
+.locationTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.locationTable th,
+.locationTable td {
+  padding: 14px 15px;
+  border-bottom: 1px solid #e8edef;
+  color: #526467;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.62rem;
+}
+
+.locationTable th {
+  color: #7b898c;
+  background: #fbfdfd;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.locationTable tbody tr {
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.locationTable tbody tr:hover {
+  background: #f7fbfa;
+}
+
+.locationTable tbody tr.inactive {
+  background: #fafafa;
+  opacity: 0.72;
+}
+
+.locationIdentity {
+  display: flex;
+  min-width: 150px;
+  align-items: center;
+  gap: 10px;
+}
+
+.locationIdentity > i {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg, #0f766e, #0b6475);
+  flex: 0 0 auto;
+  place-items: center;
+  font-style: normal;
+}
+
+.locationIdentity > span {
+  display: grid;
+  gap: 2px;
+}
+
+.locationIdentity strong {
+  color: #263f42;
+  font-size: 0.69rem;
+}
+
+.locationIdentity small,
+.locationUpdatedAt {
+  color: #879396;
+  font-size: 0.55rem;
+  font-weight: 650;
+}
+
+.locationStatus {
+  display: inline-flex;
+  min-height: 27px;
+  padding: 0 9px;
+  border-radius: 999px;
+  align-items: center;
+  font-size: 0.56rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.locationStatus.active {
+  color: #0f615b;
+  background: #dff5f0;
+}
+
+.locationStatus.inactive {
+  color: #7a4d00;
+  background: #fff0ca;
+}
+
+.locationInlineName {
+  width: 180px;
+}
+
+.locationInlineNumber {
+  width: 74px;
+}
+
+.locationRowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.locationRowActions button {
+  min-height: 31px;
+  padding: 0 9px;
+  border: 1px solid #d4dfe0;
+  border-radius: 8px;
+  color: #526467;
+  background: #fff;
+  font-size: 0.55rem;
+  white-space: nowrap;
+}
+
+.locationRowActions button.save,
+.locationRowActions button.activate {
+  border-color: #b9ddd7;
+  color: #0f615b;
+  background: #edf9f6;
+}
+
+.locationRowActions button.pause {
+  border-color: #efd7a4;
+  color: #895500;
+  background: #fff7e5;
+}
+
+.locationEmptyState {
+  display: grid;
+  min-height: 220px;
+  color: #7c898c;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1050px) {
+  .locationAdminHero {
+    grid-template-columns: 1fr;
+  }
+
+  .locationAdminGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .locationCreateCard {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .locationCreateCard .locationSectionHeading,
+  .locationCreateCard .locationPrimaryButton {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .locationAdminHeader {
+    grid-template-columns: 1fr auto;
+  }
+
+  .locationHeaderNavigation {
+    order: 3;
+    grid-column: 1 / -1;
+  }
+
+  .locationAdminWorkspace {
+    padding: 12px;
+  }
+
+  .locationAdminHero {
+    min-height: auto;
+    padding: 24px;
+    border-radius: 22px;
+    gap: 22px;
+  }
+
+  .locationAdminStats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .locationAdminStats article {
+    min-height: 90px;
+    padding: 11px;
+  }
+
+  .locationCreateCard {
+    padding: 18px;
+    grid-template-columns: 1fr;
+  }
+
+  .locationCreateCard .locationSectionHeading,
+  .locationCreateCard .locationPrimaryButton {
+    grid-column: auto;
+  }
+
+  .locationTableHeader {
+    min-height: 78px;
+    padding: 15px;
+  }
+
+  .locationTableWrap {
+    overflow: visible;
+    padding: 10px;
+  }
+
+  .locationTable,
+  .locationTable tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .locationTable thead {
+    display: none;
+  }
+
+  .locationTable tr {
+    display: grid;
+    padding: 14px;
+    border: 1px solid #dfe8e9;
+    border-radius: 16px;
+    background: #fbfdfd;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .locationTable td {
+    display: grid;
+    padding: 0;
+    border: 0;
+    gap: 4px;
+  }
+
+  .locationTable td::before {
+    color: #8a9799;
+    content: attr(data-label);
+    font-size: 0.5rem;
+    font-weight: 850;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .locationTable td:nth-child(2),
+  .locationTable td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .locationRowActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .locationInlineName,
+  .locationInlineNumber {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .locationAdminStats {
+    grid-template-columns: 1fr;
+  }
+
+  .locationAdminStats article {
+    min-height: 74px;
+  }
+
+  .locationTable tr {
+    grid-template-columns: 1fr;
+  }
+
+  .locationTable td:nth-child(2),
+  .locationTable td:last-child {
+    grid-column: auto;
   }
 }
 

@@ -1,6 +1,8 @@
 import type { Collection } from "mongodb";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { findActiveSchedulePerson, getSchedulePeopleFromMongo } from "@/lib/employeeRoster";
+import { findActiveScheduleLocation } from "@/lib/locationStore";
+import { normalizeLocationCode, resolveAvailabilityLocation } from "@/lib/locationUtils";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
 import {
   addDaysToScheduleDateKey,
@@ -15,7 +17,6 @@ import type {
   AvailabilityAdminRoleFilter,
   AvailabilityAdminSlotSummary,
   AvailabilityAdminStatusFilter,
-  AvailabilityLocationPreference,
   AvailabilityPayload,
   AvailabilitySlot,
   AvailabilitySummary,
@@ -64,6 +65,7 @@ type SaveAvailabilityWeekInput = {
   slots: AvailabilitySlot[];
   actorAccountKey: string;
   allowLockedOverwrite?: boolean;
+  allowLocationOverride?: boolean;
 };
 
 type SubmitAvailabilityWeekInput = {
@@ -109,13 +111,9 @@ function resolveHostWorkLocation(
   role: EmployeeRole,
   workLocation?: HostWorkLocation,
   storedLocation?: unknown
-): AvailabilityLocationPreference | undefined {
+): HostWorkLocation | undefined {
   if (role !== "host") return undefined;
-  if (workLocation) return workLocation;
-  const normalizedStoredLocation = normalizeText(storedLocation).toLowerCase();
-  return normalizedStoredLocation === "home" || normalizedStoredLocation === "studio"
-    ? normalizedStoredLocation
-    : undefined;
+  return normalizeLocationCode(workLocation || storedLocation) || undefined;
 }
 
 function compareWeekSlots(left: AvailabilitySlot, right: AvailabilitySlot) {
@@ -130,15 +128,16 @@ function buildAvailabilitySummary(slots: AvailabilitySlot[]): AvailabilitySummar
     (summary, slot) => {
       if (!slot.available) return summary;
       summary.availableSlots += 1;
-      if (slot.locationPreference === "home") summary.availableHome += 1;
-      if (slot.locationPreference === "studio") summary.availableStudio += 1;
+      if (slot.locationPreference) {
+        summary.availableByLocation[slot.locationPreference] =
+          (summary.availableByLocation[slot.locationPreference] || 0) + 1;
+      }
       return summary;
     },
     {
       totalSlots: DEFAULT_SCHEDULE_SLOTS.length * 7,
       availableSlots: 0,
-      availableHome: 0,
-      availableStudio: 0
+      availableByLocation: {}
     }
   );
 }
@@ -174,7 +173,8 @@ function normalizeIncomingSlots(
   role: EmployeeRole,
   workLocation: HostWorkLocation | undefined,
   weekStartKey: string,
-  slots: AvailabilitySlot[]
+  slots: AvailabilitySlot[],
+  allowLocationOverride: boolean
 ): AvailabilitySlot[] {
   const weekDateKeys = new Set(getScheduleWeekDateKeys(weekStartKey));
   const normalizedByKey = new Map<string, AvailabilitySlot>();
@@ -189,7 +189,9 @@ function normalizeIncomingSlots(
       dateKey,
       slot: slotLabel,
       available: true,
-      locationPreference: resolveHostWorkLocation(role, workLocation),
+      locationPreference: role === "host"
+        ? resolveAvailabilityLocation(workLocation, slot.locationPreference, allowLocationOverride)
+        : undefined,
       note: normalizeText(slot.note) || undefined
     };
     normalizedByKey.set(`${dateKey}__${slotLabel}`, normalizedSlot);
@@ -215,18 +217,23 @@ async function buildAvailabilityWeek(
       dateKey: document.dateKey,
       slot: document.slot,
       available: true,
-      locationPreference: resolveHostWorkLocation(role, person.workLocation, document.locationPreference),
+      locationPreference: role === "host"
+        ? resolveAvailabilityLocation(person.workLocation, document.locationPreference, true)
+        : undefined,
       note: document.note,
       updatedAt: document.updatedAt.toISOString()
     }))
     .sort(compareWeekSlots);
+  const workLocation = role === "host" ? resolveHostWorkLocation(role, person.workLocation) : undefined;
+  const workLocationActive = role !== "host" || Boolean(workLocation && await findActiveScheduleLocation(workLocation));
 
   return {
     weekStartKey,
     role,
     employeeId: person.id,
     employeeName: person.name,
-    workLocation: role === "host" ? resolveHostWorkLocation(role, person.workLocation) : undefined,
+    workLocation,
+    workLocationActive,
     status: weekDocument?.status || "draft",
     submittedAt: weekDocument?.submittedAt ? weekDocument.submittedAt.toISOString() : undefined,
     lockedAt: weekDocument?.lockedAt ? weekDocument.lockedAt.toISOString() : undefined,
@@ -257,7 +264,8 @@ export async function getAvailabilityWeekForPerson(
       role: week.role,
       employeeId: week.employeeId,
       employeeName: week.employeeName,
-      workLocation: week.workLocation
+      workLocation: week.workLocation,
+      workLocationActive: week.workLocationActive
     },
     week,
     summary: buildAvailabilitySummary(week.slots)
@@ -275,12 +283,21 @@ export async function saveAvailabilityWeek(
     throw new Error("Không tìm thấy nhân sự hoạt động cho lịch rảnh.");
   }
   if (role === "host" && !person.workLocation) {
-    throw new Error("Host chưa được cấu hình địa điểm Home hoặc Studio trong hồ sơ nhân sự.");
+    throw new Error("Host chưa được cấu hình địa điểm trong hồ sơ nhân sự.");
+  }
+  if (role === "host" && person.workLocation && !await findActiveScheduleLocation(person.workLocation)) {
+    throw new Error("Địa điểm của Host không tồn tại hoặc đã tạm ngưng.");
   }
   const employeeId = person.id;
   const actorAccountKey = normalizeText(input.actorAccountKey) || "system";
   const personKey = buildPersonKey(role, employeeId);
-  const normalizedSlots = normalizeIncomingSlots(role, person.workLocation, weekStartKey, input.slots);
+  const normalizedSlots = normalizeIncomingSlots(
+    role,
+    person.workLocation,
+    weekStartKey,
+    input.slots,
+    Boolean(input.allowLocationOverride)
+  );
   const { weeks, slots } = await getCollections();
   const client = await getMongoClient();
   const now = new Date();
@@ -307,7 +324,20 @@ export async function saveAvailabilityWeek(
         throw new Error("Không thể đăng ký khung giờ đã bắt đầu hoặc đã ở trong quá khứ.");
       }
 
-      const futureSlots = normalizedSlots.filter((slot) => !isScheduleSlotInPast(slot.dateKey, slot.slot, now));
+      const existingSlotByKey = new Map(
+        existingSlotDocuments.map((slot) => [`${slot.dateKey}__${slot.slot}`, slot] as const)
+      );
+      const preserveAdminLocation = role === "host" && normalizeLocationCode(person.workLocation) === "both" && !input.allowLocationOverride;
+      const futureSlots = normalizedSlots
+        .filter((slot) => !isScheduleSlotInPast(slot.dateKey, slot.slot, now))
+        .map((slot) => {
+          if (!preserveAdminLocation) return slot;
+          const existingSlot = existingSlotByKey.get(`${slot.dateKey}__${slot.slot}`);
+          return {
+            ...slot,
+            locationPreference: resolveAvailabilityLocation(person.workLocation, existingSlot?.locationPreference, true)
+          };
+        });
 
       await slots.deleteMany({ personKey, weekStartKey }, { session: mongoSession });
 
@@ -385,7 +415,10 @@ export async function submitAvailabilityWeek(
     throw new Error("Không tìm thấy nhân sự hoạt động cho lịch rảnh.");
   }
   if (role === "host" && !person.workLocation) {
-    throw new Error("Host chưa được cấu hình địa điểm Home hoặc Studio trong hồ sơ nhân sự.");
+    throw new Error("Host chưa được cấu hình địa điểm trong hồ sơ nhân sự.");
+  }
+  if (role === "host" && person.workLocation && !await findActiveScheduleLocation(person.workLocation)) {
+    throw new Error("Địa điểm của Host không tồn tại hoặc đã tạm ngưng.");
   }
   const employeeId = person.id;
   const actorAccountKey = normalizeText(input.actorAccountKey) || "system";

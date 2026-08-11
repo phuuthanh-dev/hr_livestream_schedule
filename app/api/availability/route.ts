@@ -58,6 +58,7 @@ export async function GET(request: Request) {
         ...payload,
         canEdit: hasEditableAvailabilitySlots(weekStartKey) &&
           (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+          payload.target?.workLocationActive !== false &&
           (session.accountType === "admin" || payload.week?.status !== "locked")
       },
       {
@@ -93,13 +94,15 @@ export async function PUT(request: Request) {
       weekStartKey: body.weekStartKey || getScheduleWeekStartKey(),
       slots: Array.isArray(body.slots) ? body.slots : [],
       actorAccountKey: session.accountKey,
-      allowLockedOverwrite: session.accountType === "admin"
+      allowLockedOverwrite: session.accountType === "admin",
+      allowLocationOverride: session.accountType === "admin"
     });
 
     return NextResponse.json({
       ...payload,
       canEdit: hasEditableAvailabilitySlots(body.weekStartKey || getScheduleWeekStartKey()) &&
         (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+        payload.target?.workLocationActive !== false &&
         (session.accountType === "admin" || payload.week?.status !== "locked"),
       message: session.accountType === "admin"
         ? "Đã lưu thay đổi lịch rảnh của nhân sự."
