@@ -195,18 +195,18 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   }
 
   async function bootstrapEmployees() {
-    if (!window.confirm("Nạp lại 23 hồ sơ từ HR_STREAMING_ MASTER FILE? Dữ liệu trùng mã sẽ được cập nhật, nhân sự khác không bị xóa.")) return;
+    if (!window.confirm("Nạp lại danh sách nhân viên mặc định từ hệ thống? Dữ liệu trùng mã sẽ được cập nhật, nhân sự khác không bị xóa.")) return;
     setBusy("bootstrap");
     setError("");
     setMessage("");
     try {
       const response = await fetch("/api/employees/bootstrap", { method: "POST" });
       const payload = (await response.json()) as EmployeeAdminPayload;
-      if (!response.ok || !payload.success) throw new Error(payload.message || "Không đồng bộ được dữ liệu gốc.");
-      setMessage(`${payload.message || "Đã đồng bộ dữ liệu gốc."} ${payload.inserted || 0} mới · ${payload.updated || 0} cập nhật.`);
+      if (!response.ok || !payload.success) throw new Error(payload.message || "Không nạp được dữ liệu mặc định.");
+      setMessage(`${payload.message || "Đã nạp dữ liệu mặc định."} ${payload.inserted || 0} mới · ${payload.updated || 0} cập nhật.`);
       await loadData();
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Không đồng bộ được dữ liệu gốc.");
+      setError(syncError instanceof Error ? syncError.message : "Không nạp được dữ liệu mặc định.");
     } finally {
       setBusy("");
     }
@@ -279,7 +279,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
               <option value="active">Đang hoạt động</option><option value="incomplete">Thiếu thông tin</option><option value="inactive">Tạm ngưng</option><option value="all">Tất cả trạng thái</option>
             </select>
-            <button className="employeeBootstrapButton" disabled={busy === "bootstrap"} onClick={() => void bootstrapEmployees()} type="button"><Icon name="refresh" size={17} />{busy === "bootstrap" ? "Đang đồng bộ" : "Đồng bộ dữ liệu gốc"}</button>
+            <button className="employeeBootstrapButton" disabled={busy === "bootstrap"} onClick={() => void bootstrapEmployees()} type="button"><Icon name="refresh" size={17} />{busy === "bootstrap" ? "Đang nạp" : "Nạp dữ liệu mặc định"}</button>
             <button className="employeeAddButton" onClick={openCreate} type="button"><Icon name="plus" size={17} />Thêm nhân viên</button>
           </div>
 

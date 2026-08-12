@@ -29,10 +29,6 @@ function handleScheduleWebRequest_(method, event) {
 
     assertScheduleWebToken_(body.token || params.token);
 
-    if (method === "GET" && action === "people") {
-      return buildScheduleWebJsonResponse_(getScheduleWebPeoplePayload_());
-    }
-
     if (method === "GET" || action === "schedule") {
       return buildScheduleWebJsonResponse_(getScheduleWebPayload_(params));
     }
@@ -97,88 +93,6 @@ function getScheduleWebSpreadsheet_() {
   }
 
   throw new Error("Không xác định được spreadsheet đích.");
-}
-
-function getScheduleWebPeoplePayload_() {
-  const ss = getScheduleWebSpreadsheet_();
-  const portfolioSheet = ss.getSheetByName("Portfolio_Master");
-  const supportSheet = ss.getSheetByName("Support_Master");
-  if (!portfolioSheet || !supportSheet) {
-    throw new Error("Thiếu tab Portfolio_Master hoặc Support_Master.");
-  }
-
-  return {
-    success: true,
-    generatedAt: new Date().toISOString(),
-    source: "Portfolio_Master / Support_Master",
-    hosts: readScheduleWebPeople_(portfolioSheet, "host"),
-    supports: readScheduleWebPeople_(supportSheet, "support")
-  };
-}
-
-function readScheduleWebPeople_(sheet, role) {
-  const data = sheet.getDataRange().getDisplayValues();
-  if (data.length <= 1) return [];
-
-  const headers = data[0];
-  const idAliases = role === "host"
-    ? ["streamer_id", "ma nhan vien", "ma"]
-    : ["ma support (support_id)", "support_id", "ma support", "ma"];
-  const nameAliases = role === "host"
-    ? ["full_name", "ho va ten", "ten"]
-    : ["ho va ten", "full_name", "ten"];
-  const levelAliases = role === "host"
-    ? ["entry_grade", "entry grade", "grade"]
-    : ["cap do / level", "cap do", "level"];
-  const idCol = findScheduleWebPeopleHeader_(headers, idAliases);
-  const nameCol = findScheduleWebPeopleHeader_(headers, nameAliases);
-  const levelCol = findScheduleWebPeopleHeader_(headers, levelAliases);
-
-  if (idCol === -1) {
-    throw new Error("Không tìm thấy cột mã nhân viên trong " + sheet.getName() + ".");
-  }
-
-  const seen = {};
-  const people = [];
-  for (let i = 1; i < data.length; i++) {
-    const id = data[i][idCol] ? data[i][idCol].toString().trim() : "";
-    if (!isMeaningfulScheduleValue(id)) continue;
-    const lookupKey = id.toLowerCase();
-    if (seen[lookupKey]) continue;
-    seen[lookupKey] = true;
-    people.push({
-      id: id,
-      name: nameCol !== -1 && data[i][nameCol] ? data[i][nameCol].toString().trim() : id,
-      role: role,
-      level: levelCol !== -1 && data[i][levelCol] ? data[i][levelCol].toString().trim() : ""
-    });
-  }
-
-  people.sort(function(left, right) {
-    return [left.name, left.id].join("__").localeCompare([right.name, right.id].join("__"));
-  });
-  return people;
-}
-
-function findScheduleWebPeopleHeader_(headers, aliases) {
-  const normalizedHeaders = (headers || []).map(function(header) {
-    return normalizeScheduleTrackingText(header).replace(/_/g, " ");
-  });
-  const normalizedAliases = (aliases || []).map(function(alias) {
-    return normalizeScheduleTrackingText(alias).replace(/_/g, " ");
-  });
-
-  for (let i = 0; i < normalizedAliases.length; i++) {
-    const exactIndex = normalizedHeaders.indexOf(normalizedAliases[i]);
-    if (exactIndex !== -1) return exactIndex;
-  }
-  for (let i = 0; i < normalizedAliases.length; i++) {
-    const partialIndex = normalizedHeaders.findIndex(function(header) {
-      return header.indexOf(normalizedAliases[i]) !== -1;
-    });
-    if (partialIndex !== -1) return partialIndex;
-  }
-  return -1;
 }
 
 function getScheduleWebPayload_(params) {

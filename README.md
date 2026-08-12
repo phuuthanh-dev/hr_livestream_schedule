@@ -1,68 +1,56 @@
 # HR Streaming Schedule Web
 
-Website Next.js hiển thị lịch livestream theo tuần từ MongoDB, được Admin chủ động đồng bộ từ `Live_Session_Master`. Hệ thống có đăng nhập Admin/Nhân viên, xác nhận ca theo đúng người được phân công, cảnh báo Studio thiếu support, support-only và các nút đồng bộ Google Sheet dành riêng cho Admin.
+Website Next.js quản lý nhân sự, lịch rảnh và lịch livestream hoàn toàn qua Website API + MongoDB. Luồng vận hành không đọc hoặc ghi Google Sheet.
+
+## Luồng xếp lịch
+
+1. Host và Support đăng ký rồi gửi lịch rảnh theo tuần.
+2. Admin chọn tuần và bấm `Chạy lịch tuần`.
+3. Server chỉ dùng tuần `submitted/locked`, tạo ca từ slot có Host đăng ký và không tạo ca từ lịch rảnh Support đơn lẻ.
+4. Host được xếp theo rank, tải tuần, cash offer, tên và mã nhân viên; tối đa hai ca mỗi ngày.
+5. Host `Both` mặc định Home. Ca Home không có Support; ca Studio ghép Support thành block 4 giờ, riêng Support `_6H` cuối tuần là block 6 giờ.
+6. Kết quả được ghi thẳng vào `schedule_sessions` và hiển thị ngay, không có Draft/Preview/Publish riêng.
+7. Chạy lại tuần chỉ thay ca tương lai chưa xác nhận. Ngày hiện tại, ngày quá khứ và ca đã xác nhận được giữ nguyên.
+
+Nếu chưa có Host gửi slot rảnh trong phần còn lại của tuần, API từ chối chạy để tránh xóa nhầm lịch hiện tại. Ca thiếu Host hoặc Support vẫn được lưu với trạng thái `open` và cảnh báo tương ứng.
 
 ## Phân quyền
 
-- Admin có quyền đồng bộ Sheet và xác nhận/hủy xác nhận cho Host hoặc Support Live.
-- Admin dùng nút `Cập nhật nhân viên` để đồng bộ `Portfolio_Master` và `Support_Master` vào collection MongoDB `schedule_people`.
-- Admin dùng nút `Cập nhật lịch` để chạy logic schedule trên Google Sheets một lần, lấy toàn bộ `Live_Session_Master` và lưu snapshot vào MongoDB.
-- Admin dùng nút `Đọc dữ liệu` khi HR đã chỉnh tay `Live_Session_Master`; thao tác này chỉ đọc nguyên trạng Sheet vào MongoDB, không chạy lại logic xếp lịch.
-- Nhân viên chọn vai trò và mã nhân viên từ roster `schedule_people`; website không đọc trực tiếp master Google Sheet trong luồng login.
-- Nhân viên chỉ được xác nhận/hủy đúng `Session_ID`, đúng vai trò và đúng mã nhân viên được gán trên `Live_Session_Master`; ca ngày cũ luôn bị chặn phía server.
-- Nhân viên mặc định chỉ thấy `Ca của tôi` và có thể chuyển sang `Tất cả ca live` khi cần.
-- Quyền confirm được kiểm tra lại trên MongoDB, ngay trong transaction cập nhật cache và trên Apps Script trước khi ghi Sheet. Phạm vi tuần do trình duyệt gửi chỉ dùng để tải lại giao diện, không được dùng làm căn cứ cấp quyền. `Session_ID` trùng sẽ bị từ chối để tránh sửa nhầm dòng.
-- Sau khi chọn nhân viên, form tự kiểm tra tài khoản và tự chuyển sang `Đăng nhập` hoặc `Tạo mật khẩu lần đầu`; nhân viên không phải chọn thao tác thủ công.
-- Mật khẩu chỉ cần không rỗng và không vượt quá 72 byte; MongoDB chỉ lưu bcrypt hash với cost 12, không lưu mật khẩu gốc.
-- Mỗi cookie đăng nhập mang `sessionVersion` và được đối chiếu với MongoDB ở mọi request. Đổi/reset mật khẩu, khóa tài khoản hoặc `Đăng xuất tất cả` sẽ tăng version và vô hiệu hóa ngay toàn bộ cookie cũ.
-- Nhân viên mở mục tài khoản trên thanh đầu trang để tự đổi mật khẩu. Admin dùng cùng màn hình để reset mật khẩu, khóa/mở khóa và thu hồi mọi phiên của từng tài khoản nhân viên.
+- Admin quản lý nhân viên qua `/api/employees`, quản lý địa điểm, xem tổng hợp lịch rảnh, chạy lịch tuần và xác nhận/hủy xác nhận ca.
+- Nhân viên chỉ sửa lịch rảnh của mình và chỉ xác nhận đúng ca, vai trò, mã nhân viên được phân công.
+- Nhân viên không được sửa lịch rảnh của slot đã bắt đầu hoặc thuộc quá khứ.
+- Mọi session đăng nhập được kiểm tra lại với MongoDB; đổi/reset mật khẩu hoặc khóa tài khoản sẽ vô hiệu hóa cookie cũ.
 
-Lưu ý: cơ chế tự tạo mật khẩu lần đầu cho phép người biết mã nhân viên claim tài khoản chưa được tạo. Nếu cần bảo mật cao hơn, nên bổ sung mã mời do HR cấp hoặc yêu cầu Admin kích hoạt tài khoản.
-
-## Apps Script API
-
-1. Đồng bộ toàn bộ file trong thư mục `app_script/` vào project Apps Script gắn với Google Sheet master.
-2. Chạy `generateScheduleWebToken()` một lần trong Apps Script editor.
-3. Deploy Apps Script dạng Web app, Execute as `Me`, access `Anyone with the link`.
-4. Copy URL `/exec` vào `GOOGLE_SCHEDULE_API_URL` và token vào `GOOGLE_SCHEDULE_API_TOKEN`.
-5. Tạo deployment version mới mỗi khi thay đổi `app_script/WebApi.gs`; deployment cũ không tự nhận code mới.
-
-Sau khi deploy Apps Script có endpoint `action=people`, đăng nhập Admin và bấm `Cập nhật nhân viên` lần đầu. Sync dùng transaction: upsert người hiện có, giữ tài khoản/mật khẩu trong `schedule_users`, và đánh dấu `active=false` đối với người không còn trong master. Một roster rỗng sẽ bị từ chối để tránh vô hiệu hóa nhầm toàn bộ nhân viên.
-
-Sau đó bấm `Cập nhật lịch` lần đầu để khởi tạo cache MongoDB. Việc xem hoặc chuyển tuần chỉ đọc MongoDB và không gọi Apps Script. Mỗi lần Admin cập nhật lịch hoặc đọc dữ liệu dùng một lượt Apps Script; mỗi lần xác nhận/hủy xác nhận dùng một lượt ghi Apps Script rồi cập nhật MongoDB, không đọc lại toàn bộ Sheet.
-
-`SCHEDULE_WEB_TOKEN` không tự hết hạn. Token tồn tại trong Script Properties đến khi bị sửa/xóa hoặc chạy lại `generateScheduleWebToken()`; chạy lại hàm sẽ làm token cũ mất hiệu lực ngay. Phiên đăng nhập dashboard có thời hạn 7 ngày.
-
-## MongoDB và Vercel
+## Biến môi trường
 
 ```bash
 DASHBOARD_AUTH_SECRET=long-random-secret
-GOOGLE_SCHEDULE_API_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
-GOOGLE_SCHEDULE_API_TOKEN=token-from-generateScheduleWebToken
 MONGODB_URI=mongodb+srv://USER:PASSWORD@HOST/
 MONGODB_DB=hr_streaming
 ADMIN_BOOTSTRAP_PASSWORD=your-initial-admin-password
 ```
 
-`ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng khi collection `schedule_users` chưa có tài khoản Admin. Lần đăng nhập Admin đầu tiên sẽ tạo bcrypt hash trong MongoDB; sau đó có thể xóa biến bootstrap khỏi Vercel và redeploy. Không commit mật khẩu hay MongoDB URI thật vào repository.
+`ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng để khởi tạo Admin lần đầu. Không commit mật khẩu hoặc MongoDB URI thật vào repository.
 
-Trên MongoDB Atlas, cho phép network access từ Vercel và giới hạn quyền database user vào database ứng dụng. Sau khi thay đổi biến môi trường Vercel, phải redeploy; Preview và Production cần cấu hình riêng nếu dùng cả hai.
+## Collections
 
-### Collections và quan hệ
-
-- `schedule_people`: roster nhân viên, khóa duy nhất `personKey = role:employeeId`.
-- `schedule_users`: tài khoản đăng nhập; `accountKey` của nhân viên liên kết với roster theo dạng `employee:role:employeeId`.
-- `schedule_sessions`: một document cho mỗi `Session_ID`; `hostPersonKey`, `supportPersonKey` và các backup key liên kết tới `schedule_people.personKey`. Bản ghi không còn trong snapshot mới được giữ để audit nhưng chuyển `active=false`.
-- `schedule_sync_runs`: lịch sử từng lần Admin cập nhật lịch; `schedule_sessions.syncBatchId` liên kết tới `schedule_sync_runs.batchId`.
-- `schedule_confirmation_events`: append-only audit log; `sessionId` liên kết tới `schedule_sessions.sessionKey`, `actorAccountKey` liên kết tới `schedule_users.accountKey`.
-
-MongoDB không ép foreign key như SQL, nên các business key được lưu trực tiếp và có unique/query index. Refresh dùng transaction, từ chối snapshot rỗng/sai ngày/trùng `Session_ID`, và dùng `confirmationRevision` để không cho refresh cũ ghi đè một confirm mới hơn.
+- `schedule_people`: hồ sơ Host và Support.
+- `schedule_users`: tài khoản đăng nhập.
+- `schedule_locations`: danh mục Home/Studio.
+- `schedule_availability_weeks`: trạng thái gửi lịch rảnh theo tuần.
+- `schedule_availability_slots`: từng slot rảnh đã đăng ký.
+- `schedule_sessions`: lịch chính được generator website tạo.
+- `schedule_sync_runs`: lịch sử mỗi lần chạy lịch tuần.
+- `schedule_confirmation_events`: audit log xác nhận và hủy xác nhận.
 
 ## Local Dev
 
 ```bash
 npm install
 npm run dev
+npm run test:schedule
+npm run typecheck
+npm run build
 ```
 
-Mỗi lần chuyển tuần, dashboard gọi API Next.js đúng một lần với phạm vi `from/to`; API này chỉ query MongoDB. Trình duyệt không nhận Google API token hoặc MongoDB URI; các thao tác đọc/ghi đều đi qua Next.js server routes.
+Dashboard chỉ gọi các Next.js server route. Trình duyệt không nhận MongoDB URI và không kết nối trực tiếp database.

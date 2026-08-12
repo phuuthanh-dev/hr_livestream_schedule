@@ -79,6 +79,7 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
   let schChannelColIndex = schHeaders.indexOf("Live_Channel_Id");
   if (schChannelColIndex === -1) schChannelColIndex = schHeaders.indexOf("Kênh Live");
   const schDateColIndex = schHeaders.indexOf("Ngày");
+  const schHostConfirmColIndex = schHeaders.indexOf("Host_Live_Confirm");
 
   if (schIdColIndex === -1 || schFormatColIndex === -1 || schChannelColIndex === -1) {
     Logger.log("Lỗi: Không tìm thấy cột Mã nhân sự/Streamer_ID, Hình thức/Location_Required hoặc Live_Channel_Id trong Live_Session_Master.");
@@ -104,6 +105,10 @@ function autoFillLocationToSchedule(showLookupAlert, options) {
     }
 
     targetRows.push(i + 1);
+    if (isScheduleRowLockedByHeaderIndex_(scheduleData[i], schHostConfirmColIndex)) {
+      continue;
+    }
+
     let hostIdString = scheduleData[i][schIdColIndex]; 
     let currentFormat = scheduleData[i][schFormatColIndex]; 
     let currentChannel = scheduleData[i][schChannelColIndex];
@@ -217,6 +222,7 @@ function refreshLiveChannelDropdowns(options) {
   if (pfChannelColIndex === -1) pfChannelColIndex = pfHeaders.indexOf("Live_Channel");
   const schIdColIndex = schHeaders.indexOf("Mã nhân sự") !== -1 ? schHeaders.indexOf("Mã nhân sự") : schHeaders.indexOf("Streamer_ID");
   const schDateColIndex = schHeaders.indexOf("Ngày");
+  const schHostConfirmColIndex = schHeaders.indexOf("Host_Live_Confirm");
   let schChannelColIndex = schHeaders.indexOf("Live_Channel_Id");
   if (schChannelColIndex === -1) schChannelColIndex = schHeaders.indexOf("Kênh Live");
 
@@ -256,6 +262,10 @@ function refreshLiveChannelDropdowns(options) {
 
   for (let i = 1; i < scheduleData.length; i++) {
     if (hasDateScope && !isScheduleDateInScope(scheduleData[i][schDateColIndex], config)) {
+      continue;
+    }
+
+    if (isScheduleRowLockedByHeaderIndex_(scheduleData[i], schHostConfirmColIndex)) {
       continue;
     }
 
@@ -553,6 +563,7 @@ function repairLiveSessionSupportLookups(showAlert, options) {
     date: headerMap["Ngày"],
     supportId: headerMap["Mã Nhân sự Support live"],
     supportName: headerMap["Tên Support live"],
+    supportConfirm: headerMap["Support_Live_Confirm"],
     backupSupportId: headerMap["Backup_Support_ID"],
     backupSupportName: headerMap["Backup_Support_Name"],
     supportCandidatePool: headerMap["Support_Candidate_Pool"]
@@ -611,6 +622,10 @@ function repairLiveSessionSupportLookups(showAlert, options) {
     scannedRows++;
     scopedRows.push(sheetRow);
     const rowIndex = i - 1;
+    if (isScheduleRowLockedByHeaderIndex_(scheduleData[i], idx.supportConfirm)) {
+      continue;
+    }
+
     let rowTouched = false;
     let rowUnresolved = false;
     const currentSupportId = supportIdValues[rowIndex][0] ? supportIdValues[rowIndex][0].toString().trim() : "";
@@ -757,6 +772,7 @@ function validateLiveSessionLookups(showAlert, targetRows) {
   const hostNameColIndex = scheduleHeaders.indexOf("Tên Host") !== -1
     ? scheduleHeaders.indexOf("Tên Host")
     : scheduleHeaders.indexOf("Full_Name");
+  const hostConfirmColIndex = scheduleHeaders.indexOf("Host_Live_Confirm");
   const supportIdColIndex = scheduleHeaders.indexOf("Mã Nhân sự Support live");
 
   if (hostIdColIndex === -1) {
@@ -862,6 +878,7 @@ function validateLiveSessionLookups(showAlert, targetRows) {
     const hostId = scheduleData[i][hostIdColIndex] ? scheduleData[i][hostIdColIndex].toString().trim() : "";
     const normalizedHostId = hostId.toLowerCase();
     const currentHostName = hostNameValues ? (hostNameValues[rowIndex][0] ? hostNameValues[rowIndex][0].toString().trim() : "") : "";
+    const hostLocked = isScheduleRowLockedByHeaderIndex_(scheduleData[i], hostConfirmColIndex);
 
     if (hostId && !["trống", "unknown", "no_host"].includes(normalizedHostId)) {
       const hostLookup = hostLookupMap[hostId];
@@ -877,6 +894,7 @@ function validateLiveSessionLookups(showAlert, targetRows) {
         if (hostNameRange) {
           clearLookupState(hostNameNotes, hostNameBackgrounds, rowIndex);
           if (
+            !hostLocked &&
             hostLookup.name &&
             (!currentHostName || currentHostName.toLowerCase() === "trống" || currentHostName === hostId)
           ) {

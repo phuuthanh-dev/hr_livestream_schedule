@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:schedule": "node --experimental-strip-types --test tests/scheduleEngine.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

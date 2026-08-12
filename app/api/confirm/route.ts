@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
-import { confirmSchedule } from "@/lib/googleSchedule";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
 import {
   applyScheduleConfirmationToMongo,
@@ -94,39 +93,16 @@ export async function POST(request: Request) {
     }
 
     const confirmed = body.confirmed !== false;
-    const googlePayload = await confirmSchedule({
+    await applyScheduleConfirmationToMongo({
       sessionId: body.sessionId,
       role: body.role,
       confirmed,
+      actorAccountKey: session.accountKey,
       actorType: session.accountType,
       actorRole: session.role,
       actorEmployeeId: session.employeeId,
-      from: body.from,
-      to: body.to
+      expectedDateKey: target.dateKey
     });
-
-    const actorAccountKey =
-      session.accountType === "admin"
-        ? "admin:admin"
-        : `employee:${session.role}:${normalizeEmployeeId(session.employeeId)}`;
-    try {
-      await applyScheduleConfirmationToMongo({
-        sessionId: body.sessionId,
-        role: body.role,
-        confirmed,
-        actorAccountKey,
-        actorType: session.accountType,
-        actorRole: session.role,
-        actorEmployeeId: session.employeeId,
-        expectedDateKey: target.dateKey,
-        sourceRevision: googlePayload.confirmationRevision
-      });
-    } catch {
-      throw new ConfirmRequestError(
-        "Google Sheets đã nhận thay đổi nhưng MongoDB chưa đồng bộ được. Admin hãy bấm Cập nhật lịch để khôi phục dữ liệu.",
-        502
-      );
-    }
 
     const payload = await getScheduleFromMongo({ from: body.from, to: body.to });
     payload.updatedSessionId = body.sessionId;

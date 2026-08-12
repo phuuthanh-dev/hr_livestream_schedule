@@ -43,6 +43,31 @@ function setupPortfolioHeaders() {
   Logger.log("Đã setup xong tiêu đề mở rộng (có Entry_Grade) trong Portfolio_Master!");
 }
 
+function normalizePortfolioSourceHeader_(value) {
+  return value
+    ? value
+        .toString()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    : "";
+}
+
+function getPortfolioSourcePreferredText_(row, columnIndexes) {
+  for (let i = 0; i < columnIndexes.length; i++) {
+    const columnIndex = columnIndexes[i];
+    if (columnIndex === -1) continue;
+
+    const value = row[columnIndex];
+    const text = value ? value.toString().trim() : "";
+    if (text) return text;
+  }
+
+  return "";
+}
+
 function syncPortfolioMaster(options) {
   const sourceSs = SpreadsheetApp.openById(SOURCE_FILE_ID);
   const sourceSheet = sourceSs.getSheetByName('Thông tin Mẫu Live');
@@ -68,10 +93,22 @@ function syncPortfolioMaster(options) {
   // 1. TỰ ĐỘNG DÒ VỊ TRÍ CỘT BÊN FILE NGUỒN (SOURCE)
   // ----------------------------------------------------
   const srcHeaders = sourceData[0].map(h => h ? h.toString().trim().toLowerCase() : "");
+  const normalizedSrcHeaders = sourceData[0].map(normalizePortfolioSourceHeader_);
+  const srcPreferredNameCol = normalizedSrcHeaders.findIndex(h =>
+    h === "ten goi khac" ||
+    h === "ten" ||
+    h === "full_name" ||
+    h === "full name"
+  );
+  const srcFullNameCol = normalizedSrcHeaders.findIndex(h =>
+    h === "ho va ten day du" ||
+    h === "ho va ten"
+  );
   
   const srcIdx = {
     maNV:     srcHeaders.findIndex(h => h.includes("mã nhân viên") || h.includes("streamer_id")),
-    ten:      srcHeaders.findIndex(h => h === "tên" || h.includes("full_name")),
+    ten:      srcPreferredNameCol,
+    tenDayDu: srcFullNameCol,
     sdt:      srcHeaders.findIndex(h => h.includes("sđt") || h.includes("số điện thoại") || h.includes("phone") || h.includes("dien thoai")),
     level:    srcHeaders.findIndex(h => h.includes("đánh giá level") || h === "level" || h === "grade"), // Bổ sung tìm Level/Grade
     cash:     srcHeaders.findIndex(h => h.includes("lương thỏa thuận") || h.includes("Lương thỏa thuận")),
@@ -100,7 +137,7 @@ function syncPortfolioMaster(options) {
   for (let i = 1; i < sourceData.length; i++) {
     let row = sourceData[i];
     let maNV = (srcIdx.maNV !== -1 && row[srcIdx.maNV]) ? row[srcIdx.maNV].toString().trim() : "";
-    let ten  = (srcIdx.ten !== -1 && row[srcIdx.ten]) ? row[srcIdx.ten].toString().trim() : "";
+    let ten  = getPortfolioSourcePreferredText_(row, [srcIdx.ten, srcIdx.tenDayDu]);
     
     if (maNV) sourceKeys.add(maNV);
     else if (ten) sourceKeys.add("TÊN_" + ten);
@@ -269,7 +306,7 @@ function syncPortfolioMaster(options) {
     let row = sourceData[i];
     
     let maNV = (srcIdx.maNV !== -1 && row[srcIdx.maNV]) ? row[srcIdx.maNV].toString().trim() : "";
-    let ten  = (srcIdx.ten !== -1 && row[srcIdx.ten]) ? row[srcIdx.ten].toString().trim() : "";
+    let ten  = getPortfolioSourcePreferredText_(row, [srcIdx.ten, srcIdx.tenDayDu]);
     
     if (!maNV && !ten) continue;
     
@@ -383,7 +420,7 @@ function syncPortfolioMaster(options) {
       let appendIdx = 0;
       for (let i = 1; i < sourceData.length; i++) {
         let maNV = (srcIdx.maNV !== -1 && sourceData[i][srcIdx.maNV]) ? sourceData[i][srcIdx.maNV].toString().trim() : "";
-        let ten  = (srcIdx.ten !== -1 && sourceData[i][srcIdx.ten]) ? sourceData[i][srcIdx.ten].toString().trim() : "";
+        let ten  = getPortfolioSourcePreferredText_(sourceData[i], [srcIdx.ten, srcIdx.tenDayDu]);
         if (!maNV && !ten) continue;
         let lk = maNV ? maNV : "TÊN_" + ten;
         if (!existingStreamers.hasOwnProperty(lk)) {

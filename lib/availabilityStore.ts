@@ -25,6 +25,7 @@ import type {
   EmployeeRole,
   HostWorkLocation
 } from "@/lib/types";
+import type { SubmittedScheduleSlot } from "@/lib/scheduleEngine";
 
 const AVAILABILITY_WEEK_COLLECTION = "schedule_availability_weeks";
 const AVAILABILITY_SLOT_COLLECTION = "schedule_availability_slots";
@@ -459,6 +460,38 @@ export async function submitAvailabilityWeek(
 export async function getAvailabilityWeekDates(weekStartKey?: string) {
   const normalizedWeekStartKey = normalizeWeekStartKey(weekStartKey);
   return getScheduleWeekDateKeys(normalizedWeekStartKey);
+}
+
+export async function getSubmittedScheduleSlotsForWeek(
+  requestedWeekStartKey?: string
+): Promise<SubmittedScheduleSlot[]> {
+  const weekStartKey = normalizeWeekStartKey(requestedWeekStartKey);
+  const { weeks, slots } = await getCollections();
+  const submittedWeeks = await weeks
+    .find({ weekStartKey, status: { $in: ["submitted", "locked"] } })
+    .project<{ personKey: string }>({ personKey: 1 })
+    .toArray();
+  const submittedPersonKeys = submittedWeeks.map((week) => week.personKey);
+  if (submittedPersonKeys.length === 0) return [];
+
+  const documents = await slots
+    .find({ weekStartKey, personKey: { $in: submittedPersonKeys } })
+    .sort({ dateKey: 1, slot: 1, personKey: 1 })
+    .toArray();
+
+  return documents.map((document) => {
+    const storedLocation = normalizeLocationCode(document.locationPreference);
+    return {
+      personKey: document.personKey,
+      role: document.role,
+      employeeId: document.employeeId,
+      dateKey: document.dateKey,
+      slot: document.slot,
+      locationPreference: document.role === "host" && (storedLocation === "home" || storedLocation === "studio")
+        ? storedLocation
+        : undefined
+    };
+  });
 }
 
 export function hasEditableAvailabilitySlots(weekStartKey: string, now = new Date()) {

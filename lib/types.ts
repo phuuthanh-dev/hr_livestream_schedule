@@ -2,6 +2,7 @@ export type ConfirmRole = "host" | "support" | "both";
 export type EmployeeRole = "host" | "support";
 export type AccountType = "admin" | "employee";
 export type HostWorkLocation = string;
+export type ScheduleSessionStatus = "published" | "open" | "canceled" | "completed";
 
 export type ScheduleLocation = {
   id: string;
@@ -103,6 +104,9 @@ export type ScheduleSession = {
   backupSupportId: string;
   backupSupportName: string;
   supportCandidatePool: string;
+  status?: ScheduleSessionStatus;
+  generatedBy?: "website" | "google_sheet";
+  generationBatchId?: string;
   isHostConfirmed: boolean;
   isSupportConfirmed: boolean;
   canConfirmHost: boolean;
@@ -116,6 +120,7 @@ export type ScheduleSession = {
 
 export type ScheduleSummary = {
   total: number;
+  openHost: number;
   supportOnly: number;
   missingSupport: number;
   pendingHostConfirm: number;
@@ -140,7 +145,7 @@ export type SchedulePayload = {
     success?: boolean;
     message?: string;
     batchId?: string;
-    mode?: "schedule_refresh" | "sheet_snapshot";
+    mode?: "schedule_refresh" | "sheet_snapshot" | "website_generation";
     inserted?: number;
     updated?: number;
     deactivated?: number;

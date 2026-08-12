@@ -88,7 +88,16 @@ function loadSourceHostInfo_(sheet) {
   const data = sheet.getDataRange().getValues();
   const headers = (data[0] || []).map(normalizeSourceHeader_);
   const hostIdCol = findSourceHeaderIndex_(headers, ['mã nhân viên', 'ma nhan vien'], 1);
-  const hostNameCol = findSourceHeaderIndex_(headers, ['tên', 'ten'], 2);
+  const hostNameCol = findSourceHeaderIndex_(
+    headers,
+    ['tên gọi khác', 'ten goi khac', 'tên', 'ten', 'full_name', 'full name'],
+    2
+  );
+  const hostFullNameCol = findSourceHeaderIndex_(
+    headers,
+    ['họ và tên đầy đủ', 'ho va ten day du', 'họ và tên', 'ho va ten'],
+    -1
+  );
   const homeCol = findSourceHeaderIndex_(headers, ['live tại nhà', 'live tai nha'], -1);
   const studioCol = findSourceHeaderIndex_(headers, ['live tại studio', 'live tai studio'], -1);
   const validIds = new Set();
@@ -100,7 +109,8 @@ function loadSourceHostInfo_(sheet) {
     if (!hostId) continue;
 
     validIds.add(hostId);
-    nameMap[hostId] = getSourceText_(data[i][hostNameCol]) || hostId;
+    nameMap[hostId] =
+      getFirstSourceTextByColumnIndexes_(data[i], [hostNameCol, hostFullNameCol]) || hostId;
 
     const homeChecked = homeCol !== -1 ? isSourceCheckedValue_(data[i][homeCol]) : false;
     const studioChecked = studioCol !== -1 ? isSourceCheckedValue_(data[i][studioCol]) : false;
@@ -118,6 +128,18 @@ function loadSourceHostInfo_(sheet) {
     nameMap: nameMap,
     formatMap: formatMap
   };
+}
+
+function getFirstSourceTextByColumnIndexes_(row, columnIndexes) {
+  for (let i = 0; i < columnIndexes.length; i++) {
+    const columnIndex = columnIndexes[i];
+    if (columnIndex === -1) continue;
+
+    const text = getSourceText_(row[columnIndex]);
+    if (text) return text;
+  }
+
+  return '';
 }
 
 function loadSourceSupportIdSet_(sheet) {

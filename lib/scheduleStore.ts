@@ -22,10 +22,8 @@ type ScheduleSessionDocument = ScheduleSession & {
   backupHostPersonKey: string;
   backupSupportPersonKey: string;
   active: boolean;
-  sourceSpreadsheetId: string;
-  sourceSheetName: string;
-  sourceGeneratedAt: Date | null;
-  sourceSnapshotRevision: number;
+  sourceGeneratedAt?: Date | null;
+  sourceSnapshotRevision?: number;
   syncBatchId: string;
   firstSyncedAt: Date;
   lastSeenAt: Date;
@@ -42,12 +40,10 @@ type ScheduleSessionDocument = ScheduleSession & {
 type ScheduleSyncRunDocument = {
   batchId: string;
   syncType: "schedule";
-  mode: "schedule_refresh" | "sheet_snapshot";
+  mode: "schedule_refresh" | "sheet_snapshot" | "website_generation";
   status: "success";
   requestedBy: string;
-  sourceSpreadsheetId: string;
-  sourceSheetName: string;
-  sourceGeneratedAt: Date | null;
+  sourceGeneratedAt?: Date | null;
   timezone: string;
   startedAt: Date;
   completedAt: Date;
@@ -77,12 +73,6 @@ type ScheduleRange = {
   to?: string;
 };
 
-type SyncScheduleOptions = {
-  requestedBy: string;
-  mode: "schedule_refresh" | "sheet_snapshot";
-  startedAt?: Date;
-};
-
 type ApplyConfirmationInput = {
   sessionId: string;
   role: ConfirmRole;
@@ -95,9 +85,18 @@ type ApplyConfirmationInput = {
   sourceRevision?: number;
 };
 
-type SyncScheduleResult = {
+type PublishGeneratedWeekInput = {
+  weekStartKey: string;
+  weekEndKey: string;
+  todayKey: string;
+  rows: ScheduleSession[];
+  requestedBy: string;
+  startedAt?: Date;
+};
+
+type ScheduleWriteResult = {
   batchId: string;
-  mode: "schedule_refresh" | "sheet_snapshot";
+  mode: "website_generation";
   inserted: number;
   updated: number;
   deactivated: number;
@@ -111,19 +110,9 @@ function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 }
 
-function cleanBoolean(value: unknown): boolean {
-  return value === true;
-}
-
 function cleanNumber(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseDate(value: unknown): Date | null {
-  if (!value) return null;
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function buildPersonKey(role: EmployeeRole, employeeId: string): string {
@@ -135,6 +124,10 @@ function normalizeScheduleSession(input: ScheduleSession): ScheduleSession {
   const warningLevel = ["ok", "info", "danger"].includes(input.warningLevel)
     ? input.warningLevel
     : "info";
+  const status = input.status === "published" || input.status === "open"
+    || input.status === "canceled" || input.status === "completed"
+    ? input.status
+    : undefined;
 
   return {
     rowNumber: cleanNumber(input.rowNumber),
@@ -159,13 +152,18 @@ function normalizeScheduleSession(input: ScheduleSession): ScheduleSession {
     backupSupportId: cleanText(input.backupSupportId),
     backupSupportName: cleanText(input.backupSupportName),
     supportCandidatePool: cleanText(input.supportCandidatePool),
-    isHostConfirmed: cleanBoolean(input.isHostConfirmed),
-    isSupportConfirmed: cleanBoolean(input.isSupportConfirmed),
-    canConfirmHost: cleanBoolean(input.canConfirmHost),
-    canConfirmSupport: cleanBoolean(input.canConfirmSupport),
-    supportRequired: cleanBoolean(input.supportRequired),
-    isSupportOnly: cleanBoolean(input.isSupportOnly),
-    missingSupport: cleanBoolean(input.missingSupport),
+    status,
+    generatedBy: input.generatedBy === "website" || input.generatedBy === "google_sheet"
+      ? input.generatedBy
+      : undefined,
+    generationBatchId: cleanText(input.generationBatchId) || undefined,
+    isHostConfirmed: input.isHostConfirmed === true,
+    isSupportConfirmed: input.isSupportConfirmed === true,
+    canConfirmHost: input.canConfirmHost === true,
+    canConfirmSupport: input.canConfirmSupport === true,
+    supportRequired: input.supportRequired === true,
+    isSupportOnly: input.isSupportOnly === true,
+    missingSupport: input.missingSupport === true,
     warningLevel: warningLevel as ScheduleSession["warningLevel"],
     warnings: Array.isArray(input.warnings) ? input.warnings.map(cleanText).filter(Boolean) : []
   };
@@ -179,6 +177,7 @@ function buildSummary(rows: ScheduleSession[]): ScheduleSummary {
   return rows.reduce<ScheduleSummary>(
     (summary, row) => {
       summary.total += 1;
+      if (!row.hostId && row.status === "open") summary.openHost += 1;
       if (row.isSupportOnly) summary.supportOnly += 1;
       if (row.missingSupport) summary.missingSupport += 1;
       if (row.canConfirmHost && !row.isHostConfirmed) summary.pendingHostConfirm += 1;
@@ -189,6 +188,7 @@ function buildSummary(rows: ScheduleSession[]): ScheduleSummary {
     },
     {
       total: 0,
+      openHost: 0,
       supportOnly: 0,
       missingSupport: 0,
       pendingHostConfirm: 0,
@@ -206,7 +206,6 @@ async function ensureScheduleIndexes(): Promise<void> {
       const sessions = database.collection<ScheduleSessionDocument>(SESSIONS_COLLECTION);
       const syncRuns = database.collection<ScheduleSyncRunDocument>(SYNC_RUNS_COLLECTION);
       const events = database.collection<ScheduleConfirmationEventDocument>(CONFIRMATION_EVENTS_COLLECTION);
-
       await Promise.all([
         sessions.createIndex({ sessionKey: 1 }, { unique: true }),
         sessions.createIndex({ active: 1, dateKey: 1, slotSortKey: 1 }),
@@ -214,7 +213,6 @@ async function ensureScheduleIndexes(): Promise<void> {
         sessions.createIndex({ active: 1, supportPersonKey: 1, dateKey: 1 }),
         syncRuns.createIndex({ batchId: 1 }, { unique: true }),
         syncRuns.createIndex({ syncType: 1, status: 1, completedAt: -1 }),
-        syncRuns.createIndex({ mode: 1, completedAt: -1 }),
         events.createIndex({ eventId: 1 }, { unique: true }),
         events.createIndex({ sessionId: 1, createdAt: -1 }),
         events.createIndex({ actorAccountKey: 1, createdAt: -1 })
@@ -224,7 +222,6 @@ async function ensureScheduleIndexes(): Promise<void> {
       throw error;
     });
   }
-
   return indexesPromise;
 }
 
@@ -242,148 +239,131 @@ async function getCollections(): Promise<{
   };
 }
 
-export async function syncSchedulePayloadToMongo(
-  payload: SchedulePayload,
-  options: SyncScheduleOptions
-): Promise<SyncScheduleResult> {
-  if (payload.sync?.success === false) {
-    throw new Error(payload.sync.message || "Google Sheets không cập nhật được lịch.");
-  }
+export async function getScheduleSessionsForGeneration(
+  weekStartKey: string,
+  weekEndKey: string
+): Promise<ScheduleSession[]> {
+  const { sessions } = await getCollections();
+  const documents = await sessions
+    .find({ active: true, dateKey: { $gte: weekStartKey, $lte: weekEndKey } })
+    .sort({ dateKey: 1, slotSortKey: 1, sessionKey: 1 })
+    .toArray();
+  return documents.map(toScheduleSession);
+}
 
-  if (!Array.isArray(payload.rows) || payload.rows.length === 0) {
-    throw new Error("Google Sheets không trả về dòng lịch nào; MongoDB được giữ nguyên để tránh mất dữ liệu.");
-  }
-
-  const rows = payload.rows.map(normalizeScheduleSession);
+export async function publishGeneratedScheduleWeek(
+  input: PublishGeneratedWeekInput
+): Promise<ScheduleWriteResult> {
+  const normalizedRows = input.rows.map(normalizeScheduleSession);
   const seenSessionIds = new Set<string>();
-  for (const row of rows) {
-    if (!row.sessionId) {
-      throw new Error(`Dòng lịch ${row.rowNumber || "không xác định"} đang thiếu Session_ID.`);
+  normalizedRows.forEach((row) => {
+    if (!row.sessionId) throw new Error("Lịch được tạo đang thiếu Session ID.");
+    if (row.dateKey < input.weekStartKey || row.dateKey > input.weekEndKey || row.dateKey <= input.todayKey) {
+      throw new Error(`Session ${row.sessionId} nằm ngoài phạm vi ngày tương lai của tuần được chạy.`);
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.dateKey)) {
-      throw new Error(`Session ${row.sessionId} có ngày không hợp lệ.`);
-    }
-    if (seenSessionIds.has(row.sessionId)) {
-      throw new Error(`Google Sheets đang có Session_ID bị trùng: ${row.sessionId}.`);
-    }
+    if (seenSessionIds.has(row.sessionId)) throw new Error(`Session ID bị trùng: ${row.sessionId}.`);
     seenSessionIds.add(row.sessionId);
-  }
+  });
 
   const { sessions, syncRuns } = await getCollections();
   const client = await getMongoClient();
   const batchId = randomUUID();
   const completedAt = new Date();
-  const startedAt = options.startedAt || completedAt;
-  const sourceGeneratedAt = parseDate(payload.generatedAt);
-  const sourceSpreadsheetId = cleanText(payload.spreadsheetId);
-  const sourceSheetName = cleanText(payload.sheetName) || "Live_Session_Master";
-  const timezone = cleanText(payload.timezone) || DEFAULT_TIMEZONE;
-  const sourceSnapshotRevision = cleanNumber(payload.confirmationRevision);
+  const startedAt = input.startedAt || completedAt;
   let inserted = 0;
   let updated = 0;
   let deactivated = 0;
+  let publishedTotal = 0;
 
   await client.withSession(async (mongoSession) => {
     await mongoSession.withTransaction(async () => {
-      const existingDocuments = await sessions
-        .find(
-          { sessionKey: { $in: rows.map((row) => row.sessionId) } },
-          {
-            session: mongoSession,
-            projection: {
-              sessionKey: 1,
-              hostConfirm: 1,
-              isHostConfirmed: 1,
-              hostConfirmationRevision: 1,
-              supportConfirm: 1,
-              isSupportConfirmed: 1,
-              supportConfirmationRevision: 1
-            }
-          }
-        )
-        .toArray();
-      const existingBySessionId = new Map(
-        existingDocuments.map((document) => [document.sessionKey, document])
+      const existingFutureRows = await sessions.find(
+        {
+          active: true,
+          dateKey: { $gte: input.weekStartKey, $lte: input.weekEndKey, $gt: input.todayKey }
+        },
+        { session: mongoSession }
+      ).toArray();
+      const protectedSlotKeys = new Set(
+        existingFutureRows
+          .filter((row) => row.isHostConfirmed || row.isSupportConfirmed)
+          .map((row) => `${row.dateKey}__${row.slot}`)
       );
+      const rowsToPublish = normalizedRows.filter(
+        (row) => !protectedSlotKeys.has(`${row.dateKey}__${row.slot}`)
+      );
+      const publishKeys = rowsToPublish.map((row) => row.sessionId);
 
-      const writeResult = await sessions.bulkWrite(
-        rows.map((sourceRow) => {
-          const row = { ...sourceRow };
-          const existing = existingBySessionId.get(row.sessionId);
-          const existingHostRevision = cleanNumber(existing?.hostConfirmationRevision);
-          const existingSupportRevision = cleanNumber(existing?.supportConfirmationRevision);
-
-          if (existing && existingHostRevision > sourceSnapshotRevision) {
-            row.hostConfirm = existing.hostConfirm;
-            row.isHostConfirmed = existing.isHostConfirmed;
-          }
-          if (existing && existingSupportRevision > sourceSnapshotRevision) {
-            row.supportConfirm = existing.supportConfirm;
-            row.isSupportConfirmed = existing.isSupportConfirmed;
-          }
-
-          return {
+      if (rowsToPublish.length > 0) {
+        const result = await sessions.bulkWrite(
+          rowsToPublish.map((row) => ({
             updateOne: {
               filter: { sessionKey: row.sessionId },
               update: {
                 $set: {
                   ...row,
+                  generatedBy: "website" as const,
+                  generationBatchId: batchId,
                   sessionKey: row.sessionId,
                   hostPersonKey: buildPersonKey("host", row.hostId),
                   supportPersonKey: buildPersonKey("support", row.supportId),
                   backupHostPersonKey: buildPersonKey("host", row.backupHostId),
                   backupSupportPersonKey: buildPersonKey("support", row.backupSupportId),
                   active: true,
-                  sourceSpreadsheetId,
-                  sourceSheetName,
-                  sourceGeneratedAt,
-                  sourceSnapshotRevision,
-                  hostConfirmationRevision: Math.max(sourceSnapshotRevision, existingHostRevision),
-                  supportConfirmationRevision: Math.max(sourceSnapshotRevision, existingSupportRevision),
+                  sourceGeneratedAt: completedAt,
+                  sourceSnapshotRevision: 0,
                   syncBatchId: batchId,
                   lastSeenAt: completedAt,
                   updatedAt: completedAt,
-                  deactivatedAt: null
+                  deactivatedAt: null,
+                  hostConfirmationRevision: 0,
+                  supportConfirmationRevision: 0
                 },
-                $setOnInsert: { firstSyncedAt: completedAt }
+                $setOnInsert: { firstSyncedAt: completedAt },
+                $unset: {
+                  sourceSpreadsheetId: "",
+                  sourceSheetName: "",
+                  hostConfirmationUpdatedAt: "",
+                  hostConfirmationActorKey: "",
+                  supportConfirmationUpdatedAt: "",
+                  supportConfirmationActorKey: ""
+                }
               },
               upsert: true
             }
-          };
-        }),
-        { session: mongoSession }
-      );
+          })),
+          { session: mongoSession }
+        );
+        inserted = result.upsertedCount;
+        updated = result.matchedCount;
+      }
 
       const deactivateResult = await sessions.updateMany(
-        { active: true, syncBatchId: { $ne: batchId } },
         {
-          $set: {
-            active: false,
-            deactivatedAt: completedAt,
-            updatedAt: completedAt
-          }
+          active: true,
+          dateKey: { $gte: input.weekStartKey, $lte: input.weekEndKey, $gt: input.todayKey },
+          isHostConfirmed: { $ne: true },
+          isSupportConfirmed: { $ne: true },
+          ...(publishKeys.length > 0 ? { sessionKey: { $nin: publishKeys } } : {})
         },
+        { $set: { active: false, deactivatedAt: completedAt, updatedAt: completedAt } },
         { session: mongoSession }
       );
-
-      inserted = writeResult.upsertedCount;
-      updated = writeResult.matchedCount;
       deactivated = deactivateResult.modifiedCount;
+      publishedTotal = rowsToPublish.length;
 
       await syncRuns.insertOne(
         {
           batchId,
           syncType: "schedule",
-          mode: options.mode,
+          mode: "website_generation",
           status: "success",
-          requestedBy: cleanText(options.requestedBy) || "admin:admin",
-          sourceSpreadsheetId,
-          sourceSheetName,
-          sourceGeneratedAt,
-          timezone,
+          requestedBy: cleanText(input.requestedBy) || "admin:admin",
+          sourceGeneratedAt: completedAt,
+          timezone: DEFAULT_TIMEZONE,
           startedAt,
           completedAt,
-          total: rows.length,
+          total: publishedTotal,
           inserted,
           updated,
           deactivated
@@ -395,11 +375,11 @@ export async function syncSchedulePayloadToMongo(
 
   return {
     batchId,
-    mode: options.mode,
+    mode: "website_generation",
     inserted,
     updated,
     deactivated,
-    total: rows.length,
+    total: publishedTotal,
     syncedAt: completedAt.toISOString()
   };
 }
@@ -409,7 +389,6 @@ export async function getScheduleFromMongo(range: ScheduleRange = {}): Promise<S
   const dateFilter: Record<string, string> = {};
   if (range.from) dateFilter.$gte = range.from;
   if (range.to) dateFilter.$lte = range.to;
-
   const query = {
     active: true,
     ...(Object.keys(dateFilter).length > 0 ? { dateKey: dateFilter } : {})
@@ -423,17 +402,14 @@ export async function getScheduleFromMongo(range: ScheduleRange = {}): Promise<S
   return {
     success: true,
     storage: "mongodb",
-    spreadsheetId: latestSync?.sourceSpreadsheetId,
-    sheetName: latestSync?.sourceSheetName || "Live_Session_Master",
+    sheetName: "Website Schedule API",
     generatedAt: latestSync?.sourceGeneratedAt?.toISOString() || latestSync?.completedAt.toISOString(),
     syncedAt: latestSync?.completedAt.toISOString(),
     timezone: latestSync?.timezone || DEFAULT_TIMEZONE,
     rowCount: rows.length,
     summary: buildSummary(rows),
     rows,
-    ...(!latestSync
-      ? { message: "Lịch chưa được Admin đồng bộ từ Google Sheets vào MongoDB." }
-      : {})
+    ...(!latestSync ? { message: "Lịch chưa được Admin chạy trên website." } : {})
   };
 }
 
@@ -443,9 +419,7 @@ export async function findScheduleSessionById(sessionId: string): Promise<Schedu
   return document ? toScheduleSession(document) : null;
 }
 
-export async function applyScheduleConfirmationToMongo(
-  input: ApplyConfirmationInput
-): Promise<void> {
+export async function applyScheduleConfirmationToMongo(input: ApplyConfirmationInput): Promise<void> {
   const { sessions, events } = await getCollections();
   const client = await getMongoClient();
   const sessionId = cleanText(input.sessionId);
@@ -455,26 +429,22 @@ export async function applyScheduleConfirmationToMongo(
 
   await client.withSession(async (mongoSession) => {
     await mongoSession.withTransaction(async () => {
-      const sessionStillExists = await sessions.findOne(
+      const current = await sessions.findOne(
         { sessionKey: sessionId, active: true },
         { session: mongoSession, projection: { _id: 1, dateKey: 1, hostId: 1, supportId: 1 } }
       );
-      if (!sessionStillExists) {
-        throw new Error("Session is not available in the MongoDB schedule cache.");
-      }
+      if (!current) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
 
       if (input.actorType === "employee") {
         if (!input.actorRole || input.role !== input.actorRole || !input.actorEmployeeId) {
-          throw new Error("Employee confirmation role does not match the authenticated account.");
+          throw new Error("Vai trò xác nhận không khớp với tài khoản nhân viên.");
         }
-        const assignedEmployeeId = input.role === "host"
-          ? sessionStillExists.hostId
-          : sessionStillExists.supportId;
+        const assignedEmployeeId = input.role === "host" ? current.hostId : current.supportId;
         if (cleanText(assignedEmployeeId).toLowerCase() !== cleanText(input.actorEmployeeId).toLowerCase()) {
-          throw new Error("Schedule assignment changed before confirmation was saved.");
+          throw new Error("Phân công đã thay đổi trước khi xác nhận được lưu.");
         }
-        if (input.expectedDateKey && cleanText(sessionStillExists.dateKey) !== cleanText(input.expectedDateKey)) {
-          throw new Error("Schedule date changed before confirmation was saved.");
+        if (input.expectedDateKey && cleanText(current.dateKey) !== cleanText(input.expectedDateKey)) {
+          throw new Error("Ngày của ca đã thay đổi trước khi xác nhận được lưu.");
         }
       }
 
@@ -490,27 +460,20 @@ export async function applyScheduleConfirmationToMongo(
           [`${prefix}ConfirmationUpdatedAt`]: now,
           [`${prefix}ConfirmationActorKey`]: input.actorAccountKey
         };
-        if (sourceRevision > 0) {
-          confirmationFields[revisionField] = sourceRevision;
-        }
+        if (sourceRevision > 0) confirmationFields[revisionField] = sourceRevision;
 
-        const updateResult = await sessions.updateOne(
+        const result = await sessions.updateOne(
           {
             sessionKey: sessionId,
             active: true,
             ...(sourceRevision > 0
-              ? {
-                  $or: [
-                    { [revisionField]: { $exists: false } },
-                    { [revisionField]: { $lt: sourceRevision } }
-                  ]
-                }
+              ? { $or: [{ [revisionField]: { $exists: false } }, { [revisionField]: { $lt: sourceRevision } }] }
               : {})
           },
           { $set: confirmationFields },
           { session: mongoSession }
         );
-        if (updateResult.matchedCount === 1) appliedRoles.push(role);
+        if (result.matchedCount === 1) appliedRoles.push(role);
       }
 
       await events.insertOne(

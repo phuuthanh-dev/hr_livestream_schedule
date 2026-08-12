@@ -13,7 +13,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "refresh" | "search" | "sheet" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "refresh" | "search" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -73,9 +73,6 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "search") {
     return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
-  }
-  if (name === "sheet") {
-    return <svg {...common}><path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" /><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2" /></svg>;
   }
   if (name === "users") {
     return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
@@ -146,6 +143,7 @@ function formatWeekRange(startKey: string) {
 function emptySummary(): ScheduleSummary {
   return {
     total: 0,
+    openHost: 0,
     supportOnly: 0,
     missingSupport: 0,
     pendingHostConfirm: 0,
@@ -158,6 +156,7 @@ function emptySummary(): ScheduleSummary {
 function buildSummary(rows: ScheduleSession[]) {
   return rows.reduce((summary, row) => {
     summary.total += 1;
+    if (!row.hostId && row.status === "open") summary.openHost += 1;
     if (row.isSupportOnly) summary.supportOnly += 1;
     if (row.missingSupport) summary.missingSupport += 1;
     if (row.canConfirmHost && !row.isHostConfirmed) summary.pendingHostConfirm += 1;
@@ -184,7 +183,7 @@ function sessionMatchesQuery(session: ScheduleSession, query: string) {
 }
 
 function sessionMatchesFilter(session: ScheduleSession, filter: FilterMode) {
-  if (filter === "warnings") return session.missingSupport || session.isSupportOnly;
+  if (filter === "warnings") return session.warningLevel !== "ok" || session.warnings.length > 0;
   if (filter === "pending") {
     return (
       (session.canConfirmHost && !session.isHostConfirmed) ||
@@ -277,7 +276,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [timezone, setTimezone] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [readingSchedule, setReadingSchedule] = useState(false);
   const [mobileDayKey, setMobileDayKey] = useState(() => toDateKey(new Date()));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -344,51 +342,27 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
-  async function refreshFromSheet() {
+  async function runWeekSchedule() {
     setRefreshing(true);
     setError("");
     setMessage("");
 
     try {
-      const response = await fetch("/api/refresh", {
+      const response = await fetch("/api/schedule/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ from: weekStartKey, to: weekEndKey })
+        body: JSON.stringify({ weekStartKey })
       });
       const payload = (await response.json()) as SchedulePayload;
       if (!response.ok || !payload.success) {
-        throw new Error(payload.message || payload.error || "Không cập nhật được lịch.");
+        throw new Error(payload.message || payload.error || "Không chạy được lịch tuần.");
       }
       applyPayload(payload);
-      setMessage(payload.sync?.message || "Đã cập nhật lịch tuần từ Google Sheet.");
+      setMessage(payload.sync?.message || "Đã chạy và cập nhật lịch tuần.");
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Không cập nhật được lịch.");
+      setError(refreshError instanceof Error ? refreshError.message : "Không chạy được lịch tuần.");
     } finally {
       setRefreshing(false);
-    }
-  }
-
-  async function readScheduleFromSheet() {
-    setReadingSchedule(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/schedule/read", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ from: weekStartKey, to: weekEndKey })
-      });
-      const payload = (await response.json()) as SchedulePayload;
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.message || payload.error || "Không đọc được dữ liệu lịch.");
-      }
-      applyPayload(payload);
-      setMessage(payload.sync?.message || "Đã đọc dữ liệu hiện tại từ Live_Session_Master.");
-    } catch (readError) {
-      setError(readError instanceof Error ? readError.message : "Không đọc được dữ liệu lịch.");
-    } finally {
-      setReadingSchedule(false);
     }
   }
 
@@ -503,24 +477,14 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           <span>Nhân viên</span>
         </a>
         <button
-          className={`syncButton readSyncButton ${readingSchedule ? "isLoading" : ""}`}
-          onClick={readScheduleFromSheet}
-          disabled={readingSchedule || refreshing}
-          title="Đọc nguyên trạng Live_Session_Master vào website, không chạy lại logic xếp lịch"
-          type="button"
-        >
-          <Icon name="sheet" />
-          <span>{readingSchedule ? "Đang đọc..." : "Đọc dữ liệu"}</span>
-        </button>
-        <button
           className={`syncButton ${refreshing ? "isLoading" : ""}`}
-          onClick={refreshFromSheet}
-          disabled={refreshing || readingSchedule}
-          title="Đồng bộ và xếp lại lịch từ Google Sheet"
+          onClick={runWeekSchedule}
+          disabled={refreshing}
+          title="Xếp lịch từ lịch rảnh đã gửi và cập nhật thẳng vào lịch chính"
           type="button"
         >
           <Icon name="refresh" />
-          <span>{refreshing ? "Đang cập nhật..." : "Cập nhật lịch"}</span>
+          <span>{refreshing ? "Đang chạy..." : "Chạy lịch tuần"}</span>
         </button>
       </div>
     );
@@ -617,17 +581,17 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           <section className="weekHealth">
             <div className="weekHealthTitle"><span>Tình trạng tuần</span><strong>{weekSummary.total} ca</strong></div>
             <div className="healthRow danger"><span><Icon name="warning" size={16} /> Thiếu support</span><strong>{weekSummary.missingSupport}</strong></div>
-            <div className="healthRow support"><span>Support-only</span><strong>{weekSummary.supportOnly}</strong></div>
+            <div className="healthRow support"><span>Thiếu Host</span><strong>{weekSummary.openHost}</strong></div>
             <div className="healthRow"><span>Chờ host</span><strong>{weekSummary.pendingHostConfirm}</strong></div>
             <div className="healthRow"><span>Chờ support</span><strong>{weekSummary.pendingSupportConfirm}</strong></div>
           </section>
 
           <div className="sourceStatus">
-            <span className="sourceIcon"><Icon name="sheet" size={18} /></span>
+            <span className="sourceIcon"><Icon name="calendar" size={18} /></span>
             <div>
-              <strong>MongoDB · Live_Session_Master</strong>
+              <strong>MongoDB · Website Schedule API</strong>
               <span>Phạm vi dữ liệu {coverage}</span>
-              <span>{generatedAt ? `Đọc lúc ${new Date(generatedAt).toLocaleString("vi-VN")}` : "Chưa có thời gian cập nhật"}</span>
+              <span>{generatedAt ? `Chạy lúc ${new Date(generatedAt).toLocaleString("vi-VN")}` : "Chưa chạy lịch"}</span>
             </div>
           </div>
         </aside>
@@ -652,7 +616,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
           {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
 
-          <div className="mobileCalendar" aria-busy={loading || refreshing || readingSchedule}>
+          <div className="mobileCalendar" aria-busy={loading || refreshing}>
             <nav className="mobileDayStrip" aria-label="Chọn ngày trong tuần">
               {days.map((day) => {
                 const dayCount = visibleSessions.filter((session) => session.dateKey === day.dateKey).length;
@@ -709,7 +673,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                           >
                             <span className="mobileEventTopline">
                               <strong>{getSessionTitle(session)}</strong>
-                              {session.missingSupport ? <Icon name="warning" size={16} /> : null}
+                              {session.warningLevel === "danger" ? <Icon name="warning" size={16} /> : null}
                             </span>
                             <span className="mobileEventPeople">{getSessionPeople(session)}</span>
                             <span className="mobileEventFooter">
@@ -730,7 +694,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             )}
           </div>
 
-          <div className="calendarSurface desktopCalendar" aria-busy={loading || refreshing || readingSchedule}>
+          <div className="calendarSurface desktopCalendar" aria-busy={loading || refreshing}>
             <div className="calendarScroller">
               <div className="weekCalendar">
                 <div className="weekHeaderGrid">
@@ -769,7 +733,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                               >
                                 <span className="eventTopline">
                                   <strong>{getSessionTitle(session)}</strong>
-                                  {session.missingSupport ? <Icon name="warning" size={14} /> : null}
+                                  {session.warningLevel === "danger" ? <Icon name="warning" size={14} /> : null}
                                 </span>
                                 <span className="eventPeople">{getSessionPeople(session)}</span>
                                 <span className="eventMeta">
@@ -810,6 +774,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             </div>
 
             {selectedSession.missingSupport ? <div className="drawerAlert danger"><Icon name="warning" />Ca Studio đang thiếu support.</div> : null}
+            {!selectedSession.hostId ? <div className="drawerAlert danger"><Icon name="warning" />Ca đang mở vì chưa có Host đủ điều kiện.</div> : null}
             {selectedSession.isSupportOnly ? <div className="drawerAlert support"><Icon name="check" />Support-only: giữ ca để fill host sau.</div> : null}
 
             <dl className="drawerDetails">
