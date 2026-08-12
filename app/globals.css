@@ -2007,6 +2007,129 @@ a:hover {
   text-transform: capitalize;
 }
 
+.assignmentEditor {
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid #cfe2dd;
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(236, 253, 248, 0.92), rgba(247, 251, 255, 0.96));
+  box-shadow: 0 10px 26px rgba(15, 118, 110, 0.08);
+}
+
+.assignmentEditorHeader {
+  display: flex;
+  margin-bottom: 13px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assignmentEditorHeader > div {
+  display: grid;
+  gap: 3px;
+}
+
+.assignmentEditorHeader strong {
+  color: #164e4a;
+  font-size: 0.83rem;
+}
+
+.assignmentEditorHeader span {
+  color: #61706f;
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+.assignmentEditorHeader em {
+  padding: 5px 8px;
+  border: 1px solid #99d8cb;
+  border-radius: 999px;
+  color: #0f766e;
+  background: #dcf8f1;
+  font-size: 0.55rem;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.assignmentEditorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(112px, 0.75fr);
+  gap: 10px;
+}
+
+.assignmentEditorGrid label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.assignmentEditorGrid label > span {
+  color: #52605f;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.assignmentEditorGrid select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 34px 0 11px;
+  border: 1px solid #bfd3cf;
+  border-radius: 11px;
+  color: #263c3a;
+  background: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.assignmentEditorGrid select:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  outline: none;
+}
+
+.assignmentEditorGrid select:disabled {
+  color: #7b8584;
+  background: #eef3f2;
+  cursor: not-allowed;
+}
+
+.assignmentSupportField {
+  grid-column: 1 / -1;
+}
+
+.assignmentSupportField small,
+.assignmentHint,
+.assignmentStatus,
+.assignmentError {
+  margin: 0;
+  font-size: 0.59rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.assignmentSupportField small,
+.assignmentHint {
+  color: #6b7776;
+}
+
+.assignmentHint {
+  margin-top: 10px;
+}
+
+.assignmentStatus {
+  margin-top: 10px;
+  color: #0f766e;
+}
+
+.assignmentError {
+  margin-top: 10px;
+  color: var(--red);
+}
+
 .drawerAlert {
   display: flex;
   margin-bottom: 14px;
@@ -2999,6 +3122,19 @@ a:hover {
 
   .drawerHeader h2 {
     font-size: 1.3rem;
+  }
+
+  .assignmentEditor {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .assignmentEditorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .assignmentSupportField {
+    grid-column: auto;
   }
 
   .drawerDetails {

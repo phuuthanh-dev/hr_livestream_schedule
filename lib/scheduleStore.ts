@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Collection, WithId } from "mongodb";
+import { findActiveSchedulePerson } from "@/lib/employeeRoster";
+import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
+import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
 import type {
   AccountType,
+  AvailabilityLocationPreference,
   ConfirmRole,
   EmployeeRole,
   SchedulePayload,
@@ -35,6 +39,8 @@ type ScheduleSessionDocument = ScheduleSession & {
   supportConfirmationUpdatedAt?: Date;
   supportConfirmationActorKey?: string;
   supportConfirmationRevision?: number;
+  manualOverrideUpdatedAt?: Date;
+  manualOverrideUpdatedBy?: string;
 };
 
 type ScheduleSyncRunDocument = {
@@ -104,6 +110,14 @@ type ScheduleWriteResult = {
   syncedAt: string;
 };
 
+export type UpdateScheduleAssignmentInput = {
+  sessionId: string;
+  hostId?: string;
+  supportId?: string;
+  locationMode?: AvailabilityLocationPreference;
+  actorAccountKey: string;
+};
+
 let indexesPromise: Promise<void> | undefined;
 
 function cleanText(value: unknown): string {
@@ -157,6 +171,7 @@ function normalizeScheduleSession(input: ScheduleSession): ScheduleSession {
       ? input.generatedBy
       : undefined,
     generationBatchId: cleanText(input.generationBatchId) || undefined,
+    manualOverride: input.manualOverride === true,
     isHostConfirmed: input.isHostConfirmed === true,
     isSupportConfirmed: input.isSupportConfirmed === true,
     canConfirmHost: input.canConfirmHost === true,
@@ -286,7 +301,7 @@ export async function publishGeneratedScheduleWeek(
       ).toArray();
       const protectedSlotKeys = new Set(
         existingFutureRows
-          .filter((row) => row.isHostConfirmed || row.isSupportConfirmed)
+          .filter((row) => row.isHostConfirmed || row.isSupportConfirmed || row.manualOverride)
           .map((row) => `${row.dateKey}__${row.slot}`)
       );
       const rowsToPublish = normalizedRows.filter(
@@ -344,6 +359,7 @@ export async function publishGeneratedScheduleWeek(
           dateKey: { $gte: input.weekStartKey, $lte: input.weekEndKey, $gt: input.todayKey },
           isHostConfirmed: { $ne: true },
           isSupportConfirmed: { $ne: true },
+          manualOverride: { $ne: true },
           ...(publishKeys.length > 0 ? { sessionKey: { $nin: publishKeys } } : {})
         },
         { $set: { active: false, deactivatedAt: completedAt, updatedAt: completedAt } },
@@ -417,6 +433,102 @@ export async function findScheduleSessionById(sessionId: string): Promise<Schedu
   const { sessions } = await getCollections();
   const document = await sessions.findOne({ sessionKey: cleanText(sessionId), active: true });
   return document ? toScheduleSession(document) : null;
+}
+
+export async function updateScheduleSessionAssignment(
+  input: UpdateScheduleAssignmentInput
+): Promise<ScheduleSession> {
+  const { sessions } = await getCollections();
+  const sessionId = cleanText(input.sessionId);
+  if (!sessionId) throw new Error("Thiếu Session ID cần cập nhật.");
+  if (input.locationMode !== undefined && input.locationMode !== "home" && input.locationMode !== "studio") {
+    throw new Error("Địa điểm ca không hợp lệ.");
+  }
+
+  const document = await sessions.findOne({ sessionKey: sessionId, active: true });
+  if (!document) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
+  const current = toScheduleSession(document);
+  const hostWasEdited = input.hostId !== undefined;
+  const supportWasEdited = input.supportId !== undefined;
+  const resolvedHostId = hostWasEdited ? cleanText(input.hostId) : current.hostId;
+  const resolvedSupportId = supportWasEdited ? cleanText(input.supportId) : current.supportId;
+  const activeHost = resolvedHostId ? await findActiveSchedulePerson("host", resolvedHostId) : null;
+  const activeSupport = resolvedSupportId ? await findActiveSchedulePerson("support", resolvedSupportId) : null;
+
+  if (hostWasEdited && resolvedHostId && !activeHost) {
+    throw new Error("Host được chọn không tồn tại hoặc đã tạm ngưng.");
+  }
+  if (supportWasEdited && resolvedSupportId && !activeSupport) {
+    throw new Error("Support được chọn không tồn tại hoặc đã tạm ngưng.");
+  }
+
+  const host = activeHost || (resolvedHostId ? {
+    id: current.hostId,
+    name: current.hostName || current.hostId,
+    role: "host" as const,
+    workLocation: getSessionLocationMode(current) || "studio",
+    liveChannelId: current.channel
+  } : null);
+  const support = activeSupport || (resolvedSupportId ? {
+    id: current.supportId,
+    name: current.supportName || current.supportId,
+    role: "support" as const
+  } : null);
+  const configuredLocation = cleanText(host?.workLocation).toLowerCase().replace(/\s+/g, "-");
+  const studioLocation = configuredLocation && !["home", "both", "studio"].includes(configuredLocation)
+    ? await findActiveScheduleLocation(configuredLocation)
+    : null;
+
+  if (configuredLocation && !["home", "both", "studio"].includes(configuredLocation) && !studioLocation) {
+    throw new Error("Địa điểm Studio trong hồ sơ Host không tồn tại hoặc đã tạm ngưng.");
+  }
+
+  const updated = buildManualScheduleAssignment({
+    current,
+    host,
+    support,
+    hostWasEdited,
+    supportWasEdited,
+    locationMode: input.locationMode,
+    studioLocationName: studioLocation?.name
+  });
+  const hostNeedsConfirmationReset = current.hostId.toLowerCase() !== updated.hostId.toLowerCase()
+    || current.format.toLowerCase() !== updated.format.toLowerCase();
+  const supportNeedsConfirmationReset = current.supportId.toLowerCase() !== updated.supportId.toLowerCase()
+    || current.format.toLowerCase() !== updated.format.toLowerCase();
+  const now = new Date();
+  const unsetFields: Record<string, ""> = {};
+
+  if (hostNeedsConfirmationReset) {
+    unsetFields.hostConfirmationUpdatedAt = "";
+    unsetFields.hostConfirmationActorKey = "";
+  }
+  if (supportNeedsConfirmationReset) {
+    unsetFields.supportConfirmationUpdatedAt = "";
+    unsetFields.supportConfirmationActorKey = "";
+  }
+
+  const result = await sessions.updateOne(
+    { sessionKey: sessionId, active: true },
+    {
+      $set: {
+        ...updated,
+        hostPersonKey: buildPersonKey("host", updated.hostId),
+        supportPersonKey: buildPersonKey("support", updated.supportId),
+        backupHostPersonKey: buildPersonKey("host", updated.backupHostId),
+        backupSupportPersonKey: buildPersonKey("support", updated.backupSupportId),
+        ...(hostNeedsConfirmationReset ? { hostConfirmationRevision: 0 } : {}),
+        ...(supportNeedsConfirmationReset ? { supportConfirmationRevision: 0 } : {}),
+        manualOverride: true,
+        manualOverrideUpdatedAt: now,
+        manualOverrideUpdatedBy: cleanText(input.actorAccountKey) || "admin:admin",
+        updatedAt: now
+      },
+      ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {})
+    }
+  );
+  if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi cập nhật được lưu.");
+  return updated;
 }
 
 export async function applyScheduleConfirmationToMongo(input: ApplyConfirmationInput): Promise<void> {

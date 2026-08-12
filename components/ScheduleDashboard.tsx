@@ -2,8 +2,17 @@
 
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import { getSessionLocationMode } from "@/lib/scheduleAssignment";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
-import type { ConfirmRole, SchedulePayload, ScheduleSession, ScheduleSummary } from "@/lib/types";
+import type {
+  AvailabilityLocationPreference,
+  ConfirmRole,
+  PeoplePayload,
+  SchedulePayload,
+  SchedulePerson,
+  ScheduleSession,
+  ScheduleSummary
+} from "@/lib/types";
 
 type ScheduleDashboardProps = {
   username: string;
@@ -14,7 +23,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "refresh" | "search" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "search" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -68,9 +77,6 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "location") {
     return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
-  }
-  if (name === "refresh") {
-    return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
   }
   if (name === "search") {
     return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
@@ -276,7 +282,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [generatedAt, setGeneratedAt] = useState("");
   const [timezone, setTimezone] = useState("");
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [mobileDayKey, setMobileDayKey] = useState(() => toDateKey(new Date()));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -285,6 +290,12 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [busyConfirm, setBusyConfirm] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [hosts, setHosts] = useState<SchedulePerson[]>([]);
+  const [supports, setSupports] = useState<SchedulePerson[]>([]);
+  const [peopleLoading, setPeopleLoading] = useState(isAdmin);
+  const [peopleError, setPeopleError] = useState("");
+  const [assignmentBusy, setAssignmentBusy] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
   const deferredQuery = useDeferredValue(query);
 
   const todayKey = getScheduleTodayKey(timezone || undefined);
@@ -306,6 +317,20 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
   const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
+  const selectedHostProfile = selectedSession
+    ? hosts.find((host) => host.id.toLowerCase() === selectedSession.hostId.toLowerCase())
+    : undefined;
+  const selectedSupportProfile = selectedSession
+    ? supports.find((support) => support.id.toLowerCase() === selectedSession.supportId.toLowerCase())
+    : undefined;
+  const selectedLocationMode = selectedSession ? getSessionLocationMode(selectedSession) : "";
+  const selectedHostLocation = selectedHostProfile?.workLocation?.trim().toLowerCase() || "";
+  const selectedHostCanUseHome = selectedHostProfile
+    ? selectedHostLocation === "home" || selectedHostLocation === "both"
+    : selectedLocationMode === "home";
+  const selectedHostCanUseStudio = selectedHostProfile
+    ? selectedHostLocation !== "home"
+    : !selectedSession?.hostId || selectedLocationMode === "studio";
   const selectedSessionIsPast = Boolean(selectedSession?.dateKey && selectedSession.dateKey < todayKey);
   const canConfirmSelectedHost = Boolean(
     selectedSession && (
@@ -340,30 +365,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     setTimezone(payload.timezone || "");
     if (selectedSessionId && !nextRows.some((session) => session.sessionId === selectedSessionId)) {
       setSelectedSessionId("");
-    }
-  }
-
-  async function runWeekSchedule() {
-    setRefreshing(true);
-    setError("");
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/schedule/generate", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ weekStartKey })
-      });
-      const payload = (await response.json()) as SchedulePayload;
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.message || payload.error || "Không chạy được lịch tuần.");
-      }
-      applyPayload(payload);
-      setMessage(payload.sync?.message || "Đã chạy và cập nhật lịch tuần.");
-    } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : "Không chạy được lịch tuần.");
-    } finally {
-      setRefreshing(false);
     }
   }
 
@@ -410,6 +411,40 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
+  async function updateSelectedSession(
+    changes: { hostId?: string; supportId?: string; locationMode?: AvailabilityLocationPreference },
+    busyField: "host" | "support" | "location"
+  ) {
+    if (!selectedSession || !isAdmin) return;
+    setAssignmentBusy(busyField);
+    setAssignmentError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: selectedSession.sessionId,
+          ...changes,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không cập nhật được ca.");
+      }
+      applyPayload(payload);
+      setMessage(payload.message || `Đã cập nhật ca ${selectedSession.slot}.`);
+    } catch (updateError) {
+      setAssignmentError(updateError instanceof Error ? updateError.message : "Không cập nhật được ca.");
+    } finally {
+      setAssignmentBusy("");
+    }
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
@@ -445,6 +480,33 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   }, [weekStartKey]);
 
   useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    setPeopleLoading(true);
+    setPeopleError("");
+    void fetch("/api/people", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json()) as PeoplePayload;
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || payload.error || "Không tải được danh sách nhân viên.");
+        }
+        if (active) {
+          setHosts(payload.hosts || []);
+          setSupports(payload.supports || []);
+        }
+      })
+      .catch((loadError) => {
+        if (active) setPeopleError(loadError instanceof Error ? loadError.message : "Không tải được danh sách nhân viên.");
+      })
+      .finally(() => {
+        if (active) setPeopleLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
     setMobileDayKey((current) => {
       if (current >= weekStartKey && current <= weekEndKey) return current;
       if (todayKey >= weekStartKey && todayKey <= weekEndKey) return todayKey;
@@ -454,6 +516,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
   useEffect(() => {
     if (!selectedSessionId) return;
+    setAssignmentError("");
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function closeOnEscape(event: KeyboardEvent) {
@@ -477,16 +540,14 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           <Icon name="users" />
           <span>Nhân viên</span>
         </a>
-        <button
-          className={`syncButton ${refreshing ? "isLoading" : ""}`}
-          onClick={runWeekSchedule}
-          disabled={refreshing}
-          title="Xếp lịch từ lịch rảnh đã gửi và cập nhật thẳng vào lịch chính"
-          type="button"
-        >
-          <Icon name="refresh" />
-          <span>{refreshing ? "Đang chạy..." : "Chạy lịch tuần"}</span>
-        </button>
+        <a className="syncButton locationShortcut" href="/locations">
+          <Icon name="location" />
+          <span>Địa điểm</span>
+        </a>
+        <a className="syncButton availabilityShortcut" href="/availability/summary">
+          <Icon name="calendar" />
+          <span>Lịch rảnh</span>
+        </a>
       </div>
     );
   }
@@ -513,11 +574,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
         <div className="headerActions">
           {isAdmin ? renderAdminActions("desktop") : null}
-          <a className="todayButton availabilityShortcut" href={isAdmin ? "/availability/summary" : "/availability"}>
-            <Icon name="calendar" size={17} />
-            <span>{isAdmin ? "Tổng hợp rảnh" : "Lịch rảnh"}</span>
-          </a>
-          {isAdmin ? <a className="todayButton availabilityShortcut locationShortcut" href="/locations"><Icon name="location" size={17} /><span>Địa điểm</span></a> : null}
+          {!isAdmin ? <a className="todayButton availabilityShortcut" href="/availability"><Icon name="calendar" size={17} /><span>Lịch rảnh</span></a> : null}
           <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
           <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
           <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
@@ -617,7 +674,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
           {message ? <div className="notice successNotice"><Icon name="check" />{message}</div> : null}
 
-          <div className="mobileCalendar" aria-busy={loading || refreshing}>
+          <div className="mobileCalendar" aria-busy={loading}>
             <nav className="mobileDayStrip" aria-label="Chọn ngày trong tuần">
               {days.map((day) => {
                 const dayCount = visibleSessions.filter((session) => session.dateKey === day.dateKey).length;
@@ -695,7 +752,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             )}
           </div>
 
-          <div className="calendarSurface desktopCalendar" aria-busy={loading || refreshing}>
+          <div className="calendarSurface desktopCalendar" aria-busy={loading}>
             <div className="calendarScroller">
               <div className="weekCalendar">
                 <div className="weekHeaderGrid">
@@ -773,6 +830,76 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               </div>
               <button className="iconButton" aria-label="Đóng chi tiết" onClick={() => setSelectedSessionId("")} type="button"><Icon name="close" /></button>
             </div>
+
+            {isAdmin ? (
+              <section className="assignmentEditor" aria-label="Chỉnh phân công ca">
+                <div className="assignmentEditorHeader">
+                  <div><strong>Phân công ca</strong><span>Chọn và lưu trực tiếp vào lịch chính</span></div>
+                  {selectedSession.manualOverride ? <em>Admin chỉnh</em> : null}
+                </div>
+                <div className="assignmentEditorGrid">
+                  <label>
+                    <span>Host</span>
+                    <select
+                      value={selectedSession.hostId}
+                      disabled={peopleLoading || Boolean(assignmentBusy)}
+                      onChange={(event) => void updateSelectedSession({ hostId: event.target.value }, "host")}
+                    >
+                      <option value="">Chưa chọn Host</option>
+                      {selectedSession.hostId && !selectedHostProfile ? (
+                        <option value={selectedSession.hostId}>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host hiện tại")}</option>
+                      ) : null}
+                      {hosts.map((host) => (
+                        <option key={host.id} value={host.id}>
+                          {host.name} · {host.id}{host.level ? ` · ${host.level}` : ""}{host.workLocation ? ` · ${host.workLocation}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Địa điểm</span>
+                    <select
+                      value={selectedLocationMode}
+                      disabled={Boolean(assignmentBusy) || (!selectedHostCanUseHome && !selectedHostCanUseStudio)}
+                      onChange={(event) => void updateSelectedSession(
+                        { locationMode: event.target.value as AvailabilityLocationPreference },
+                        "location"
+                      )}
+                    >
+                      {!selectedLocationMode ? <option value="" disabled>Chưa chọn địa điểm</option> : null}
+                      {selectedHostCanUseHome ? <option value="home">Home</option> : null}
+                      {selectedHostCanUseStudio ? <option value="studio">Studio</option> : null}
+                    </select>
+                  </label>
+                  <label className="assignmentSupportField">
+                    <span>Support Live</span>
+                    <select
+                      value={selectedSession.supportId}
+                      disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
+                      onChange={(event) => void updateSelectedSession({ supportId: event.target.value }, "support")}
+                    >
+                      <option value="">Chưa chọn Support</option>
+                      {selectedSession.supportId && !selectedSupportProfile ? (
+                        <option value={selectedSession.supportId}>{getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support hiện tại")}</option>
+                      ) : null}
+                      {supports.map((support) => (
+                        <option key={support.id} value={support.id}>
+                          {support.name} · {support.id}{support.level ? ` · ${support.level}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <small>{selectedLocationMode === "home"
+                      ? selectedHostCanUseStudio
+                        ? "Chọn Support sẽ tự chuyển ca sang Studio."
+                        : "Host này chỉ làm tại Home nên không sử dụng Support."
+                      : "Đổi người sẽ tự hủy xác nhận Support cũ."}</small>
+                  </label>
+                </div>
+                {assignmentBusy ? <p className="assignmentStatus">Đang cập nhật {assignmentBusy === "host" ? "Host" : assignmentBusy === "support" ? "Support" : "địa điểm"}...</p> : null}
+                {peopleError || assignmentError ? <p className="assignmentError">{assignmentError || peopleError}</p> : null}
+                <p className="assignmentHint">Tên, mã, kênh live, địa điểm, trạng thái và cảnh báo được đồng bộ tự động.</p>
+              </section>
+            ) : null}
 
             {selectedSession.missingSupport ? <div className="drawerAlert danger"><Icon name="warning" />Ca Studio đang thiếu support.</div> : null}
             {!selectedSession.hostId ? <div className="drawerAlert danger"><Icon name="warning" />Ca đang mở vì chưa có Host đủ điều kiện.</div> : null}

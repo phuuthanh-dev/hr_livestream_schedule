@@ -49,7 +49,7 @@ export async function generateAndPublishScheduleWeek(
   }
 
   const protectedSessions = existingSessions.filter(
-    (row) => row.dateKey <= todayKey || row.isHostConfirmed || row.isSupportConfirmed
+    (row) => row.dateKey <= todayKey || row.isHostConfirmed || row.isSupportConfirmed || row.manualOverride
   );
   const generatedRows = generateSchedule({
     weekStartKey,

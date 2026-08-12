@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildManualScheduleAssignment } from "../lib/scheduleAssignment.ts";
 import { generateSchedule } from "../lib/scheduleEngine.ts";
 
 const slots = [
@@ -149,4 +150,88 @@ test("protected slot is not generated again", () => {
     [protectedSession]
   );
   assert.equal(rows.length, 0);
+});
+
+test("manual Host selection syncs profile fields and Both defaults to Home", () => {
+  const previousHost = person("HRLT01", "host");
+  const support = person("HRSL01", "support");
+  const current = run(
+    [previousHost, support],
+    slots.slice(0, 2).flatMap((slot) => [
+      available("host", previousHost.id, "2026-08-13", slot, "studio"),
+      available("support", support.id, "2026-08-13", slot)
+    ])
+  )[0];
+  const replacement = person("HRLT02", "host", {
+    name: "Host mới",
+    workLocation: "both",
+    liveChannelId: "CHANNEL-02"
+  });
+  const updated = buildManualScheduleAssignment({
+    current,
+    host: replacement,
+    support,
+    hostWasEdited: true,
+    supportWasEdited: false
+  });
+
+  assert.equal(updated.hostId, replacement.id);
+  assert.equal(updated.hostName, replacement.name);
+  assert.equal(updated.channel, replacement.liveChannelId);
+  assert.equal(updated.format, "Home");
+  assert.equal(updated.supportId, "");
+  assert.equal(updated.isHostConfirmed, false);
+  assert.equal(updated.manualOverride, true);
+});
+
+test("selecting Support for a Both Host moves the session to Studio", () => {
+  const host = person("HRLT01", "host", { workLocation: "both" });
+  const support = person("HRSL01", "support", { name: "Support mới" });
+  const current = run(
+    [host],
+    [available("host", host.id, "2026-08-13", slots[0], "home")]
+  )[0];
+  const updated = buildManualScheduleAssignment({
+    current,
+    host,
+    support,
+    hostWasEdited: false,
+    supportWasEdited: true
+  });
+
+  assert.equal(updated.format, "Studio");
+  assert.equal(updated.supportId, support.id);
+  assert.equal(updated.supportName, support.name);
+  assert.equal(updated.status, "published");
+  assert.equal(updated.missingSupport, false);
+});
+
+test("moving a session Home clears Support and its confirmation", () => {
+  const host = person("HRLT01", "host", { workLocation: "both" });
+  const support = person("HRSL01", "support");
+  const current = {
+    ...run(
+      [host, support],
+      slots.slice(0, 2).flatMap((slot) => [
+        available("host", host.id, "2026-08-13", slot, "studio"),
+        available("support", support.id, "2026-08-13", slot)
+      ])
+    )[0],
+    isSupportConfirmed: true,
+    supportConfirm: "Đã xác nhận"
+  };
+  const updated = buildManualScheduleAssignment({
+    current,
+    host,
+    support,
+    hostWasEdited: false,
+    supportWasEdited: false,
+    locationMode: "home"
+  });
+
+  assert.equal(updated.format, "Home");
+  assert.equal(updated.supportId, "");
+  assert.equal(updated.isSupportConfirmed, false);
+  assert.equal(updated.supportConfirm, "Chưa xác nhận");
+  assert.equal(updated.supportRequired, false);
 });

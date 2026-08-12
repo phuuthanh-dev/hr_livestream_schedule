@@ -107,6 +107,7 @@ export type ScheduleSession = {
   status?: ScheduleSessionStatus;
   generatedBy?: "website" | "google_sheet";
   generationBatchId?: string;
+  manualOverride?: boolean;
   isHostConfirmed: boolean;
   isSupportConfirmed: boolean;
   canConfirmHost: boolean;
