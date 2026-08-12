@@ -2586,6 +2586,705 @@ a:hover {
   }
 }
 
+/* Login and people application experience */
+.loginExperience,
+.applicationPage {
+  --talent-ink: #102f2d;
+  --talent-deep: #0a2928;
+  --talent-mint: #b9f3df;
+  --talent-coral: #f26c4f;
+  --talent-cream: #f7f3e9;
+  min-height: 100dvh;
+  color: var(--talent-ink);
+}
+
+.loginExperience {
+  display: grid;
+  background: var(--talent-cream);
+  grid-template-columns: minmax(420px, 1.04fr) minmax(480px, 0.96fr);
+}
+
+.loginStory {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  padding: clamp(30px, 4vw, 62px);
+  color: #f8f4ea;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(185, 243, 223, 0.16), transparent 24rem),
+    linear-gradient(145deg, #0c3532 0%, #082523 64%, #061d1c 100%);
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.loginStory::before {
+  position: absolute;
+  right: -12rem;
+  bottom: -16rem;
+  width: 34rem;
+  height: 34rem;
+  border: 1px solid rgba(185, 243, 223, 0.18);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 4rem rgba(185, 243, 223, 0.025),
+    0 0 0 8rem rgba(185, 243, 223, 0.018);
+  content: "";
+}
+
+.loginBrand,
+.applicationBrand {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.loginBrand img,
+.applicationBrand img {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.loginStoryCopy {
+  position: relative;
+  z-index: 1;
+  max-width: 660px;
+  margin: auto 0 28px;
+  animation: talentRise 620ms 80ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.loginStoryCopy > p,
+.applicationKicker {
+  display: flex;
+  margin: 0 0 18px;
+  color: var(--talent-mint);
+  align-items: center;
+  gap: 9px;
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+}
+
+.loginStoryCopy > p i,
+.applicationKicker i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--talent-coral);
+  box-shadow: 0 0 0 5px rgba(242, 108, 79, 0.14);
+}
+
+.loginStoryCopy h1,
+.applicationStoryCopy h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(3rem, 5.4vw, 6.6rem);
+  font-weight: 650;
+  line-height: 0.94;
+  letter-spacing: -0.058em;
+}
+
+.loginStoryCopy h1 em,
+.applicationStoryCopy h1 em {
+  color: var(--talent-coral);
+  font-style: italic;
+}
+
+.loginStoryCopy > span {
+  display: block;
+  max-width: 570px;
+  margin-top: 24px;
+  color: rgba(248, 244, 234, 0.68);
+  font-size: clamp(0.82rem, 1.25vw, 1rem);
+  line-height: 1.75;
+}
+
+.loginSignalBoard {
+  position: relative;
+  z-index: 1;
+  padding: 17px;
+  border: 1px solid rgba(185, 243, 223, 0.16);
+  border-radius: 21px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(12px);
+  animation: talentRise 620ms 180ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.signalHeader {
+  display: flex;
+  margin-bottom: 13px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.55rem;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+}
+
+.signalHeader > span { color: rgba(248, 244, 234, 0.52); }
+.signalHeader strong { display: flex; color: var(--talent-mint); align-items: center; gap: 7px; }
+.signalHeader strong i { width: 6px; height: 6px; border-radius: 50%; background: var(--talent-coral); animation: signalPulse 1.8s ease-in-out infinite; }
+
+.signalTimeline {
+  display: grid;
+  height: 3px;
+  margin-bottom: 13px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.signalTimeline i { border-radius: 3px; background: rgba(248, 244, 234, 0.13); }
+.signalTimeline i:nth-child(-n + 4) { background: var(--talent-coral); }
+
+.signalCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.signalCards article {
+  display: grid;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(247, 243, 233, 0.085);
+  gap: 2px;
+}
+
+.signalCards span { color: var(--talent-mint); font-size: 0.54rem; font-weight: 850; }
+.signalCards strong { font-size: 0.74rem; }
+.signalCards em { overflow: hidden; color: rgba(248, 244, 234, 0.48); font-size: 0.51rem; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+
+.loginStoryFooter {
+  position: relative;
+  z-index: 1;
+  margin: 15px 0 0;
+  color: rgba(248, 244, 234, 0.42);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.loginAccessPanel {
+  display: flex;
+  min-height: 100dvh;
+  padding: clamp(30px, 5vw, 76px);
+  background:
+    linear-gradient(rgba(16, 47, 45, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 47, 45, 0.035) 1px, transparent 1px),
+    var(--talent-cream);
+  background-size: 30px 30px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.loginAccessInner {
+  width: min(100%, 520px);
+  margin: auto;
+  animation: talentRise 620ms 140ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.loginAccessHeading > p,
+.applicationFormHeading > p {
+  margin: 0 0 10px;
+  color: var(--talent-coral);
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.17em;
+}
+
+.loginAccessHeading h2,
+.applicationFormHeading h2,
+.applicationSuccess h2 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(2.2rem, 4vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.loginAccessHeading > span,
+.applicationFormHeading > span {
+  display: block;
+  margin-top: 12px;
+  color: #657371;
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+
+.loginAccessPanel .loginForm {
+  margin-top: 30px;
+  gap: 14px;
+}
+
+.loginAccessPanel .loginForm label {
+  color: #415350;
+  font-size: 0.7rem;
+  gap: 7px;
+}
+
+.loginAccessPanel .loginForm input,
+.loginAccessPanel .loginForm select {
+  min-height: 50px;
+  border-color: #d3d8cf;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.86);
+}
+
+.loginAccessPanel .loginForm input:focus,
+.loginAccessPanel .loginForm select:focus {
+  border-color: #178276;
+  box-shadow: 0 0 0 4px rgba(23, 130, 118, 0.11);
+}
+
+.loginAccessPanel .loginTypeTabs {
+  padding: 5px;
+  border: 1px solid #dfe2da;
+  border-radius: 15px;
+  background: rgba(220, 223, 214, 0.62);
+}
+
+.loginAccessPanel .loginTypeTabs button { min-height: 43px; border-radius: 11px; color: #6b7572; }
+.loginAccessPanel .loginTypeTabs button.active { color: var(--talent-ink); background: #fffdf8; box-shadow: 0 4px 14px rgba(16, 47, 45, 0.08); }
+.loginAccessPanel .passwordToggle:hover:not(:disabled) { color: #0f766e; background: rgba(15, 118, 110, 0.08); }
+
+.loginAccessPanel .loginSubmit {
+  min-height: 52px;
+  margin-top: 2px;
+  border-radius: 13px;
+  color: #fff;
+  background: var(--talent-ink);
+  box-shadow: 0 14px 28px rgba(16, 47, 45, 0.18);
+  transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.loginAccessPanel .loginSubmit:hover:not(:disabled) {
+  background: #174e49;
+  box-shadow: 0 16px 34px rgba(16, 47, 45, 0.24);
+  transform: translateY(-1px);
+}
+
+.loginApplyPrompt {
+  display: flex;
+  margin-top: 28px;
+  padding-top: 21px;
+  border-top: 1px solid #d9ddd5;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.loginApplyPrompt > span { color: #74807e; font-size: 0.68rem; font-weight: 650; }
+.loginApplyPrompt a { display: inline-flex; color: var(--talent-coral); align-items: center; gap: 6px; font-size: 0.69rem; font-weight: 850; }
+.loginApplyPrompt a:hover { text-decoration: none; }
+.loginApplyPrompt svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; transition: transform 160ms ease; }
+.loginApplyPrompt a:hover svg { transform: translateX(3px); }
+
+.loginLegal {
+  width: min(100%, 520px);
+  margin: 28px auto 0;
+  color: #8a918d;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.applicationPage {
+  display: grid;
+  background: #f5f1e7;
+  grid-template-columns: minmax(380px, 0.82fr) minmax(560px, 1.18fr);
+}
+
+.applicationStory {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100dvh;
+  padding: clamp(30px, 4vw, 60px);
+  color: #f8f4ea;
+  background:
+    linear-gradient(rgba(185, 243, 223, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(185, 243, 223, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 90% 12%, rgba(242, 108, 79, 0.16), transparent 22rem),
+    var(--talent-deep);
+  background-size: 44px 44px, 44px 44px, auto, auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.applicationStory::after {
+  position: absolute;
+  right: -6rem;
+  bottom: -7rem;
+  width: 22rem;
+  height: 22rem;
+  border: 1px solid rgba(185, 243, 223, 0.14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3.5rem rgba(185, 243, 223, 0.025), 0 0 0 7rem rgba(185, 243, 223, 0.018);
+  content: "";
+}
+
+.applicationStoryCopy {
+  position: relative;
+  z-index: 1;
+  margin: auto 0 42px;
+  animation: talentRise 620ms 70ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.applicationStoryCopy h1 { font-size: clamp(3rem, 5vw, 5.9rem); }
+.applicationStoryCopy > p:last-child { max-width: 570px; margin: 24px 0 0; color: rgba(248, 244, 234, 0.64); font-size: 0.8rem; line-height: 1.75; }
+
+.applicationRoleNotes {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  margin-bottom: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  animation: talentRise 620ms 160ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.applicationRoleNotes article {
+  display: grid;
+  padding: 16px;
+  border: 1px solid rgba(185, 243, 223, 0.14);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.045);
+  gap: 7px;
+}
+
+.applicationRoleNotes strong { color: var(--talent-mint); font-size: 0.62rem; letter-spacing: 0.14em; }
+.applicationRoleNotes span { color: rgba(248, 244, 234, 0.56); font-size: 0.6rem; line-height: 1.55; }
+
+.applicationStoryFooter {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  margin-top: 22px;
+  gap: 3px;
+}
+
+.applicationStoryFooter span { color: rgba(248, 244, 234, 0.4); font-size: 0.56rem; }
+.applicationStoryFooter strong { font-family: "Fraunces", serif; font-size: 0.9rem; }
+
+.applicationFormShell {
+  min-width: 0;
+  padding: 0 clamp(26px, 6vw, 88px) 80px;
+}
+
+.applicationTopbar {
+  display: flex;
+  width: min(100%, 780px);
+  min-height: 76px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.applicationTopbar a { display: inline-flex; color: #53615e; align-items: center; gap: 7px; font-size: 0.65rem; }
+.applicationTopbar a:hover { color: var(--talent-ink); text-decoration: none; }
+.applicationTopbar svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; }
+.applicationTopbar > span { color: #818a86; font-size: 0.57rem; font-weight: 700; }
+
+.applicationForm,
+.applicationSuccess {
+  width: min(100%, 780px);
+  margin: 20px auto 0;
+  padding: clamp(25px, 4vw, 46px);
+  border: 1px solid rgba(16, 47, 45, 0.1);
+  border-radius: 26px;
+  background: rgba(255, 253, 248, 0.94);
+  box-shadow: 0 24px 70px rgba(44, 62, 56, 0.09);
+  animation: talentRise 580ms 100ms cubic-bezier(0.2, 0.75, 0.2, 1) both;
+}
+
+.applicationFormHeading { margin-bottom: 30px; }
+.applicationFormHeading h2 { font-size: clamp(2rem, 3.8vw, 3.15rem); }
+
+.applicationRolePicker {
+  display: grid;
+  margin: 0;
+  padding: 0 0 31px;
+  border: 0;
+  border-bottom: 1px solid #e2e2d9;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.applicationRolePicker legend {
+  margin-bottom: 10px;
+  color: #465653;
+  font-size: 0.63rem;
+  font-weight: 850;
+}
+
+.applicationRolePicker button {
+  display: grid;
+  min-width: 0;
+  min-height: 105px;
+  padding: 14px;
+  border: 1px solid #d9ddd6;
+  border-radius: 16px;
+  color: #64706d;
+  background: #faf9f4;
+  align-items: center;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 11px;
+  text-align: left;
+  transition: border 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.applicationRolePicker button:hover { border-color: #9cbeb7; transform: translateY(-1px); }
+.applicationRolePicker button.active { border-color: #2b8d80; color: var(--talent-ink); background: #ecf8f3; box-shadow: 0 9px 24px rgba(16, 91, 82, 0.1); }
+.applicationRolePicker button.active.host { border-color: #df826b; background: #fff2ec; box-shadow: 0 9px 24px rgba(199, 88, 62, 0.09); }
+
+.applicationRolePicker button > i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #17766c;
+  background: #ddf3eb;
+  place-items: center;
+}
+
+.applicationRolePicker button.host > i { color: #b94d36; background: #ffe0d5; }
+.applicationRolePicker svg { width: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+.applicationRolePicker button > span { display: grid; min-width: 0; gap: 4px; }
+.applicationRolePicker strong { color: inherit; font-size: 0.72rem; }
+.applicationRolePicker small { color: #7c8582; font-size: 0.54rem; font-weight: 600; line-height: 1.4; }
+.applicationRolePicker em { color: #8a928f; font-size: 0.52rem; font-style: normal; font-weight: 800; }
+.applicationRolePicker button.active em { color: #15766b; }
+.applicationRolePicker button.active.host em { color: #b94d36; }
+
+.applicationFormSection {
+  padding: 31px 0;
+  border-bottom: 1px solid #e2e2d9;
+}
+
+.applicationFormSection > header {
+  display: flex;
+  margin-bottom: 20px;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.applicationFormSection > header > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--talent-ink);
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 850;
+  place-items: center;
+}
+
+.applicationFormSection header h3 { margin: 0; font-family: "Fraunces", serif; font-size: 1.13rem; letter-spacing: -0.02em; }
+.applicationFormSection header p { margin: 3px 0 0; color: #79827f; font-size: 0.59rem; line-height: 1.5; }
+.hostPortfolioSection { margin: 0 -18px; padding-right: 18px; padding-left: 18px; background: linear-gradient(90deg, rgba(255, 231, 220, 0.48), transparent); }
+.hostPortfolioSection > header > span { background: var(--talent-coral); }
+.finalSection { border-bottom: 0; }
+
+.applicationFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.applicationFields label {
+  display: grid;
+  min-width: 0;
+  color: #465653;
+  gap: 7px;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.applicationFields label.wide { grid-column: 1 / -1; }
+.applicationFields input:not([type="checkbox"]),
+.applicationFields textarea {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #d4d9d2;
+  border-radius: 12px;
+  color: #183b38;
+  background: #fff;
+  font: inherit;
+  font-size: 0.71rem;
+  font-weight: 600;
+  line-height: 1.55;
+  outline: none;
+  resize: vertical;
+  transition: border 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.applicationFields input:not([type="checkbox"]) { min-height: 48px; }
+.applicationFields input::placeholder,
+.applicationFields textarea::placeholder { color: #a0a7a3; }
+.applicationFields input:focus,
+.applicationFields textarea:focus { border-color: #218579; background: #fffefa; box-shadow: 0 0 0 4px rgba(33, 133, 121, 0.1); }
+.applicationFields label > small { color: #8a928f; font-size: 0.53rem; font-weight: 600; }
+
+.applicationConsent {
+  display: flex !important;
+  padding: 14px;
+  border: 1px solid #dcded7;
+  border-radius: 12px;
+  background: #f7f7f1;
+  align-items: flex-start;
+  gap: 10px !important;
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.applicationConsent input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: #176f66; flex: 0 0 auto; }
+.applicationHoneypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
+.applicationFormError {
+  margin: 0 0 20px;
+  padding: 13px 15px;
+  border: 1px solid #edc2b8;
+  border-radius: 12px;
+  color: #a63d28;
+  background: #fff1ed;
+  font-size: 0.65rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.applicationSubmitRow {
+  display: flex;
+  padding-top: 7px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.applicationSubmitRow > span { max-width: 190px; color: #89918e; font-size: 0.55rem; line-height: 1.5; }
+.applicationSubmitRow button,
+.applicationSuccess button,
+.applicationSuccess a {
+  display: inline-flex;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 13px;
+  color: #fff;
+  background: var(--talent-coral);
+  box-shadow: 0 13px 26px rgba(202, 78, 49, 0.18);
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 0.68rem;
+  font-weight: 850;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.applicationSubmitRow button:hover:not(:disabled),
+.applicationSuccess button:hover,
+.applicationSuccess a:hover { text-decoration: none; box-shadow: 0 16px 30px rgba(202, 78, 49, 0.25); transform: translateY(-1px); }
+.applicationSubmitRow svg { width: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+
+.applicationSuccess {
+  display: flex;
+  min-height: min(620px, calc(100dvh - 130px));
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.applicationSuccessMark { display: grid; width: 70px; height: 70px; margin-bottom: 23px; border-radius: 22px; color: #fff; background: #16756b; box-shadow: 0 14px 30px rgba(22, 117, 107, 0.22); place-items: center; }
+.applicationSuccessMark svg { width: 34px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.applicationSuccess > p { margin: 0 0 10px; color: var(--talent-coral); font-size: 0.6rem; font-weight: 850; letter-spacing: 0.14em; text-transform: uppercase; }
+.applicationSuccess > span { max-width: 480px; margin-top: 16px; color: #6f7b78; font-size: 0.75rem; line-height: 1.7; }
+.applicationSuccess > div { display: flex; margin-top: 30px; gap: 10px; }
+.applicationSuccess a { color: var(--talent-ink); border: 1px solid #ccd4cf; background: #fff; box-shadow: none; }
+
+@keyframes talentRise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes signalPulse {
+  50% { box-shadow: 0 0 0 6px rgba(242, 108, 79, 0.12); }
+}
+
+@media (max-width: 1000px) {
+  .loginExperience { grid-template-columns: minmax(350px, 0.85fr) minmax(430px, 1.15fr); }
+  .loginSignalBoard { display: none; }
+  .applicationPage { grid-template-columns: 320px minmax(0, 1fr); }
+  .applicationRoleNotes { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .loginExperience,
+  .applicationPage { display: block; }
+
+  .loginStory { min-height: 325px; padding: 26px 22px; }
+  .loginStoryCopy { margin: auto 0 0; }
+  .loginStoryCopy h1 { font-size: clamp(2.5rem, 12vw, 4.2rem); }
+  .loginStoryCopy > span { max-width: 520px; margin-top: 16px; font-size: 0.72rem; }
+  .loginStoryFooter { display: none; }
+  .loginAccessPanel { min-height: auto; padding: 34px 20px 30px; }
+  .loginAccessInner { width: min(100%, 560px); }
+  .loginLegal { text-align: center; }
+
+  .applicationStory { position: relative; height: auto; min-height: 440px; padding: 26px 22px 30px; }
+  .applicationStoryCopy { margin: 70px 0 30px; }
+  .applicationStoryCopy h1 { max-width: 560px; font-size: clamp(3rem, 13vw, 5rem); }
+  .applicationStoryCopy > p:last-child { font-size: 0.7rem; }
+  .applicationRoleNotes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .applicationStoryFooter { display: none; }
+  .applicationFormShell { padding: 0 16px 50px; }
+  .applicationTopbar { min-height: 64px; }
+  .applicationForm,
+  .applicationSuccess { margin-top: 5px; border-radius: 22px; }
+}
+
+@media (max-width: 560px) {
+  .loginStory { min-height: 300px; }
+  .loginStoryCopy > p { margin-bottom: 12px; }
+  .loginStoryCopy h1 { font-size: clamp(2.35rem, 12.5vw, 3.6rem); }
+  .loginStoryCopy > span { display: none; }
+  .loginApplyPrompt { align-items: flex-start; flex-direction: column; }
+
+  .applicationStory { min-height: 390px; }
+  .applicationStoryCopy { margin-top: 52px; }
+  .applicationStoryCopy h1 { font-size: clamp(2.7rem, 14vw, 4rem); }
+  .applicationRoleNotes { display: none; }
+  .applicationTopbar > span { display: none; }
+  .applicationForm,
+  .applicationSuccess { padding: 25px 18px; }
+  .applicationRolePicker,
+  .applicationFields { grid-template-columns: 1fr; }
+  .applicationFields label.wide { grid-column: auto; }
+  .applicationRolePicker button { min-height: 92px; }
+  .applicationSubmitRow { align-items: stretch; flex-direction: column; }
+  .applicationSubmitRow > span { max-width: none; }
+  .applicationSubmitRow button { width: 100%; }
+  .applicationSuccess > div { width: 100%; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loginStoryCopy,
+  .loginSignalBoard,
+  .loginAccessInner,
+  .applicationStoryCopy,
+  .applicationRoleNotes,
+  .applicationForm,
+  .applicationSuccess { animation: none; }
+  .signalHeader strong i { animation: none; }
+}
+
 @media (max-width: 600px) {
   body {
     background:
