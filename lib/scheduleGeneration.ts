@@ -43,9 +43,9 @@ export async function generateAndPublishScheduleWeek(
     getScheduleSessionsForGeneration(weekStartKey, weekEndKey)
   ]);
   const people = [...(roster.hosts || []), ...(roster.supports || [])];
-  const hostAvailability = availability.filter((slot) => slot.role === "host" && slot.dateKey > todayKey);
-  if (hostAvailability.length === 0) {
-    throw new Error("Chưa có Host gửi slot rảnh trong phần còn lại của tuần. Lịch hiện tại được giữ nguyên.");
+  const futureAvailability = availability.filter((slot) => slot.dateKey > todayKey);
+  if (futureAvailability.length === 0) {
+    throw new Error("Chưa có Host hoặc Support gửi slot rảnh trong phần còn lại của tuần. Lịch hiện tại được giữ nguyên.");
   }
 
   const protectedSessions = existingSessions.filter(

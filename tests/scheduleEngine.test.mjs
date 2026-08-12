@@ -5,7 +5,8 @@ import { generateSchedule } from "../lib/scheduleEngine.ts";
 const slots = [
   "08:00 - 10:00",
   "10:00 - 12:00",
-  "12:00 - 14:00"
+  "12:00 - 14:00",
+  "14:00 - 16:00"
 ];
 
 function person(id, role, overrides = {}) {
@@ -45,10 +46,36 @@ function run(people, availability, protectedSessions = []) {
   });
 }
 
-test("support availability never creates a session without host availability", () => {
+test("support availability creates an open Studio session with Host empty", () => {
   const support = person("HRSL01", "support");
   const rows = run([support], [available("support", support.id, "2026-08-13", slots[0])]);
-  assert.equal(rows.length, 0);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].hostId, "");
+  assert.equal(rows[0].format, "Studio");
+  assert.equal(rows[0].status, "open");
+});
+
+test("two consecutive support-only slots share one Support assignment", () => {
+  const support = person("HRSL01", "support");
+  const rows = run(
+    [support],
+    slots.slice(0, 2).map((slot) => available("support", support.id, "2026-08-13", slot))
+  );
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((row) => row.hostId === ""));
+  assert.deepEqual(rows.map((row) => row.supportId), [support.id, support.id]);
+  assert.ok(rows.every((row) => row.status === "open"));
+});
+
+test("four support-only slots stay visible while _6H keeps its weekday four-hour limit", () => {
+  const support = person("HRSL01_6H", "support");
+  const rows = run(
+    [support],
+    slots.map((slot) => available("support", support.id, "2026-08-13", slot))
+  );
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map((row) => row.supportId), [support.id, support.id, "", ""]);
+  assert.ok(rows.every((row) => row.hostId === "" && row.status === "open"));
 });
 
 test("Both defaults to Home and Home never receives Support", () => {
@@ -71,7 +98,7 @@ test("host is limited to two sessions in one day", () => {
   const host = person("HRLT01", "host", { workLocation: "home" });
   const rows = run(
     [host],
-    slots.map((slot) => available("host", host.id, "2026-08-13", slot, "home"))
+    slots.slice(0, 3).map((slot) => available("host", host.id, "2026-08-13", slot, "home"))
   );
   assert.equal(rows.length, 3);
   assert.equal(rows.filter((row) => row.hostId === host.id).length, 2);
@@ -100,7 +127,7 @@ test("weekend six-hour block only uses a _6H Support", () => {
   ];
   const normalSupport = person("HRSL01", "support");
   const sixHourSupport = person("HRSL02_6H", "support", { cashOffer: "45.000" });
-  const availability = slots.flatMap((slot) => [
+  const availability = slots.slice(0, 3).flatMap((slot) => [
     ...hosts.map((host) => available("host", host.id, "2026-08-15", slot, "studio")),
     available("support", normalSupport.id, "2026-08-15", slot),
     available("support", sixHourSupport.id, "2026-08-15", slot)

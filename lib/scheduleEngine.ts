@@ -219,6 +219,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
   );
   const hostSlots = new Map<string, SubmittedScheduleSlot[]>();
   const supportAvailability = new Set<string>();
+  const supportSlotKeys = new Set<string>();
 
   submittedSlots.forEach((item) => {
     const key = `${item.dateKey}__${item.slot}`;
@@ -228,6 +229,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
       hostSlots.set(key, bucket);
     } else {
       supportAvailability.add(`${personKey("support", item.employeeId)}__${key}`);
+      supportSlotKeys.add(key);
     }
   });
 
@@ -256,9 +258,11 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     }
   });
 
-  const demands = Array.from(hostSlots.entries())
-    .filter(([key]) => !protectedSlotKeys.has(key))
-    .map(([key, entries]) => {
+  const demandKeys = new Set([...hostSlots.keys(), ...supportSlotKeys]);
+  const demands = Array.from(demandKeys)
+    .filter((key) => !protectedSlotKeys.has(key))
+    .map((key) => {
+      const entries = hostSlots.get(key) || [];
       const [dateKey, slot] = key.split("__");
       const candidatesByPerson = new Map<string, HostCandidate>();
       entries.forEach((entry) => {
@@ -272,7 +276,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
           });
         });
       const candidates = Array.from(candidatesByPerson.values());
-      return { dateKey, slot, entries, candidates };
+      return { dateKey, slot, candidates, hasSupportAvailability: supportSlotKeys.has(key) };
     })
     .sort((left, right) => {
       if (left.candidates.length !== right.candidates.length) return left.candidates.length - right.candidates.length;
@@ -305,6 +309,11 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     const row = buildEmptySession(demand.dateKey, demand.slot);
     if (!primary) {
       row.warnings.push("OPEN_HOST: Không có Host đủ điều kiện để xếp ca.");
+      if (demand.hasSupportAvailability) {
+        row.format = "Studio";
+        row.supportRequired = true;
+        row.missingSupport = true;
+      }
       generated.push({ row });
       return;
     }
