@@ -16,7 +16,8 @@ import type {
   AvailabilityAdminRoleFilter,
   AvailabilityAdminSlotSummary,
   AvailabilityAdminStatusFilter,
-  AvailabilitySubmissionState
+  AvailabilitySubmissionState,
+  SchedulePayload
 } from "@/lib/types";
 
 type AvailabilityAdminDashboardProps = {
@@ -126,7 +127,9 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [statusFilter, setStatusFilter] = useState<AvailabilityAdminStatusFilter>("all");
   const [payload, setPayload] = useState<AvailabilityAdminDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [error, setError] = useState("");
+  const [scheduleMessage, setScheduleMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
 
@@ -139,6 +142,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     });
     setLoading(true);
     setError("");
+    setScheduleMessage("");
 
     void fetch(`/api/availability/summary?${params.toString()}`, {
       cache: "no-store",
@@ -182,6 +186,29 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
+  }
+
+  async function generateWeekSchedule() {
+    setGeneratingSchedule(true);
+    setError("");
+    setScheduleMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStartKey })
+      });
+      const result = (await response.json()) as SchedulePayload;
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || result.error || "Không chạy được lịch tuần.");
+      }
+      setScheduleMessage(result.sync?.message || `Đã chạy lịch tuần ${formatWeekRange(weekStartKey)}.`);
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Không chạy được lịch tuần.");
+    } finally {
+      setGeneratingSchedule(false);
+    }
   }
 
   return (
@@ -260,10 +287,30 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <Icon name="refresh" size={18} />
               <span>{loading ? "Đang tải" : "Làm mới"}</span>
             </button>
+            <button
+              className="availabilitySummaryGenerate"
+              disabled={loading || generatingSchedule}
+              onClick={generateWeekSchedule}
+              type="button"
+            >
+              <span className="availabilitySummaryGenerateIcon"><Icon name="calendar" size={20} /></span>
+              <span>
+                <strong>{generatingSchedule ? "Đang chạy lịch tuần..." : "Chạy lịch tuần"}</strong>
+                <small>Xếp và cập nhật thẳng vào lịch chính</small>
+              </span>
+              <em>{formatWeekRange(weekStartKey)}</em>
+            </button>
           </div>
         </div>
 
         {error ? <div className="notice errorNotice"><Icon name="warning" />{error}</div> : null}
+        {scheduleMessage ? (
+          <div className="notice successNotice availabilityScheduleSuccess">
+            <Icon name="calendar" />
+            <span>{scheduleMessage}</span>
+            <a href={`/?weekStartKey=${weekStartKey}`}>Mở lịch chính</a>
+          </div>
+        ) : null}
 
         <div className={`availabilitySummaryContent ${loading ? "isLoading" : ""}`} aria-busy={loading}>
           <div className="availabilityKpiGrid">

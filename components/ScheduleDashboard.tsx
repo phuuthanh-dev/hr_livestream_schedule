@@ -10,6 +10,7 @@ type ScheduleDashboardProps = {
   isAdmin: boolean;
   employeeRole?: "host" | "support";
   employeeId?: string;
+  initialWeekStartKey?: string;
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
@@ -269,8 +270,8 @@ async function requestWeekSchedule(from: string, to: string) {
   return payload;
 }
 
-export default function ScheduleDashboard({ username, isAdmin, employeeRole, employeeId }: ScheduleDashboardProps) {
-  const [weekStartKey, setWeekStartKey] = useState(getCurrentWeekStartKey);
+export default function ScheduleDashboard({ username, isAdmin, employeeRole, employeeId, initialWeekStartKey }: ScheduleDashboardProps) {
+  const [weekStartKey, setWeekStartKey] = useState(() => initialWeekStartKey || getCurrentWeekStartKey());
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
   const [generatedAt, setGeneratedAt] = useState("");
   const [timezone, setTimezone] = useState("");
