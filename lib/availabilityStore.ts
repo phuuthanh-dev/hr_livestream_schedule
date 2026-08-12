@@ -305,10 +305,15 @@ export async function saveAvailabilityWeek(
 
   await client.withSession(async (mongoSession) => {
     await mongoSession.withTransaction(async () => {
-      const [existingWeek, existingSlotDocuments] = await Promise.all([
-        weeks.findOne({ personKey, weekStartKey }, { session: mongoSession }),
-        slots.find({ personKey, weekStartKey }, { session: mongoSession }).toArray()
-      ]);
+      // A MongoDB transaction must use its session sequentially; parallel commands
+      // can advance the transaction number out of order on the server.
+      const existingWeek = await weeks.findOne(
+        { personKey, weekStartKey },
+        { session: mongoSession }
+      );
+      const existingSlotDocuments = await slots
+        .find({ personKey, weekStartKey }, { session: mongoSession })
+        .toArray();
       if (existingWeek?.status === "locked" && !input.allowLockedOverwrite) {
         throw new Error("Tuần này đã bị khóa nên bạn không thể chỉnh lịch rảnh.");
       }
