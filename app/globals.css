@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,650;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap");
-
 :root {
   --blue: #0b57d0;
   --blue-soft: #d3e3fd;
@@ -31,10 +29,13 @@ body {
 body {
   margin: 0;
   color: var(--ink);
-  font-family: "Manrope", sans-serif;
+  font-family: var(--font-manrope), "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background:
     radial-gradient(circle at 8% 8%, rgba(211, 227, 253, 0.58), transparent 26rem),
     var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -112,7 +113,7 @@ a:hover {
 
 .loginCard h1 {
   margin: 0;
-  font-family: "Fraunces", serif;
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
   font-size: clamp(2.5rem, 7vw, 5rem);
   line-height: 0.96;
   letter-spacing: -0.055em;
@@ -1264,14 +1265,14 @@ a:hover {
 }
 
 .miniMonthHeader strong {
-  font-size: 0.87rem;
+  font-size: 0.88rem;
   text-transform: capitalize;
 }
 
 .miniMonthHeader span {
   color: var(--muted);
-  font-size: 0.64rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .miniMonth {
@@ -1285,8 +1286,8 @@ a:hover {
   display: grid;
   height: 28px;
   color: #70757a;
-  font-size: 0.61rem;
-  font-weight: 800;
+  font-size: 0.72rem;
+  font-weight: 700;
   place-items: center;
 }
 
@@ -1301,7 +1302,7 @@ a:hover {
   color: #3c4043;
   background: transparent;
   place-items: center;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 600;
 }
 
@@ -1354,7 +1355,7 @@ a:hover {
   outline: 0;
   color: var(--ink);
   background: transparent;
-  font-size: 0.74rem;
+  font-size: 0.78rem;
 }
 
 .calendarSearch input::placeholder {
@@ -1368,9 +1369,9 @@ a:hover {
 .sidebarLabel {
   margin: 0 10px 7px;
   color: #80868b;
-  font-size: 0.61rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .filterOption {
@@ -1385,7 +1386,7 @@ a:hover {
   align-items: center;
   gap: 10px;
   text-align: left;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 650;
 }
 
@@ -1401,7 +1402,7 @@ a:hover {
 
 .filterOption strong {
   color: #747a80;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
 }
 
 .filterDot {
@@ -1445,7 +1446,7 @@ a:hover {
 .weekHealthTitle {
   margin-bottom: 10px;
   justify-content: space-between;
-  font-size: 0.74rem;
+  font-size: 0.78rem;
 }
 
 .weekHealthTitle strong {
@@ -1456,7 +1457,7 @@ a:hover {
   min-height: 29px;
   color: var(--muted);
   justify-content: space-between;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 650;
 }
 
@@ -1506,13 +1507,13 @@ a:hover {
 .sourceStatus strong {
   overflow: hidden;
   color: #3c4043;
-  font-size: 0.67rem;
+  font-size: 0.74rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sourceStatus span:not(.sourceIcon) {
-  font-size: 0.58rem;
+  font-size: 0.65rem;
   line-height: 1.5;
 }
 
@@ -1544,13 +1545,13 @@ a:hover {
 
 .employeeViewCopy strong {
   color: #244d3e;
-  font-size: 0.76rem;
+  font-size: 0.8rem;
 }
 
 .employeeViewCopy span {
   overflow: hidden;
   color: #69736f;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1568,12 +1569,12 @@ a:hover {
   display: inline-flex;
   min-height: 34px;
   padding: 0 12px;
-  border-radius: 9px;
+  border-radius: 99px;
   color: #59625f;
   background: transparent;
   align-items: center;
   gap: 7px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 750;
 }
 
@@ -1597,7 +1598,7 @@ a:hover {
   color: inherit;
   background: rgba(128, 138, 134, 0.12);
   place-items: center;
-  font-size: 0.61rem;
+  font-size: 0.68rem;
 }
 
 .employeeViewSwitch button.active strong {
@@ -1660,18 +1661,19 @@ a:hover {
   min-height: 84px;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.96);
-  grid-template-columns: 72px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 92px repeat(7, minmax(0, 1fr));
   backdrop-filter: blur(12px);
 }
 
 .timezoneCorner {
   display: flex;
-  padding: 0 8px 10px 0;
-  color: #8a9095;
+  padding: 0 6px 10px;
+  color: #70757a;
   align-items: flex-end;
-  justify-content: flex-end;
-  font-size: 0.55rem;
-  font-weight: 700;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .dayHeader {
@@ -1685,9 +1687,9 @@ a:hover {
 }
 
 .dayHeader span {
-  font-size: 0.61rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .dayHeader strong {
@@ -1697,8 +1699,8 @@ a:hover {
   border-radius: 50%;
   color: #3c4043;
   place-items: center;
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-size: 1.28rem;
+  font-weight: 600;
 }
 
 .dayHeader.today span {
@@ -1723,7 +1725,7 @@ a:hover {
   background: rgba(255, 255, 255, 0.96);
   align-items: center;
   gap: 18px;
-  font-size: 0.59rem;
+  font-size: 0.68rem;
   font-weight: 700;
   backdrop-filter: blur(12px);
 }
@@ -1731,7 +1733,7 @@ a:hover {
 .calendarMetaRow > span {
   width: 44px;
   color: #92979c;
-  font-size: 0.54rem;
+  font-size: 0.62rem;
   letter-spacing: 0.08em;
 }
 
@@ -1758,11 +1760,12 @@ a:hover {
 
 .timeRow {
   display: grid;
-  min-height: 112px;
-  grid-template-columns: 72px repeat(7, minmax(0, 1fr));
+  min-height: 118px;
+  grid-template-columns: 92px repeat(7, minmax(0, 1fr));
 }
 
 .timeLabel {
+  margin-top: 20px;
   position: relative;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -1774,7 +1777,7 @@ a:hover {
   padding: 0 3px;
   color: #8a9095;
   background: #fff;
-  font-size: 0.57rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 
@@ -1801,8 +1804,8 @@ a:hover {
   display: flex;
   min-width: 0;
   width: 100%;
-  min-height: 54px;
-  padding: 6px 7px 6px 9px;
+  min-height: 56px;
+  padding: 5px 7px;
   border-left: 4px solid var(--event-border);
   border-radius: 6px;
   color: var(--event-ink);
@@ -1862,7 +1865,7 @@ a:hover {
 
 .eventTopline strong {
   overflow: hidden;
-  font-size: 0.66rem;
+  font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: -0.015em;
   text-overflow: ellipsis;
@@ -1875,17 +1878,17 @@ a:hover {
 
 .eventPeople {
   overflow: hidden;
-  opacity: 0.9;
-  font-size: 0.56rem;
-  font-weight: 600;
+  opacity: 0.95;
+  font-size: 0.68rem;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .eventMeta {
   margin-top: auto;
-  opacity: 0.86;
-  font-size: 0.51rem;
+  opacity: 0.9;
+  font-size: 0.64rem;
   font-weight: 750;
 }
 
@@ -3526,8 +3529,8 @@ a:hover {
   }
 
   .mobileDayStrip button span {
-    font-size: 0.55rem;
-    font-weight: 800;
+    font-size: 0.7rem;
+    font-weight: 700;
     letter-spacing: 0.04em;
   }
 
@@ -5265,18 +5268,19 @@ a:hover {
 
 .availabilityPeopleTable th,
 .availabilityPeopleTable td {
-  padding: 13px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid #e9edef;
   text-align: left;
   vertical-align: middle;
+  font-size: 0.78rem;
 }
 
 .availabilityPeopleTable th {
   color: #788689;
   background: #fbfdfd;
-  font-size: 0.59rem;
-  font-weight: 850;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -5293,14 +5297,14 @@ a:hover {
 
 .availabilityPersonIdentity > i {
   display: grid;
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   color: #fff;
   background: linear-gradient(145deg, #15324a, #0f766e);
   flex: 0 0 auto;
   place-items: center;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-style: normal;
   font-weight: 850;
 }
@@ -5312,24 +5316,24 @@ a:hover {
 
 .availabilityPersonIdentity strong {
   color: #263d40;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 
 .availabilityPersonIdentity small,
 .availabilityUpdatedAt {
   color: #7c898c;
-  font-size: 0.59rem;
+  font-size: 0.68rem;
   font-weight: 650;
 }
 
 .availabilityRoleBadge,
 .availabilitySubmissionBadge {
   display: inline-flex;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 27px;
+  padding: 0 9px;
   border-radius: 999px;
   align-items: center;
-  font-size: 0.61rem;
+  font-size: 0.7rem;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -6046,20 +6050,20 @@ a:hover {
 
 .locationTable th,
 .locationTable td {
-  padding: 14px 15px;
+  padding: 12px 14px;
   border-bottom: 1px solid #e8edef;
   color: #526467;
   text-align: left;
   vertical-align: middle;
-  font-size: 0.62rem;
+  font-size: 0.78rem;
 }
 
 .locationTable th {
   color: #7b898c;
   background: #fbfdfd;
-  font-size: 0.55rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -6453,13 +6457,13 @@ a:hover {
 }
 
 .employeeHeroStats span {
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 0.57rem;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.7rem;
   font-weight: 750;
 }
 
 .employeeHeroStats strong {
-  font-family: "Fraunces", serif;
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
   font-size: 1.85rem;
   line-height: 1;
 }
@@ -6507,7 +6511,7 @@ a:hover {
   background: transparent;
   outline: none;
   font: inherit;
-  font-size: 0.67rem;
+  font-size: 0.78rem;
 }
 
 .employeeToolbar > select {
@@ -6520,7 +6524,7 @@ a:hover {
   background: #fff;
   outline: none;
   font: inherit;
-  font-size: 0.62rem;
+  font-size: 0.76rem;
   font-weight: 750;
 }
 
@@ -6533,7 +6537,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  font-size: 0.61rem;
+  font-size: 0.76rem;
   font-weight: 850;
   white-space: nowrap;
   cursor: pointer;
@@ -6570,12 +6574,12 @@ a:hover {
 
 .employeeRosterMeta strong {
   color: #263f42;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 
 .employeeRosterMeta span {
   color: #819093;
-  font-size: 0.57rem;
+  font-size: 0.7rem;
 }
 
 .employeeTableWrap {
@@ -6589,20 +6593,20 @@ a:hover {
 
 .employeeTable th,
 .employeeTable td {
-  padding: 13px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid #e8eeee;
   color: #526568;
   text-align: left;
   vertical-align: middle;
-  font-size: 0.61rem;
+  font-size: 0.78rem;
 }
 
 .employeeTable th {
   color: #7b898c;
   background: #fbfdfd;
-  font-size: 0.54rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -6628,14 +6632,14 @@ a:hover {
 
 .employeeIdentity > i {
   display: grid;
-  width: 39px;
-  height: 39px;
-  border-radius: 13px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   color: #fff;
   background: linear-gradient(145deg, #17344a, #26667a);
   flex: 0 0 auto;
   place-items: center;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-style: normal;
   font-weight: 850;
 }
@@ -6653,19 +6657,19 @@ a:hover {
 .employeeIdentity strong,
 .employeeStackValue strong {
   color: #263f42;
-  font-size: 0.66rem;
+  font-size: 0.8rem;
 }
 
 .employeeIdentity code {
   color: #0f766e;
   font-family: "Space Mono", monospace;
-  font-size: 0.55rem;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
 .employeeIdentity small {
   color: #c6533a;
-  font-size: 0.51rem;
+  font-size: 0.66rem;
   font-weight: 750;
 }
 
@@ -6676,7 +6680,7 @@ a:hover {
 .employeeStackValue small,
 .employeeUpdatedAt {
   color: #879497;
-  font-size: 0.54rem;
+  font-size: 0.68rem;
   font-weight: 650;
 }
 
@@ -6687,8 +6691,8 @@ a:hover {
   padding: 0 9px;
   border-radius: 999px;
   align-items: center;
-  font-size: 0.55rem;
-  font-weight: 850;
+  font-size: 0.7rem;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -6721,7 +6725,7 @@ a:hover {
 .employeeRowActions button {
   display: inline-flex;
   min-height: 31px;
-  padding: 0 9px;
+  padding: 0 10px;
   border: 1px solid #d4dfe0;
   border-radius: 8px;
   color: #526467;
@@ -6729,7 +6733,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  font-size: 0.54rem;
+  font-size: 0.72rem;
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;

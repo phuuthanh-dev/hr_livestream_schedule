@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Manrope, Fraunces } from "next/font/google";
 import "./globals.css";
+
+const manrope = Manrope({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin", "vietnamese"],
+  weight: ["600", "700", "800"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "HR Streaming Schedule",
@@ -18,8 +33,9 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" className={`${manrope.variable} ${fraunces.variable}`}>
       <body>{children}</body>
     </html>
   );
 }
+

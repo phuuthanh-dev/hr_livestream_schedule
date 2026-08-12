@@ -33,7 +33,7 @@ type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
-  cashOffer: "", castStatus: "", experience: "", trainingStatus: "", notes: "", achievements: "",
+  cashOffer: "", castStatus: "Đồng ý", experience: "", trainingStatus: "", notes: "", achievements: "",
   zaloStatus: "", liveAccountType: "", liveChannelId: "", active: true
 };
 
@@ -290,14 +290,14 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
           {filteredEmployees.length ? (
             <div className="employeeTableWrap">
               <table className="employeeTable">
-                <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Liên hệ</th><th>Level / Địa điểm</th><th>Training / Cast</th><th>Trạng thái</th><th>Cập nhật</th><th /></tr></thead>
+                <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Liên hệ</th><th>Level / Địa điểm</th><th>Training</th><th>Trạng thái</th><th>Cập nhật</th><th /></tr></thead>
                 <tbody>{filteredEmployees.map((employee) => (
                   <tr className={employee.active === false ? "inactive" : ""} key={`${employee.role}:${employee.id}`}>
                     <td data-label="Nhân viên"><span className={`employeeIdentity ${employee.role}`}><i>{employee.name.slice(0, 1).toUpperCase()}</i><span><strong>{employee.name}</strong><code>{employee.id}</code>{isIncomplete(employee) ? <small>Thiếu thông tin bắt buộc</small> : null}</span></span></td>
                     <td data-label="Vai trò"><span className={`employeeRoleBadge ${employee.role}`}>{employee.role === "host" ? "Host" : "Support"}</span></td>
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
                     <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm" : "Support Live"}</small></span></td>
-                    <td data-label="Training / Cast"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong><small>{employee.castStatus || "Chưa cập nhật cast"}</small></span></td>
+                    <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong></span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
                     <td data-label="Thao tác"><div className="employeeRowActions"><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button></div></td>
@@ -326,7 +326,6 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                 <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => ({ ...current, level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
                 {form.role === "host" ? <label><span>Địa điểm</span><select required value={form.workLocation} onChange={(event) => setForm((current) => ({ ...current, workLocation: event.target.value }))}>{locations.map((location) => <option disabled={!location.active} key={location.code} value={location.code}>{location.name}{location.active ? "" : " · Tạm ngưng"}</option>)}</select></label> : null}
                 <label><span>Cash offer</span><input value={form.cashOffer} onChange={(event) => setForm((current) => ({ ...current, cashOffer: event.target.value }))} /></label>
-                <label><span>Đồng ý cast</span><input value={form.castStatus} onChange={(event) => setForm((current) => ({ ...current, castStatus: event.target.value }))} /></label>
                 <label><span>Kinh nghiệm</span><input value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} /></label>
                 <label><span>Training</span><input value={form.trainingStatus} onChange={(event) => setForm((current) => ({ ...current, trainingStatus: event.target.value }))} /></label>
                 <label className="wide"><span>CV / Portfolio</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} /></label>

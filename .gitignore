@@ -8,4 +8,9 @@ node_modules/
 .env*.local
 !.env.example
 ~$*.xlsx
+*.xlsx
+*.xls
+*.xlsm
+*.xlsb
 nguon/
+*docx
