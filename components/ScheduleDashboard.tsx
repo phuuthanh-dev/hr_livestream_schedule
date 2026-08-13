@@ -23,7 +23,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "search" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "location" | "logout" | "money" | "search" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -77,6 +77,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "location") {
     return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
+  }
+  if (name === "money") {
+    return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M15 8.5c-.7-.5-1.5-.8-2.5-.8-1.4 0-2.5.7-2.5 1.8 0 2.8 5 1.2 5 4 0 1.1-1.1 1.8-2.5 1.8-1 0-2-.3-2.8-.9M12.5 6v12" /></svg>;
   }
   if (name === "search") {
     return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
@@ -547,6 +550,10 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         <a className="syncButton availabilityShortcut" href="/availability/summary">
           <Icon name="calendar" />
           <span>Lịch rảnh</span>
+        </a>
+        <a className="syncButton payrollShortcut" href="/payroll">
+          <Icon name="money" />
+          <span>Tính lương</span>
         </a>
       </div>
     );

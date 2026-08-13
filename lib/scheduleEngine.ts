@@ -1,4 +1,5 @@
 import type { AvailabilityLocationPreference, SchedulePerson, ScheduleSession } from "./types";
+import { buildScheduleLaneKey, getScheduleSessionLane, type ScheduleLane } from "./scheduleLane.ts";
 
 export type SubmittedScheduleSlot = {
   personKey: string;
@@ -20,7 +21,7 @@ export type ScheduleEngineInput = {
 
 type HostCandidate = {
   person: SchedulePerson;
-  location: "home" | "studio";
+  location: ScheduleLane;
 };
 
 type GeneratedItem = {
@@ -123,11 +124,11 @@ function addDateDays(dateKey: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function sessionId(dateKey: string, slot: string) {
+function sessionId(dateKey: string, slot: string, lane: ScheduleLane) {
   const start = slotStartMinutes(slot);
   const hours = String(Math.floor(start / 60)).padStart(2, "0");
   const minutes = String(start % 60).padStart(2, "0");
-  return `AUTO_${dateKey.replace(/-/g, "")}_${hours}${minutes}`;
+  return `AUTO_${dateKey.replace(/-/g, "")}_${hours}${minutes}_${lane.toUpperCase()}`;
 }
 
 function locationForHost(person: SchedulePerson, preference?: AvailabilityLocationPreference) {
@@ -153,11 +154,12 @@ function compareText(left: string, right: string) {
   return left.localeCompare(right, "vi", { sensitivity: "base" });
 }
 
-function buildEmptySession(dateKey: string, slot: string): ScheduleSession {
+function buildEmptySession(dateKey: string, slot: string, lane: ScheduleLane): ScheduleSession {
+  const isStudio = lane === "studio";
   return {
     rowNumber: 0,
     stt: "",
-    sessionId: sessionId(dateKey, slot),
+    sessionId: sessionId(dateKey, slot, lane),
     dateKey,
     dateLabel: dateLabel(dateKey),
     weekday: weekdayLabel(dateKey),
@@ -165,7 +167,7 @@ function buildEmptySession(dateKey: string, slot: string): ScheduleSession {
     slotSortKey: String(slotStartMinutes(slot)).padStart(4, "0"),
     hostId: "",
     hostName: "",
-    format: "",
+    format: isStudio ? "Studio" : "Home",
     supportId: "",
     supportName: "",
     channel: "",
@@ -183,9 +185,9 @@ function buildEmptySession(dateKey: string, slot: string): ScheduleSession {
     isSupportConfirmed: false,
     canConfirmHost: false,
     canConfirmSupport: false,
-    supportRequired: false,
+    supportRequired: isStudio,
     isSupportOnly: false,
-    missingSupport: false,
+    missingSupport: isStudio,
     warningLevel: "danger",
     warnings: []
   };
@@ -222,19 +224,28 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
   const supportSlotKeys = new Set<string>();
 
   submittedSlots.forEach((item) => {
-    const key = `${item.dateKey}__${item.slot}`;
     if (item.role === "host") {
+      const person = peopleByKey.get(personKey("host", item.employeeId));
+      if (!person || person.role !== "host" || !isQualified(person)) return;
+      const location = locationForHost(person, item.locationPreference);
+      if (!location) return;
+      const key = buildScheduleLaneKey(item.dateKey, item.slot, location);
       const bucket = hostSlots.get(key) || [];
       bucket.push(item);
       hostSlots.set(key, bucket);
     } else {
-      supportAvailability.add(`${personKey("support", item.employeeId)}__${key}`);
-      supportSlotKeys.add(key);
+      const slotKey = buildScheduleLaneKey(item.dateKey, item.slot, "studio");
+      supportAvailability.add(`${personKey("support", item.employeeId)}__${item.dateKey}__${item.slot}`);
+      supportSlotKeys.add(slotKey);
     }
   });
 
   const protectedSlotKeys = new Set(
-    input.protectedSessions.map((row) => `${row.dateKey}__${row.slot}`)
+    input.protectedSessions.map((row) => buildScheduleLaneKey(
+      row.dateKey,
+      row.slot,
+      getScheduleSessionLane(row)
+    ))
   );
   const hostWeekCounts = new Map<string, number>();
   const hostDayCounts = new Map<string, number>();
@@ -263,20 +274,21 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     .filter((key) => !protectedSlotKeys.has(key))
     .map((key) => {
       const entries = hostSlots.get(key) || [];
-      const [dateKey, slot] = key.split("__");
+      const [dateKey, slot, laneValue] = key.split("__");
+      const lane: ScheduleLane = laneValue === "home" ? "home" : "studio";
       const candidatesByPerson = new Map<string, HostCandidate>();
       entries.forEach((entry) => {
           const person = peopleByKey.get(personKey("host", entry.employeeId));
           if (!person || person.role !== "host" || !isQualified(person)) return;
           const location = locationForHost(person, entry.locationPreference);
-          if (!location) return;
+          if (!location || location !== lane) return;
           candidatesByPerson.set(personKey("host", person.id), {
             person,
             location
           });
         });
       const candidates = Array.from(candidatesByPerson.values());
-      return { dateKey, slot, candidates, hasSupportAvailability: supportSlotKeys.has(key) };
+      return { dateKey, slot, lane, candidates, hasSupportAvailability: supportSlotKeys.has(key) };
     })
     .sort((left, right) => {
       if (left.candidates.length !== right.candidates.length) return left.candidates.length - right.candidates.length;
@@ -306,14 +318,9 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
 
     const primary = eligible[0];
     const backup = eligible[1];
-    const row = buildEmptySession(demand.dateKey, demand.slot);
+    const row = buildEmptySession(demand.dateKey, demand.slot, demand.lane);
     if (!primary) {
       row.warnings.push("OPEN_HOST: Không có Host đủ điều kiện để xếp ca.");
-      if (demand.hasSupportAvailability) {
-        row.format = "Studio";
-        row.supportRequired = true;
-        row.missingSupport = true;
-      }
       generated.push({ row });
       return;
     }
@@ -435,7 +442,9 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     .map((item) => item.row)
     .sort((left, right) => {
       if (left.dateKey !== right.dateKey) return left.dateKey.localeCompare(right.dateKey);
-      return slotStartMinutes(left.slot) - slotStartMinutes(right.slot);
+      const slotDifference = slotStartMinutes(left.slot) - slotStartMinutes(right.slot);
+      if (slotDifference) return slotDifference;
+      return getScheduleSessionLane(left).localeCompare(getScheduleSessionLane(right));
     })
     .map((row, index) => ({ ...row, rowNumber: index + 1, stt: String(index + 1) }));
 }

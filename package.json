@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test:schedule": "node --experimental-strip-types --test tests/scheduleEngine.test.mjs",
+    "test:payroll": "node --experimental-strip-types --test tests/payrollEngine.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -15,7 +16,8 @@
     "mongodb": "^7.5.0",
     "next": "^16.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "read-excel-file": "^9.3.10"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

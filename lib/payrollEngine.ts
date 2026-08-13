@@ -1,0 +1,337 @@
+import { createHash } from "node:crypto";
+import type { TikTokReportFragment } from "./payrollImport.ts";
+import { getScheduleSessionLane } from "./scheduleLane.ts";
+import type {
+  PayrollEntry,
+  PayrollException,
+  PayrollRateCard,
+  PayrollRole,
+  PayrollSettings,
+  SchedulePerson,
+  ScheduleSession
+} from "./types.ts";
+
+type LogicalLive = {
+  key: string;
+  dateKey: string;
+  accountId: string;
+  startAt: Date;
+  endAt: Date;
+  grossGmv: number;
+  returnedGmv: number;
+  tiktokLiveIds: string[];
+};
+
+export type PayrollCalculationInput = {
+  weekStartKey: string;
+  weekEndKey: string;
+  sessions: ScheduleSession[];
+  people: SchedulePerson[];
+  fragments: TikTokReportFragment[];
+  rates: PayrollRateCard[];
+  settings: PayrollSettings;
+  generatedAt?: Date;
+};
+
+function normalizeText(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("vi")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeAccount(value: string) {
+  return value.trim().toLowerCase().replace(/^@/, "");
+}
+
+function hashKey(parts: Array<string | number>) {
+  return createHash("sha256").update(parts.join("|")).digest("hex");
+}
+
+function personKey(role: PayrollRole, employeeId: string) {
+  return `${role}:${employeeId.trim().toLowerCase()}`;
+}
+
+function parseSlotRange(dateKey: string, slot: string) {
+  const match = slot.match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
+  if (!match) return null;
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const startMinutes = Number(match[1]) * 60 + Number(match[2]);
+  let endMinutes = Number(match[3]) * 60 + Number(match[4]);
+  if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+  const base = Date.UTC(year, month - 1, day, -7, 0, 0, 0);
+  return {
+    startAt: new Date(base + startMinutes * 60_000),
+    endAt: new Date(base + endMinutes * 60_000),
+    hours: (endMinutes - startMinutes) / 60
+  };
+}
+
+function overlapMilliseconds(
+  left: { startAt: Date; endAt: Date },
+  right: { startAt: Date; endAt: Date }
+) {
+  return Math.max(0, Math.min(left.endAt.getTime(), right.endAt.getTime()) - Math.max(left.startAt.getTime(), right.startAt.getTime()));
+}
+
+function joinFragments(fragments: TikTokReportFragment[], gapMinutes: number): LogicalLive[] {
+  const buckets = new Map<string, TikTokReportFragment[]>();
+  fragments.forEach((fragment) => {
+    const key = `${fragment.dateKey}__${normalizeAccount(fragment.accountId)}`;
+    const bucket = buckets.get(key) || [];
+    bucket.push(fragment);
+    buckets.set(key, bucket);
+  });
+
+  const lives: LogicalLive[] = [];
+  buckets.forEach((bucket) => {
+    const sorted = bucket.slice().sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
+    let current: LogicalLive | null = null;
+    sorted.forEach((fragment) => {
+      const withinGap = current
+        && fragment.startAt.getTime() - current.endAt.getTime() <= gapMinutes * 60_000;
+      if (!current || !withinGap) {
+        current = {
+          key: hashKey([fragment.dateKey, normalizeAccount(fragment.accountId), fragment.tiktokLiveId, fragment.startAt.toISOString()]),
+          dateKey: fragment.dateKey,
+          accountId: fragment.accountId,
+          startAt: fragment.startAt,
+          endAt: fragment.endAt,
+          grossGmv: fragment.grossGmv,
+          returnedGmv: fragment.returnedGmv,
+          tiktokLiveIds: [fragment.tiktokLiveId]
+        };
+        lives.push(current);
+        return;
+      }
+      current.endAt = new Date(Math.max(current.endAt.getTime(), fragment.endAt.getTime()));
+      current.grossGmv += fragment.grossGmv;
+      current.returnedGmv += fragment.returnedGmv;
+      if (!current.tiktokLiveIds.includes(fragment.tiktokLiveId)) current.tiktokLiveIds.push(fragment.tiktokLiveId);
+    });
+  });
+  return lives.sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
+}
+
+function canonicalGrade(role: PayrollRole, value: string) {
+  const normalized = normalizeText(value);
+  if (role === "support") {
+    const level = normalized.match(/(\d+)/)?.[1];
+    return level ? `cap ${level}` : normalized;
+  }
+  if (normalized.includes("thu viec") || normalized.includes("trial") || normalized.includes("trainee")) return "thu viec";
+  return normalized.match(/^[sabc](?:\s|$)/)?.[0].trim() || normalized;
+}
+
+function findRate(rates: PayrollRateCard[], role: PayrollRole, grade: string) {
+  const canonical = canonicalGrade(role, grade);
+  return rates.find((rate) => rate.active && rate.role === role && canonicalGrade(role, rate.grade) === canonical);
+}
+
+function commissionRateFor(rate: PayrollRateCard, eligibleGmv: number, settings: PayrollSettings) {
+  if (rate.commissionMode === "none") return 0;
+  if (rate.commissionMode === "fixed") return rate.commissionRate;
+  return settings.hostGmvTiers
+    .slice()
+    .sort((left, right) => left.minimumGmv - right.minimumGmv)
+    .reduce((selected, tier) => eligibleGmv >= tier.minimumGmv ? tier.commissionRate : selected, 0);
+}
+
+export function calculatePayroll(input: PayrollCalculationInput) {
+  const generatedAt = input.generatedAt || new Date();
+  const peopleByKey = new Map(input.people.map((person) => [personKey(person.role, person.id), person]));
+  const lives = joinFragments(input.fragments, input.settings.joinGapMinutes);
+  const exceptions: PayrollException[] = [];
+  const usableSessions = input.sessions.filter((session) => session.status !== "canceled" && session.hostId);
+  const sessionRanges = new Map<string, ReturnType<typeof parseSlotRange>>();
+  usableSessions.forEach((session) => sessionRanges.set(session.sessionId, parseSlotRange(session.dateKey, session.slot)));
+
+  usableSessions.forEach((session) => {
+    if (session.channel.trim()) return;
+    exceptions.push({
+      exceptionKey: hashKey(["missing_account", session.sessionId]),
+      type: "missing_account",
+      dateKey: session.dateKey,
+      sessionId: session.sessionId,
+      employeeId: session.hostId,
+      message: `${session.hostName || session.hostId} chưa có TikTok account để đối chiếu báo cáo.`
+    });
+  });
+
+  const liveByKey = new Map(lives.map((live) => [live.key, live]));
+  const sessionsByLive = new Map<string, ScheduleSession[]>();
+  const matchedSessionIds = new Set<string>();
+  usableSessions.filter((session) => session.channel.trim()).forEach((session) => {
+    const range = sessionRanges.get(session.sessionId);
+    if (!range) return;
+    const candidates = lives
+      .filter((live) => live.dateKey === session.dateKey && normalizeAccount(live.accountId) === normalizeAccount(session.channel))
+      .map((live) => ({
+        live,
+        overlap: overlapMilliseconds(range, live),
+        minimumOverlap: Math.min(30 * 60_000, (live.endAt.getTime() - live.startAt.getTime()) / 2)
+      }))
+      .filter((candidate) => candidate.overlap >= candidate.minimumOverlap)
+      .sort((left, right) => right.overlap - left.overlap);
+    const best = candidates[0];
+    if (!best) return;
+    const bucket = sessionsByLive.get(best.live.key) || [];
+    bucket.push(session);
+    sessionsByLive.set(best.live.key, bucket);
+    matchedSessionIds.add(session.sessionId);
+  });
+
+  lives.forEach((live) => {
+    if (sessionsByLive.has(live.key)) return;
+    exceptions.push({
+      exceptionKey: hashKey(["unmatched_report", live.key]),
+      type: "unmatched_report",
+      dateKey: live.dateKey,
+      accountId: live.accountId,
+      tiktokLiveIds: live.tiktokLiveIds,
+      message: `Báo cáo ${live.accountId} ${live.startAt.toLocaleTimeString("vi-VN", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" })} chưa khớp ca lịch.`
+    });
+  });
+
+  usableSessions.forEach((session) => {
+    const confirmedRoles = [
+      session.isHostConfirmed && session.hostId ? { role: "host" as const, id: session.hostId, name: session.hostName } : null,
+      getScheduleSessionLane(session) === "studio" && session.isSupportConfirmed && session.supportId
+        ? { role: "support" as const, id: session.supportId, name: session.supportName }
+        : null
+    ].filter(Boolean) as Array<{ role: PayrollRole; id: string; name: string }>;
+    if (confirmedRoles.length > 0 && !matchedSessionIds.has(session.sessionId)) {
+      confirmedRoles.forEach((person) => exceptions.push({
+        exceptionKey: hashKey(["missing_report", session.sessionId, person.role, person.id]),
+        type: "missing_report",
+        dateKey: session.dateKey,
+        sessionId: session.sessionId,
+        employeeId: person.id,
+        accountId: session.channel || undefined,
+        message: `Ca ${session.slot} của ${person.name || person.id} chưa có báo cáo TikTok; chưa tự động tính lương.`
+      }));
+    }
+  });
+
+  const entries: PayrollEntry[] = [];
+  sessionsByLive.forEach((sessions, liveKey) => {
+    const live = liveByKey.get(liveKey);
+    if (!live) return;
+    const eligibleGmv = Math.max(0, live.grossGmv - live.returnedGmv);
+    const confirmedHostSessions = sessions.filter((session) => {
+      if (session.isHostConfirmed) return true;
+      exceptions.push({
+        exceptionKey: hashKey(["unconfirmed_shift", session.sessionId, "host"]),
+        type: "unconfirmed_shift",
+        dateKey: session.dateKey,
+        sessionId: session.sessionId,
+        employeeId: session.hostId,
+        message: `Host ${session.hostName || session.hostId} chưa xác nhận ca ${session.slot}; ca chưa được tính lương.`
+      });
+      return false;
+    });
+    const hostIds = new Set(confirmedHostSessions.map((session) => session.hostId.toLowerCase()));
+    if (hostIds.size > 1) {
+      exceptions.push({
+        exceptionKey: hashKey(["ambiguous_assignment", live.key, "host"]),
+        type: "ambiguous_assignment",
+        dateKey: live.dateKey,
+        accountId: live.accountId,
+        tiktokLiveIds: live.tiktokLiveIds,
+        message: "Một phiên logic đang khớp nhiều Host; cần Admin kiểm tra trước khi tính lương."
+      });
+    } else if (confirmedHostSessions.length > 0) {
+      buildEntry("host", confirmedHostSessions, live, eligibleGmv);
+    }
+
+    const supportGroups = new Map<string, ScheduleSession[]>();
+    sessions.filter((session) => getScheduleSessionLane(session) === "studio" && session.supportId).forEach((session) => {
+      if (!session.isSupportConfirmed) {
+        exceptions.push({
+          exceptionKey: hashKey(["unconfirmed_shift", session.sessionId, "support"]),
+          type: "unconfirmed_shift",
+          dateKey: session.dateKey,
+          sessionId: session.sessionId,
+          employeeId: session.supportId,
+          message: `Support ${session.supportName || session.supportId} chưa xác nhận ca ${session.slot}; ca chưa được tính lương.`
+        });
+        return;
+      }
+      const key = session.supportId.toLowerCase();
+      const bucket = supportGroups.get(key) || [];
+      bucket.push(session);
+      supportGroups.set(key, bucket);
+    });
+    supportGroups.forEach((supportSessions) => buildEntry("support", supportSessions, live, eligibleGmv));
+  });
+
+  function buildEntry(
+    role: PayrollRole,
+    sessions: ScheduleSession[],
+    live: LogicalLive,
+    eligibleGmv: number
+  ) {
+    const first = sessions[0];
+    const employeeId = role === "host" ? first.hostId : first.supportId;
+    const fallbackName = role === "host" ? first.hostName : first.supportName;
+    const person = peopleByKey.get(personKey(role, employeeId));
+    const grade = person?.level || "";
+    const rate = findRate(input.rates, role, grade);
+    if (!rate) {
+      exceptions.push({
+        exceptionKey: hashKey(["missing_rate", live.key, role, employeeId]),
+        type: "missing_rate",
+        dateKey: live.dateKey,
+        employeeId,
+        accountId: live.accountId,
+        message: `${person?.name || fallbackName || employeeId} chưa có bảng giá phù hợp với grade “${grade || "trống"}”.`
+      });
+      return;
+    }
+    const uniqueSessions = Array.from(new Map(sessions.map((session) => [session.sessionId, session])).values());
+    const scheduledHours = uniqueSessions.reduce((total, session) => total + (sessionRanges.get(session.sessionId)?.hours || 0), 0);
+    const commissionRate = commissionRateFor(rate, eligibleGmv, input.settings);
+    const basePay = Math.round(scheduledHours * rate.hourlyRate);
+    const commissionPay = Math.round(eligibleGmv * commissionRate);
+    const adjustments = 0;
+    const grossPay = basePay + commissionPay + adjustments;
+    const taxAmount = Math.round(grossPay * input.settings.taxRate);
+    entries.push({
+      entryKey: hashKey([input.weekStartKey, live.key, role, employeeId.toLowerCase()]),
+      weekStartKey: input.weekStartKey,
+      weekEndKey: input.weekEndKey,
+      dateKey: live.dateKey,
+      role,
+      employeeId,
+      employeeName: person?.name || fallbackName || employeeId,
+      grade,
+      location: getScheduleSessionLane(first),
+      accountId: live.accountId,
+      sessionIds: uniqueSessions.map((session) => session.sessionId),
+      tiktokLiveIds: live.tiktokLiveIds,
+      scheduledHours,
+      hourlyRate: rate.hourlyRate,
+      grossGmv: live.grossGmv,
+      returnedGmv: live.returnedGmv,
+      eligibleGmv,
+      commissionRate,
+      basePay,
+      commissionPay,
+      adjustments,
+      grossPay,
+      taxRate: input.settings.taxRate,
+      taxAmount,
+      netPay: grossPay - taxAmount,
+      generatedAt: generatedAt.toISOString()
+    });
+  }
+
+  return {
+    entries: entries.sort((left, right) => [left.dateKey, left.employeeName].join("|").localeCompare([right.dateKey, right.employeeName].join("|"), "vi")),
+    exceptions: Array.from(new Map(exceptions.map((exception) => [exception.exceptionKey, exception])).values())
+  };
+}

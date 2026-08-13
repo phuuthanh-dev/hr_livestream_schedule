@@ -4,6 +4,7 @@ import { findActiveSchedulePerson } from "@/lib/employeeRoster";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
+import { buildScheduleLaneKey, getScheduleSessionLane } from "@/lib/scheduleLane";
 import type {
   AccountType,
   AvailabilityLocationPreference,
@@ -302,10 +303,10 @@ export async function publishGeneratedScheduleWeek(
       const protectedSlotKeys = new Set(
         existingFutureRows
           .filter((row) => row.isHostConfirmed || row.isSupportConfirmed || row.manualOverride)
-          .map((row) => `${row.dateKey}__${row.slot}`)
+          .map((row) => buildScheduleLaneKey(row.dateKey, row.slot, getScheduleSessionLane(row)))
       );
       const rowsToPublish = normalizedRows.filter(
-        (row) => !protectedSlotKeys.has(`${row.dateKey}__${row.slot}`)
+        (row) => !protectedSlotKeys.has(buildScheduleLaneKey(row.dateKey, row.slot, getScheduleSessionLane(row)))
       );
       const publishKeys = rowsToPublish.map((row) => row.sessionId);
 

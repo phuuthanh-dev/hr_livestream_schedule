@@ -256,3 +256,118 @@ export type AvailabilityAdminDashboardPayload = {
   slots?: AvailabilityAdminSlotSummary[];
   message?: string;
 };
+
+export type PayrollRole = EmployeeRole;
+export type PayrollCommissionMode = "none" | "fixed" | "gmv_tier";
+export type PayrollPeriodStatus = "draft" | "locked";
+
+export type PayrollRateCard = {
+  id: string;
+  role: PayrollRole;
+  grade: string;
+  hourlyRate: number;
+  commissionMode: PayrollCommissionMode;
+  commissionRate: number;
+  sortOrder: number;
+  active: boolean;
+  note?: string;
+};
+
+export type PayrollGmvTier = {
+  minimumGmv: number;
+  commissionRate: number;
+};
+
+export type PayrollSettings = {
+  taxRate: number;
+  joinGapMinutes: number;
+  hostGmvTiers: PayrollGmvTier[];
+};
+
+export type PayrollEntry = {
+  entryKey: string;
+  weekStartKey: string;
+  weekEndKey: string;
+  dateKey: string;
+  role: PayrollRole;
+  employeeId: string;
+  employeeName: string;
+  grade: string;
+  location: "home" | "studio";
+  accountId: string;
+  sessionIds: string[];
+  tiktokLiveIds: string[];
+  scheduledHours: number;
+  hourlyRate: number;
+  grossGmv: number;
+  returnedGmv: number;
+  eligibleGmv: number;
+  commissionRate: number;
+  basePay: number;
+  commissionPay: number;
+  adjustments: number;
+  grossPay: number;
+  taxRate: number;
+  taxAmount: number;
+  netPay: number;
+  generatedAt: string;
+};
+
+export type PayrollExceptionType =
+  | "missing_report"
+  | "unmatched_report"
+  | "missing_account"
+  | "missing_rate"
+  | "ambiguous_assignment"
+  | "unconfirmed_shift";
+
+export type PayrollException = {
+  exceptionKey: string;
+  type: PayrollExceptionType;
+  dateKey: string;
+  message: string;
+  accountId?: string;
+  sessionId?: string;
+  employeeId?: string;
+  tiktokLiveIds?: string[];
+};
+
+export type PayrollImportRecord = {
+  batchId: string;
+  fileName: string;
+  importedAt: string;
+  importedBy: string;
+  totalRows: number;
+  inserted: number;
+  duplicates: number;
+  invalidRows: number;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export type PayrollDashboardSummary = {
+  employeeCount: number;
+  entryCount: number;
+  scheduledHours: number;
+  grossGmv: number;
+  basePay: number;
+  commissionPay: number;
+  taxAmount: number;
+  netPay: number;
+  exceptionCount: number;
+};
+
+export type PayrollDashboardPayload = {
+  success: boolean;
+  weekStartKey?: string;
+  weekEndKey?: string;
+  periodStatus?: PayrollPeriodStatus;
+  generatedAt?: string;
+  summary?: PayrollDashboardSummary;
+  entries?: PayrollEntry[];
+  exceptions?: PayrollException[];
+  rates?: PayrollRateCard[];
+  settings?: PayrollSettings;
+  imports?: PayrollImportRecord[];
+  message?: string;
+};

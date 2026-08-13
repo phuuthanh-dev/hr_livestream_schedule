@@ -79,7 +79,7 @@ test("four support-only slots stay visible while _6H keeps its weekday four-hour
   assert.ok(rows.every((row) => row.hostId === "" && row.status === "open"));
 });
 
-test("Both defaults to Home and Home never receives Support", () => {
+test("Both defaults to Home while Support availability opens a separate Studio lane", () => {
   const host = person("HRLT01", "host", { workLocation: "both" });
   const support = person("HRSL01", "support");
   const rows = run(
@@ -89,10 +89,30 @@ test("Both defaults to Home and Home never receives Support", () => {
       available("support", support.id, "2026-08-13", slots[0])
     ]
   );
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].format, "Home");
-  assert.equal(rows[0].supportId, "");
-  assert.equal(rows[0].status, "published");
+  assert.equal(rows.length, 2);
+  const home = rows.find((row) => row.format === "Home");
+  const studio = rows.find((row) => row.format === "Studio");
+  assert.equal(home?.hostId, host.id);
+  assert.equal(home?.supportId, "");
+  assert.equal(home?.status, "published");
+  assert.equal(studio?.hostId, "");
+  assert.equal(studio?.status, "open");
+});
+
+test("one slot can contain one Studio live and one Home live", () => {
+  const studioHost = person("HRLT01", "host", { workLocation: "studio" });
+  const homeHost = person("HRLT02", "host", { workLocation: "home" });
+  const rows = run(
+    [studioHost, homeHost],
+    [
+      available("host", studioHost.id, "2026-08-13", slots[0], "studio"),
+      available("host", homeHost.id, "2026-08-13", slots[0], "home")
+    ]
+  );
+
+  assert.equal(rows.length, 2);
+  assert.deepEqual(new Set(rows.map((row) => row.format)), new Set(["Home", "Studio"]));
+  assert.equal(new Set(rows.map((row) => row.sessionId)).size, 2);
 });
 
 test("host is limited to two sessions in one day", () => {
