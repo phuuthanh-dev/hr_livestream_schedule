@@ -5,7 +5,7 @@ import { nextEmployeeIdForRole } from "@/lib/applicationAutomation";
 import { deleteContractImage } from "@/lib/contractCloudinary";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
-import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
+import { getMongoDatabase } from "@/lib/mongodb";
 import type { EmployeeRole, HostWorkLocation, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
 import { syncEmployeeAccountProfile } from "@/lib/userAccounts";
 
@@ -226,9 +226,7 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
   const existing = await collection.findOne({ personKey: buildPersonKey(role, employeeId) });
   if (!existing) throw new Error("Không tìm thấy nhân viên.");
 
-  const client = await getMongoClient();
   const database = await getMongoDatabase();
-  const session = client.startSession();
   const personKey = buildPersonKey(role, employeeId);
   const contractCollection = database.collection("employee_contract_profiles");
   const availabilityWeeks = database.collection("schedule_availability_weeks");
@@ -251,32 +249,17 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
   const applicationFilters: Array<Record<string, unknown>> = [{ employeeId }];
   if (existing.phone) applicationFilters.push({ normalizedPhone: existing.phone, role });
 
-  let deleted;
-  try {
-    deleted = await session.withTransaction(async () => {
-      const [rosterResult, accountResult, contractResult, availabilityWeekResult, availabilitySlotResult, applicationResult] = await Promise.all([
-        collection.deleteOne({ personKey }, { session }),
-        userAccounts.deleteOne({ accountKey: `employee:${role}:${normalizeEmployeeId(employeeId)}` }, { session }),
-        contractCollection.deleteOne({ personKey }, { session }),
-        availabilityWeeks.deleteMany({ personKey }, { session }),
-        availabilitySlots.deleteMany({ personKey }, { session }),
-        applications.deleteMany({ $or: applicationFilters }, { session })
-      ]);
+  const [rosterResult, accountResult, contractResult, availabilityWeekResult, availabilitySlotResult, applicationResult] = await Promise.all([
+    collection.deleteOne({ personKey }),
+    userAccounts.deleteOne({ accountKey: `employee:${role}:${normalizeEmployeeId(employeeId)}` }),
+    contractCollection.deleteOne({ personKey }),
+    availabilityWeeks.deleteMany({ personKey }),
+    availabilitySlots.deleteMany({ personKey }),
+    applications.deleteMany({ $or: applicationFilters })
+  ]);
 
-      if (rosterResult.deletedCount !== 1) {
-        throw new Error("Không xoá được hồ sơ nhân viên.");
-      }
-
-      return {
-        accounts: accountResult.deletedCount,
-        contracts: contractResult.deletedCount,
-        availabilityWeeks: availabilityWeekResult.deletedCount,
-        availabilitySlots: availabilitySlotResult.deletedCount,
-        applications: applicationResult.deletedCount
-      };
-    });
-  } finally {
-    await session.endSession();
+  if (rosterResult.deletedCount !== 1) {
+    throw new Error("Không xoá được hồ sơ nhân viên.");
   }
 
   const contractImageIds = [contractDocument?.citizenIdFront?.publicId, contractDocument?.citizenIdBack?.publicId]
@@ -285,7 +268,13 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
 
   return {
     employee: toSchedulePerson(existing),
-    deleted
+    deleted: {
+      accounts: accountResult.deletedCount,
+      contracts: contractResult.deletedCount,
+      availabilityWeeks: availabilityWeekResult.deletedCount,
+      availabilitySlots: availabilitySlotResult.deletedCount,
+      applications: applicationResult.deletedCount
+    }
   };
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { FormEvent } from "react";
 import { useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
@@ -101,6 +102,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SchedulePerson | null>(null);
   const deferredQuery = useDeferredValue(query.trim().toLocaleLowerCase("vi"));
 
   async function loadData() {
@@ -196,11 +198,6 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   }
 
   async function hardDeleteEmployee(employee: SchedulePerson) {
-    const confirmed = window.confirm(
-      `Xoá cứng ${employee.name} (${employee.id})?\n\nHệ thống sẽ xoá hẳn hồ sơ nhân viên, tài khoản đăng nhập, hợp đồng, lịch rảnh và hồ sơ ứng tuyển liên kết. Thao tác này không hoàn tác được.`
-    );
-    if (!confirmed) return;
-
     setBusy(`delete:${employee.role}:${employee.id}`);
     setError("");
     setMessage("");
@@ -212,6 +209,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
       });
       const payload = (await response.json()) as EmployeeAdminPayload;
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không xoá được nhân viên.");
+      setDeleteTarget(null);
       setMessage(payload.message || "Đã xoá cứng nhân viên.");
       await loadData();
     } catch (deleteError) {
@@ -328,7 +326,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => void hardDeleteEmployee(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
+                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -374,6 +372,40 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
       ) : null}
 
       {accountPanelOpen ? <AccountPanel isAdmin username={username} onClose={() => setAccountPanelOpen(false)} /> : null}
+      <AlertDialog.Root
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !busy.startsWith("delete:")) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="employeeDeleteOverlay" />
+          <AlertDialog.Content className="employeeDeleteDialog">
+            <AlertDialog.Title>Xoá cứng nhân viên</AlertDialog.Title>
+            <AlertDialog.Description>
+              {deleteTarget
+                ? `Bạn sắp xoá hẳn ${deleteTarget.name} (${deleteTarget.id}). Hệ thống sẽ dọn hồ sơ nhân viên, tài khoản đăng nhập, hợp đồng, lịch rảnh và hồ sơ ứng tuyển liên kết.`
+                : "Bạn sắp xoá hẳn nhân viên này."}
+            </AlertDialog.Description>
+            <p>Thao tác này không hoàn tác được.</p>
+            <div className="employeeDeleteActions">
+              <AlertDialog.Cancel asChild>
+                <button disabled={busy.startsWith("delete:")} type="button">Huỷ</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  className="danger"
+                  disabled={!deleteTarget || busy.startsWith("delete:")}
+                  onClick={() => deleteTarget ? void hardDeleteEmployee(deleteTarget) : undefined}
+                  type="button"
+                >
+                  {busy.startsWith("delete:") ? "Đang xoá..." : "Xoá hẳn"}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </main>
   );
 }
