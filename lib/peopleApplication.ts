@@ -155,6 +155,14 @@ function normalizeInput(input: PeopleApplicationInput) {
 }
 
 function toApplication(document: PeopleApplicationDocument): PeopleApplication {
+  const submittedAt = document.submittedAt instanceof Date
+    ? document.submittedAt
+    : document.updatedAt instanceof Date
+      ? document.updatedAt
+      : new Date();
+  const updatedAt = document.updatedAt instanceof Date
+    ? document.updatedAt
+    : submittedAt;
   return {
     applicationId: document.applicationId,
     employeeId: document.employeeId || undefined,
@@ -175,8 +183,8 @@ function toApplication(document: PeopleApplicationDocument): PeopleApplication {
     sheetSyncStatus: document.sheetSyncStatus,
     sheetSyncedAt: document.sheetSyncedAt?.toISOString(),
     sheetSyncError: document.sheetSyncError,
-    submittedAt: document.submittedAt.toISOString(),
-    updatedAt: document.updatedAt.toISOString()
+    submittedAt: submittedAt.toISOString(),
+    updatedAt: updatedAt.toISOString()
   };
 }
 
