@@ -27,6 +27,9 @@ type ContractDocuments = {
   citizenIdBack?: { publicId?: string } | null;
 };
 
+const MAX_CONTRACT_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_CONTRACT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function requiredText(value: unknown, label: string, maxLength: number) {
   const normalized = String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
   if (!normalized) throw new Error(`${label} không được để trống.`);
@@ -62,11 +65,14 @@ function requiredDate(value: unknown, label: string, today: Date) {
     throw new Error(`${label} không hợp lệ.`);
   }
 
-  const todayKey = [
-    today.getUTCFullYear(),
-    String(today.getUTCMonth() + 1).padStart(2, "0"),
-    String(today.getUTCDate()).padStart(2, "0")
-  ].join("-");
+  const todayParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(today);
+  const todayPart = (type: Intl.DateTimeFormatPartTypes) => todayParts.find((part) => part.type === type)?.value || "";
+  const todayKey = `${todayPart("year")}-${todayPart("month")}-${todayPart("day")}`;
   if (normalized > todayKey) throw new Error(`${label} không được nằm trong tương lai.`);
   return normalized;
 }
@@ -103,4 +109,13 @@ export function normalizeEmployeeContractInput(
 
 export function isEmployeeContractComplete(documents: ContractDocuments) {
   return Boolean(documents.citizenIdFront?.publicId && documents.citizenIdBack?.publicId);
+}
+
+export function validateEmployeeContractImageInput(input: { contentType: unknown; size: unknown }) {
+  if (!ALLOWED_CONTRACT_IMAGE_TYPES.has(String(input.contentType ?? ""))) {
+    throw new Error("Ảnh CCCD chỉ nhận định dạng JPEG, PNG hoặc WebP.");
+  }
+  const size = Number(input.size);
+  if (!Number.isFinite(size) || size <= 0) throw new Error("Tệp CCCD đang trống.");
+  if (size > MAX_CONTRACT_IMAGE_BYTES) throw new Error("Mỗi ảnh CCCD không được vượt quá 10 MB.");
 }

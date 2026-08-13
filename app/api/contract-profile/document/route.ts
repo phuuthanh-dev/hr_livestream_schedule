@@ -29,5 +29,7 @@ export async function GET(request: Request) {
   const file = side === "front" ? profile?.citizenIdFront : profile?.citizenIdBack;
   if (!file) return NextResponse.json({ success: false, message: "Chưa có ảnh CCCD này." }, { status: 404 });
 
-  return NextResponse.redirect(getContractImageDownloadUrl(file));
+  const response = NextResponse.redirect(getContractImageDownloadUrl(file));
+  response.headers.set("cache-control", "private, no-store");
+  return response;
 }

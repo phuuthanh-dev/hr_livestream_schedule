@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isEmployeeContractComplete,
-  normalizeEmployeeContractInput
+  normalizeEmployeeContractInput,
+  validateEmployeeContractImageInput
 } from "../lib/employeeContractValidation.ts";
 
 const validInput = {
@@ -63,6 +64,13 @@ test("rejects impossible or future dates", () => {
   );
 });
 
+test("accepts the current Vietnam date while the server is still on the previous UTC date", () => {
+  assert.doesNotThrow(() => normalizeEmployeeContractInput(
+    { ...validInput, citizenIdIssuedDate: "2026-08-13" },
+    new Date("2026-08-12T18:00:00.000Z")
+  ));
+});
+
 test("requires a numeric bank account number", () => {
   assert.throws(
     () => normalizeEmployeeContractInput({ ...validInput, bankAccountNumber: "ABC-123" }),
@@ -76,4 +84,22 @@ test("marks a contract complete only after both CCCD sides are uploaded", () => 
     citizenIdFront: { publicId: "front" },
     citizenIdBack: { publicId: "back" }
   }), true);
+});
+
+test("accepts supported CCCD images up to 10 MB", () => {
+  assert.doesNotThrow(() => validateEmployeeContractImageInput({
+    contentType: "image/jpeg",
+    size: 10 * 1024 * 1024
+  }));
+});
+
+test("rejects unsupported or oversized CCCD files", () => {
+  assert.throws(
+    () => validateEmployeeContractImageInput({ contentType: "application/pdf", size: 1000 }),
+    /JPEG, PNG hoặc WebP/
+  );
+  assert.throws(
+    () => validateEmployeeContractImageInput({ contentType: "image/png", size: 10 * 1024 * 1024 + 1 }),
+    /10 MB/
+  );
 });

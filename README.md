@@ -28,9 +28,10 @@ DASHBOARD_AUTH_SECRET=long-random-secret
 MONGODB_URI=mongodb+srv://USER:PASSWORD@HOST/
 MONGODB_DB=hr_streaming
 ADMIN_BOOTSTRAP_PASSWORD=your-initial-admin-password
+CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 ```
 
-`ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng để khởi tạo Admin lần đầu. Không commit mật khẩu hoặc MongoDB URI thật vào repository.
+`ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng để khởi tạo Admin lần đầu. `CLOUDINARY_URL` chỉ được dùng ở server để ký upload trực tiếp và lưu ảnh CCCD ở chế độ `authenticated`; ảnh không đi qua giới hạn request body của Vercel Function. Không commit mật khẩu, MongoDB URI hoặc khóa Cloudinary thật vào repository.
 
 ## Collections
 
@@ -42,6 +43,8 @@ ADMIN_BOOTSTRAP_PASSWORD=your-initial-admin-password
 - `schedule_sessions`: lịch chính được generator website tạo.
 - `schedule_sync_runs`: lịch sử mỗi lần chạy lịch tuần.
 - `schedule_confirmation_events`: audit log xác nhận và hủy xác nhận.
+- `people_applications`: hồ sơ ứng tuyển gửi từ trang `/apply`.
+- `employee_contract_profiles`: thông tin hợp đồng và metadata ảnh CCCD riêng tư; không chứa BHXH.
 
 ## Local Dev
 

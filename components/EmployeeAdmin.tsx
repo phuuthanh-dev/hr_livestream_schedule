@@ -218,7 +218,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   }
 
   const activeEmployees = employees.filter((employee) => employee.active !== false);
-  const incompleteCount = activeEmployees.filter(isIncomplete).length;
+  const completedContractCount = activeEmployees.filter((employee) => employee.contractProfile?.completed).length;
   const locationNameByCode = new Map(locations.map((location) => [location.code, location.name]));
   const filteredEmployees = employees.filter((employee) => {
     if (roleFilter !== "all" && employee.role !== roleFilter) return false;
@@ -260,7 +260,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             <article><span>Đang hoạt động</span><strong>{activeEmployees.length}</strong></article>
             <article><span>Host</span><strong>{activeEmployees.filter((employee) => employee.role === "host").length}</strong></article>
             <article><span>Support</span><strong>{activeEmployees.filter((employee) => employee.role === "support").length}</strong></article>
-            <article className={incompleteCount ? "warning" : ""}><span>Thiếu thông tin</span><strong>{incompleteCount}</strong></article>
+            <article className={completedContractCount < activeEmployees.length ? "warning" : ""}><span>Hợp đồng hoàn tất</span><strong>{completedContractCount}/{activeEmployees.length}</strong></article>
           </div>
         </div>
 
@@ -290,7 +290,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
           {filteredEmployees.length ? (
             <div className="employeeTableWrap">
               <table className="employeeTable">
-                <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Liên hệ</th><th>Level / Địa điểm</th><th>Training</th><th>Trạng thái</th><th>Cập nhật</th><th /></tr></thead>
+                <thead><tr><th>Nhân viên</th><th>Vai trò</th><th>Liên hệ</th><th>Level / Địa điểm</th><th>Training</th><th>Hợp đồng</th><th>Trạng thái</th><th>Cập nhật</th><th /></tr></thead>
                 <tbody>{filteredEmployees.map((employee) => (
                   <tr className={employee.active === false ? "inactive" : ""} key={`${employee.role}:${employee.id}`}>
                     <td data-label="Nhân viên"><span className={`employeeIdentity ${employee.role}`}><i>{employee.name.slice(0, 1).toUpperCase()}</i><span><strong>{employee.name}</strong><code>{employee.id}</code>{isIncomplete(employee) ? <small>Thiếu thông tin bắt buộc</small> : null}</span></span></td>
@@ -298,9 +298,10 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
                     <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm" : "Support Live"}</small></span></td>
                     <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong></span></td>
+                    <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button></div></td>
+                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>

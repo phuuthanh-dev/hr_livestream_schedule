@@ -1,0 +1,296 @@
+"use client";
+
+import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, useState } from "react";
+import type { EmployeeContractDocumentSide, EmployeeContractProfile } from "@/lib/employeeContract";
+import type { EmployeeRole } from "@/lib/types";
+
+type EmployeeContractFormProps = {
+  username: string;
+  isAdmin: boolean;
+  targetRole?: EmployeeRole;
+  targetEmployeeId?: string;
+};
+
+type ContractFormState = {
+  gmail: string;
+  dateOfBirth: string;
+  citizenId: string;
+  citizenIdIssuedDate: string;
+  citizenIdIssuedPlace: string;
+  permanentAddress: string;
+  temporaryAddress: string;
+  bankAccountNumber: string;
+  bankName: string;
+};
+
+type ContractPayload = {
+  success: boolean;
+  target?: { role: EmployeeRole; employeeId: string; employeeName: string };
+  profile?: EmployeeContractProfile | null;
+  message?: string;
+};
+
+type ContractUploadPayload = ContractPayload & {
+  upload?: {
+    uploadUrl: string;
+    apiKey: string;
+    allowedFormats: string;
+    publicId: string;
+    timestamp: number;
+    signature: string;
+    deliveryType: "authenticated";
+  };
+};
+
+const EMPTY_FORM: ContractFormState = {
+  gmail: "",
+  dateOfBirth: "",
+  citizenId: "",
+  citizenIdIssuedDate: "",
+  citizenIdIssuedPlace: "",
+  permanentAddress: "",
+  temporaryAddress: "",
+  bankAccountNumber: "",
+  bankName: ""
+};
+
+function toForm(profile?: EmployeeContractProfile | null): ContractFormState {
+  if (!profile) return EMPTY_FORM;
+  return {
+    gmail: profile.gmail,
+    dateOfBirth: profile.dateOfBirth,
+    citizenId: profile.citizenId,
+    citizenIdIssuedDate: profile.citizenIdIssuedDate,
+    citizenIdIssuedPlace: profile.citizenIdIssuedPlace,
+    permanentAddress: profile.permanentAddress,
+    temporaryAddress: profile.temporaryAddress,
+    bankAccountNumber: profile.bankAccountNumber,
+    bankName: profile.bankName
+  };
+}
+
+function FileIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="m7 16 3.5-4 2.7 3 1.8-2 2 3M8 8h.01" /></svg>;
+}
+
+export default function EmployeeContractForm({
+  username,
+  isAdmin,
+  targetRole,
+  targetEmployeeId
+}: EmployeeContractFormProps) {
+  const [form, setForm] = useState<ContractFormState>(EMPTY_FORM);
+  const [target, setTarget] = useState<ContractPayload["target"]>();
+  const [profile, setProfile] = useState<EmployeeContractProfile | null>(null);
+  const [files, setFiles] = useState<Record<EmployeeContractDocumentSide, File | null>>({ front: null, back: null });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  function targetParams() {
+    const params = new URLSearchParams();
+    if (isAdmin && targetRole && targetEmployeeId) {
+      params.set("role", targetRole);
+      params.set("employeeId", targetEmployeeId);
+    }
+    return params;
+  }
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const params = targetParams();
+    void fetch(`/api/contract-profile${params.size ? `?${params.toString()}` : ""}`, { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json() as ContractPayload;
+        if (!response.ok || !payload.success || !payload.target) {
+          throw new Error(payload.message || "Không tải được thông tin hợp đồng.");
+        }
+        if (!active) return;
+        setTarget(payload.target);
+        setProfile(payload.profile || null);
+        setForm(toForm(payload.profile));
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Không tải được thông tin hợp đồng.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [isAdmin, targetEmployeeId, targetRole]);
+
+  function updateField(field: keyof ContractFormState, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function selectFile(side: EmployeeContractDocumentSide, event: ChangeEvent<HTMLInputElement>) {
+    setFiles((current) => ({ ...current, [side]: event.target.files?.[0] || null }));
+  }
+
+  async function uploadFile(side: EmployeeContractDocumentSide, file: File) {
+    const targetValues = isAdmin ? { role: targetRole, employeeId: targetEmployeeId } : {};
+    const signatureResponse = await fetch("/api/contract-profile/upload/signature", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...targetValues,
+        side,
+        contentType: file.type,
+        size: file.size
+      })
+    });
+    const signaturePayload = await signatureResponse.json() as ContractUploadPayload;
+    if (!signatureResponse.ok || !signaturePayload.success || !signaturePayload.upload) {
+      throw new Error(signaturePayload.message || "Không tạo được phiên tải CCCD.");
+    }
+
+    const upload = signaturePayload.upload;
+    const cloudinaryBody = new FormData();
+    cloudinaryBody.set("file", file);
+    cloudinaryBody.set("api_key", upload.apiKey);
+    cloudinaryBody.set("allowed_formats", upload.allowedFormats);
+    cloudinaryBody.set("public_id", upload.publicId);
+    cloudinaryBody.set("timestamp", String(upload.timestamp));
+    cloudinaryBody.set("signature", upload.signature);
+    cloudinaryBody.set("type", upload.deliveryType);
+    const cloudinaryResponse = await fetch(upload.uploadUrl, { method: "POST", body: cloudinaryBody });
+    const cloudinaryPayload = await cloudinaryResponse.json() as { public_id?: string; error?: { message?: string } };
+    if (!cloudinaryResponse.ok || cloudinaryPayload.public_id !== upload.publicId) {
+      throw new Error(cloudinaryPayload.error?.message || "Cloudinary không nhận được ảnh CCCD.");
+    }
+
+    const completeResponse = await fetch("/api/contract-profile/upload/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...targetValues,
+        side,
+        publicId: upload.publicId,
+        originalFilename: file.name
+      })
+    });
+    const completePayload = await completeResponse.json() as ContractPayload;
+    if (!completeResponse.ok || !completePayload.success || !completePayload.profile) {
+      throw new Error(completePayload.message || "Không xác nhận được ảnh CCCD.");
+    }
+    return completePayload.profile;
+  }
+
+  async function saveContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/contract-profile", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...form, role: targetRole, employeeId: targetEmployeeId })
+      });
+      const payload = await response.json() as ContractPayload;
+      if (!response.ok || !payload.success || !payload.profile) {
+        throw new Error(payload.message || "Không lưu được thông tin hợp đồng.");
+      }
+
+      let nextProfile = payload.profile;
+      setProfile(nextProfile);
+      for (const side of ["front", "back"] as const) {
+        const file = files[side];
+        if (file) {
+          nextProfile = await uploadFile(side, file);
+          setProfile(nextProfile);
+          setFiles((current) => ({ ...current, [side]: null }));
+        }
+      }
+      setProfile(nextProfile);
+      setMessage(nextProfile.completed ? "Hồ sơ hợp đồng đã đầy đủ và được lưu an toàn." : "Đã lưu thông tin. Hãy tải đủ hai mặt CCCD để hoàn tất hồ sơ.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Không lưu được thông tin hợp đồng.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function documentUrl(side: EmployeeContractDocumentSide) {
+    const params = targetParams();
+    params.set("side", side);
+    return `/api/contract-profile/document?${params.toString()}`;
+  }
+
+  const employeeName = target?.employeeName || username;
+  const identity = target ? `${target.role === "host" ? "Host" : "Support Live"} · ${target.employeeId}` : "Đang tải hồ sơ";
+
+  return (
+    <main className="contractApp">
+      <header className="appHeader contractHeader">
+        <div className="brandBlock"><span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span><span className="brandName">Hồ sơ hợp đồng</span></div>
+        <a className="todayButton" href={isAdmin ? "/employees" : "/"}>{isAdmin ? "Danh sách nhân sự" : "Lịch chính"}</a>
+        <div className="contractHeaderIdentity"><strong>{employeeName}</strong><span>{identity}</span></div>
+      </header>
+
+      <section className="contractWorkspace">
+        <aside className="contractIntro">
+          <span className="contractEyebrow">PERSONAL RECORD · PRIVATE</span>
+          <h1>Thông tin để hoàn thiện hợp đồng.</h1>
+          <p>Nhân viên trực tiếp cung cấp dữ liệu. Hệ thống không thu thập thông tin BHXH trong biểu mẫu này.</p>
+          <div className={`contractProgress ${profile?.completed ? "complete" : ""}`}>
+            <span>{profile?.completed ? "Hồ sơ hoàn tất" : profile ? "Đang bổ sung" : "Chưa bắt đầu"}</span>
+            <strong>{profile?.completed ? "100%" : profile ? `${50 + (profile.citizenIdFront ? 25 : 0) + (profile.citizenIdBack ? 25 : 0)}%` : "0%"}</strong>
+            <i><b style={{ width: profile?.completed ? "100%" : profile ? `${50 + (profile.citizenIdFront ? 25 : 0) + (profile.citizenIdBack ? 25 : 0)}%` : "0%" }} /></i>
+          </div>
+          <div className="contractPrivacyNote"><strong>Dữ liệu được giới hạn quyền truy cập</strong><span>Ảnh CCCD lưu ở chế độ riêng tư. Chỉ chính nhân viên và Admin mới mở được qua liên kết có thời hạn.</span></div>
+        </aside>
+
+        <section className="contractSurface">
+          {error ? <div className="notice errorNotice">{error}</div> : null}
+          {message ? <div className="notice successNotice">{message}</div> : null}
+          {loading ? <div className="contractLoading">Đang tải hồ sơ hợp đồng...</div> : (
+            <form className="contractForm" onSubmit={saveContract}>
+              <section className="contractSection">
+                <header><span>01</span><div><strong>Thông tin cá nhân</strong><p>Dùng đúng thông tin trên CCCD.</p></div></header>
+                <div className="contractFieldGrid">
+                  <label className="wide"><span>Gmail *</span><input autoComplete="email" maxLength={180} onChange={(event) => updateField("gmail", event.target.value)} placeholder="tennhanvien@gmail.com" required type="email" value={form.gmail} /></label>
+                  <label><span>Ngày sinh *</span><input onChange={(event) => updateField("dateOfBirth", event.target.value)} required type="date" value={form.dateOfBirth} /></label>
+                  <label><span>CCCD *</span><input inputMode="numeric" maxLength={12} onChange={(event) => updateField("citizenId", event.target.value.replace(/\D/g, ""))} placeholder="12 chữ số" required value={form.citizenId} /></label>
+                  <label><span>Ngày cấp *</span><input onChange={(event) => updateField("citizenIdIssuedDate", event.target.value)} required type="date" value={form.citizenIdIssuedDate} /></label>
+                  <label><span>Nơi cấp *</span><input maxLength={240} onChange={(event) => updateField("citizenIdIssuedPlace", event.target.value)} required value={form.citizenIdIssuedPlace} /></label>
+                  <label className="wide"><span>Địa chỉ thường trú *</span><textarea maxLength={1000} onChange={(event) => updateField("permanentAddress", event.target.value)} required rows={3} value={form.permanentAddress} /></label>
+                  <label className="wide"><span>Địa chỉ tạm trú *</span><textarea maxLength={1000} onChange={(event) => updateField("temporaryAddress", event.target.value)} required rows={3} value={form.temporaryAddress} /></label>
+                </div>
+              </section>
+
+              <section className="contractSection">
+                <header><span>02</span><div><strong>Thông tin nhận thanh toán</strong><p>Tài khoản ngân hàng phải thuộc về nhân viên.</p></div></header>
+                <div className="contractFieldGrid">
+                  <label><span>Số tài khoản *</span><input inputMode="numeric" maxLength={30} onChange={(event) => updateField("bankAccountNumber", event.target.value.replace(/\D/g, ""))} required value={form.bankAccountNumber} /></label>
+                  <label><span>Ngân hàng *</span><input maxLength={120} onChange={(event) => updateField("bankName", event.target.value)} placeholder="Ví dụ: Vietcombank" required value={form.bankName} /></label>
+                </div>
+              </section>
+
+              <section className="contractSection">
+                <header><span>03</span><div><strong>Ảnh hai mặt CCCD</strong><p>JPEG, PNG hoặc WebP; tối đa 10 MB mỗi ảnh.</p></div></header>
+                <div className="contractUploadGrid">
+                  {(["front", "back"] as const).map((side) => {
+                    const uploaded = side === "front" ? profile?.citizenIdFront : profile?.citizenIdBack;
+                    return <label className={`contractUploadCard ${uploaded ? "uploaded" : ""}`} key={side}>
+                      <FileIcon />
+                      <strong>{side === "front" ? "Mặt trước CCCD" : "Mặt sau CCCD"}</strong>
+                      <span>{files[side]?.name || (uploaded ? "Đã lưu an toàn" : "Chọn ảnh để tải lên")}</span>
+                      <input accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(side, event)} type="file" />
+                      {uploaded ? <a href={documentUrl(side)} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">Xem ảnh đã lưu</a> : null}
+                    </label>;
+                  })}
+                </div>
+              </section>
+
+              <footer className="contractFormFooter"><span>{profile?.updatedAt ? `Cập nhật gần nhất: ${new Date(profile.updatedAt).toLocaleString("vi-VN")}` : "Chưa lưu lần nào"}</span><button disabled={saving} type="submit">{saving ? "Đang lưu hồ sơ..." : "Lưu hồ sơ hợp đồng"}</button></footer>
+            </form>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}

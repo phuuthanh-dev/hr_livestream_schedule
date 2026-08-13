@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
 import {
   createSchedulePerson,
   listSchedulePeopleForAdmin,
@@ -28,7 +29,18 @@ export async function GET() {
   }
 
   try {
-    const employees = await listSchedulePeopleForAdmin();
+    const [roster, contractSummaries] = await Promise.all([
+      listSchedulePeopleForAdmin(),
+      listEmployeeContractSummaries()
+    ]);
+    const employees = roster.map((employee) => ({
+      ...employee,
+      contractProfile: contractSummaries.get(employeeContractPersonKey(employee.role, employee.id)) || {
+        completed: false,
+        hasFront: false,
+        hasBack: false
+      }
+    }));
     const activeEmployees = employees.filter((employee) => employee.active !== false);
     const incomplete = activeEmployees.filter((employee) =>
       !employee.name || !employee.phone || !employee.level || (employee.role === "host" && !employee.workLocation)

@@ -123,9 +123,7 @@ export async function saveEmployeeContractProfile(input: {
   const values = normalizeEmployeeContractInput(input.values);
   const collection = await getContractCollection();
   const key = personKey(input.person.role, input.person.id);
-  const existing = await collection.findOne({ personKey: key });
   const now = new Date();
-  const completed = isEmployeeContractComplete(existing || {});
   const document = await collection.findOneAndUpdate(
     { personKey: key },
     {
@@ -134,14 +132,13 @@ export async function saveEmployeeContractProfile(input: {
         employeeId: input.person.id,
         normalizedEmployeeId: normalizeEmployeeId(input.person.id),
         employeeName: input.person.name,
-        completed,
-        ...(completed && !existing?.submittedAt ? { submittedAt: now } : {}),
         updatedAt: now,
         updatedBy: input.actorAccountKey
       },
       $setOnInsert: {
         personKey: key,
         role: input.person.role,
+        completed: false,
         createdAt: now,
         createdBy: input.actorAccountKey
       }
@@ -166,18 +163,12 @@ export async function saveEmployeeContractFile(input: {
 
   const now = new Date();
   const file: StoredEmployeeContractFile = { ...input.file, uploadedAt: now };
-  const completed = isEmployeeContractComplete({
-    citizenIdFront: input.side === "front" ? file : existing.citizenIdFront,
-    citizenIdBack: input.side === "back" ? file : existing.citizenIdBack
-  });
   const fileUpdate = input.side === "front" ? { citizenIdFront: file } : { citizenIdBack: file };
-  const document = await collection.findOneAndUpdate(
+  let document = await collection.findOneAndUpdate(
     { personKey: key },
     {
       $set: {
         ...fileUpdate,
-        completed,
-        ...(completed && !existing.submittedAt ? { submittedAt: now } : {}),
         updatedAt: now,
         updatedBy: input.actorAccountKey
       }
@@ -185,6 +176,20 @@ export async function saveEmployeeContractFile(input: {
     { returnDocument: "after" }
   );
   if (!document) throw new Error("Không cập nhật được tài liệu CCCD.");
+  const completed = isEmployeeContractComplete(document);
+  if (document.completed !== completed || (completed && !document.submittedAt)) {
+    document = await collection.findOneAndUpdate(
+      { personKey: key },
+      {
+        $set: {
+          completed,
+          ...(completed && !document.submittedAt ? { submittedAt: now } : {})
+        }
+      },
+      { returnDocument: "after" }
+    );
+  }
+  if (!document) throw new Error("Không cập nhật được trạng thái hồ sơ hợp đồng.");
   return { profile: toProfile(document), replacedFile: input.side === "front" ? existing.citizenIdFront : existing.citizenIdBack };
 }
 

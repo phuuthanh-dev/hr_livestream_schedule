@@ -40,6 +40,12 @@ export type SchedulePerson = {
   liveAccountType?: string;
   liveChannelId?: string;
   active?: boolean;
+  contractProfile?: {
+    completed: boolean;
+    hasFront: boolean;
+    hasBack: boolean;
+    updatedAt?: string;
+  };
   source?: string;
   createdAt?: string;
   updatedAt?: string;
