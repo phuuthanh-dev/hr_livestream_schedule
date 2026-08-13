@@ -29,7 +29,7 @@ type EmployeeForm = {
   active: boolean;
 };
 
-type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "plus" | "refresh" | "search" | "users";
+type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "plus" | "refresh" | "search" | "trash" | "users";
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
@@ -51,6 +51,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "plus") return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
   if (name === "refresh") return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
   if (name === "search") return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
+  if (name === "trash") return <svg {...common}><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
   return null;
 }
@@ -194,6 +195,32 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     }
   }
 
+  async function hardDeleteEmployee(employee: SchedulePerson) {
+    const confirmed = window.confirm(
+      `Xoá cứng ${employee.name} (${employee.id})?\n\nHệ thống sẽ xoá hẳn hồ sơ nhân viên, tài khoản đăng nhập, hợp đồng, lịch rảnh và hồ sơ ứng tuyển liên kết. Thao tác này không hoàn tác được.`
+    );
+    if (!confirmed) return;
+
+    setBusy(`delete:${employee.role}:${employee.id}`);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/employees", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: employee.id, role: employee.role })
+      });
+      const payload = (await response.json()) as EmployeeAdminPayload;
+      if (!response.ok || !payload.success) throw new Error(payload.message || "Không xoá được nhân viên.");
+      setMessage(payload.message || "Đã xoá cứng nhân viên.");
+      await loadData();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Không xoá được nhân viên.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function bootstrapEmployees() {
     if (!window.confirm("Nạp lại danh sách nhân viên mặc định từ hệ thống? Dữ liệu trùng mã sẽ được cập nhật, nhân sự khác không bị xóa.")) return;
     setBusy("bootstrap");
@@ -301,7 +328,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button></div></td>
+                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => void hardDeleteEmployee(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>

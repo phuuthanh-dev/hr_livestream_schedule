@@ -8277,6 +8277,17 @@ a:hover {
   background: #edf9f6;
 }
 
+.employeeRowActions button.danger {
+  border-color: #efc4bf;
+  color: #8e2f22;
+  background: #fff1ef;
+}
+
+.employeeRowActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .employeeEmptyState {
   display: grid;
   min-height: 240px;

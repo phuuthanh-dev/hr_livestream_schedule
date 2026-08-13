@@ -3,6 +3,7 @@ import { getDashboardSession } from "@/lib/auth";
 import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
 import {
   createSchedulePerson,
+  hardDeleteSchedulePerson,
   listSchedulePeopleForAdmin,
   updateSchedulePerson,
   type SchedulePersonMutation
@@ -97,6 +98,29 @@ export async function PUT(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không cập nhật được nhân viên.";
+    return NextResponse.json<EmployeeAdminPayload>({ success: false, message }, { status: errorStatus(message) });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await requireAdmin();
+  if (!session) {
+    return NextResponse.json<EmployeeAdminPayload>({ success: false, message: "Chỉ Admin được quản lý nhân viên." }, { status: 403 });
+  }
+
+  try {
+    const body = (await request.json()) as { role?: "host" | "support"; id?: string };
+    if ((body.role !== "host" && body.role !== "support") || !body.id?.trim()) {
+      return NextResponse.json<EmployeeAdminPayload>({ success: false, message: "Thiếu mã nhân viên hoặc vai trò." }, { status: 400 });
+    }
+
+    const result = await hardDeleteSchedulePerson(body.role, body.id);
+    return NextResponse.json<EmployeeAdminPayload>({
+      success: true,
+      message: `Đã xoá cứng ${result.employee.name}.`
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Không xoá được nhân viên.";
     return NextResponse.json<EmployeeAdminPayload>({ success: false, message }, { status: errorStatus(message) });
   }
 }
