@@ -1,33 +1,12 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { resolveEmployeeContractPerson } from "@/lib/employeeContractAccess";
 import {
   getEmployeeContractProfile,
   saveEmployeeContractProfile
 } from "@/lib/employeeContract";
-import { findActiveSchedulePerson, findSchedulePerson } from "@/lib/employeeRoster";
-import type { EmployeeRole } from "@/lib/types";
 
 export const runtime = "nodejs";
-
-function readRole(value: unknown): EmployeeRole | null {
-  return value === "host" || value === "support" ? value : null;
-}
-
-async function resolvePerson(input: {
-  session: NonNullable<Awaited<ReturnType<typeof getDashboardSession>>>;
-  role?: unknown;
-  employeeId?: unknown;
-}) {
-  if (input.session.accountType === "employee") {
-    if (!input.session.role || !input.session.employeeId) return null;
-    return findActiveSchedulePerson(input.session.role, input.session.employeeId);
-  }
-
-  const role = readRole(input.role);
-  const employeeId = String(input.employeeId ?? "").trim();
-  if (!role || !employeeId) return null;
-  return findSchedulePerson(role, employeeId);
-}
 
 export async function GET(request: Request) {
   const session = await getDashboardSession();
@@ -36,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const person = await resolvePerson({
+  const person = await resolveEmployeeContractPerson({
     session,
     role: url.searchParams.get("role"),
     employeeId: url.searchParams.get("employeeId")
@@ -68,7 +47,7 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json() as Record<string, unknown>;
-    const person = await resolvePerson({
+    const person = await resolveEmployeeContractPerson({
       session,
       role: body.role,
       employeeId: body.employeeId
