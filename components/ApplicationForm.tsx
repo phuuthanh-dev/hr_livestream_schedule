@@ -13,6 +13,8 @@ type ApplicationFormState = {
   experience: string;
   achievements: string;
   expectedSalary: string;
+  liveLocationPreference: "" | "home" | "studio";
+  liveAccountPreference: "" | "personal" | "company";
   introVideoUrl: string;
   tiktokUrl: string;
   notes: string;
@@ -29,6 +31,8 @@ const INITIAL_FORM: ApplicationFormState = {
   experience: "",
   achievements: "",
   expectedSalary: "",
+  liveLocationPreference: "home",
+  liveAccountPreference: "company",
   introVideoUrl: "",
   tiktokUrl: "",
   notes: "",
@@ -68,7 +72,17 @@ export default function ApplicationForm() {
     setForm((current) => ({
       ...current,
       role,
-      ...(role === "support" ? { introVideoUrl: "", tiktokUrl: "" } : {})
+      ...(role === "host"
+        ? {
+            liveLocationPreference: current.liveLocationPreference || "home",
+            liveAccountPreference: current.liveAccountPreference || "company"
+          }
+        : {
+            liveLocationPreference: "",
+            liveAccountPreference: "",
+            introVideoUrl: "",
+            tiktokUrl: ""
+          })
     }));
     setError("");
   }
@@ -169,6 +183,20 @@ export default function ApplicationForm() {
         <section className="applicationFormSection hostPortfolioSection">
           <header><span>03</span><div><h3>Hồ sơ lên hình</h3><p>Dành riêng cho Host để đội ngũ hiểu rõ phong cách của bạn.</p></div></header>
           <div className="applicationFields">
+            <label>
+              <span>Nơi live mong muốn *</span>
+              <select required value={form.liveLocationPreference} onChange={(event) => updateField("liveLocationPreference", event.target.value as ApplicationFormState["liveLocationPreference"])}>
+                <option value="home">Live tại nhà</option>
+                <option value="studio">Live tại Studio</option>
+              </select>
+            </label>
+            <label>
+              <span>Tài khoản live *</span>
+              <select required value={form.liveAccountPreference} onChange={(event) => updateField("liveAccountPreference", event.target.value as ApplicationFormState["liveAccountPreference"])}>
+                <option value="personal">Live tài khoản cá nhân</option>
+                <option value="company">Live tài khoản công ty</option>
+              </select>
+            </label>
             <label className="wide"><span>Link video giới thiệu / video live</span><input maxLength={1000} onChange={(event) => updateField("introVideoUrl", event.target.value)} placeholder="YouTube, Google Drive hoặc video công khai" type="url" value={form.introVideoUrl} /></label>
             <label className="wide"><span>Link TikTok</span><input maxLength={1000} onChange={(event) => updateField("tiktokUrl", event.target.value)} placeholder="https://www.tiktok.com/@username" type="url" value={form.tiktokUrl} /></label>
           </div>

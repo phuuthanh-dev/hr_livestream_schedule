@@ -6,6 +6,8 @@ import type { EmployeeRole } from "@/lib/types";
 const APPLICATIONS_COLLECTION = "people_applications";
 
 export type PeopleApplicationStatus = "new" | "reviewing" | "accepted" | "rejected";
+export type PeopleApplicationLiveLocationPreference = "home" | "studio";
+export type PeopleApplicationLiveAccountPreference = "personal" | "company";
 
 export type PeopleApplicationInput = {
   role?: EmployeeRole;
@@ -16,6 +18,8 @@ export type PeopleApplicationInput = {
   experience?: string;
   achievements?: string;
   expectedSalary?: string;
+  liveLocationPreference?: PeopleApplicationLiveLocationPreference;
+  liveAccountPreference?: PeopleApplicationLiveAccountPreference;
   introVideoUrl?: string;
   tiktokUrl?: string;
   notes?: string;
@@ -32,6 +36,8 @@ export type PeopleApplication = {
   experience: string;
   achievements: string;
   expectedSalary: string;
+  liveLocationPreference: PeopleApplicationLiveLocationPreference | "";
+  liveAccountPreference: PeopleApplicationLiveAccountPreference | "";
   introVideoUrl: string;
   tiktokUrl: string;
   notes: string;
@@ -77,6 +83,18 @@ function assertWebUrl(value: string, label: string, required = false) {
   }
 }
 
+function normalizeLiveLocationPreference(value: unknown, role?: EmployeeRole): PeopleApplicationLiveLocationPreference | "" {
+  if (role !== "host") return "";
+  if (value === "home" || value === "studio") return value;
+  throw new Error("Vui lòng chọn nơi live mong muốn.");
+}
+
+function normalizeLiveAccountPreference(value: unknown, role?: EmployeeRole): PeopleApplicationLiveAccountPreference | "" {
+  if (role !== "host") return "";
+  if (value === "personal" || value === "company") return value;
+  throw new Error("Vui lòng chọn loại tài khoản live.");
+}
+
 function normalizeInput(input: PeopleApplicationInput) {
   const role = input.role;
   const fullName = cleanText(input.fullName, 120);
@@ -86,6 +104,8 @@ function normalizeInput(input: PeopleApplicationInput) {
   const experience = cleanMultilineText(input.experience, 3000);
   const achievements = cleanMultilineText(input.achievements, 2000);
   const expectedSalary = cleanText(input.expectedSalary, 120);
+  const liveLocationPreference = normalizeLiveLocationPreference(input.liveLocationPreference, role);
+  const liveAccountPreference = normalizeLiveAccountPreference(input.liveAccountPreference, role);
   const introVideoUrl = role === "host" ? cleanText(input.introVideoUrl, 1000) : "";
   const tiktokUrl = role === "host" ? cleanText(input.tiktokUrl, 1000) : "";
   const notes = cleanMultilineText(input.notes, 2000);
@@ -111,6 +131,8 @@ function normalizeInput(input: PeopleApplicationInput) {
     experience,
     achievements,
     expectedSalary,
+    liveLocationPreference,
+    liveAccountPreference,
     introVideoUrl,
     tiktokUrl,
     notes
@@ -128,6 +150,8 @@ function toApplication(document: PeopleApplicationDocument): PeopleApplication {
     experience: document.experience,
     achievements: document.achievements,
     expectedSalary: document.expectedSalary,
+    liveLocationPreference: document.liveLocationPreference || "",
+    liveAccountPreference: document.liveAccountPreference || "",
     introVideoUrl: document.introVideoUrl,
     tiktokUrl: document.tiktokUrl,
     notes: document.notes,
