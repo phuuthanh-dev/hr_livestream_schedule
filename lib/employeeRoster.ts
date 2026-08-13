@@ -199,6 +199,12 @@ export async function findActiveSchedulePerson(role: EmployeeRole, employeeId: s
   return document ? toSchedulePerson(document) : null;
 }
 
+export async function findSchedulePerson(role: EmployeeRole, employeeId: string): Promise<SchedulePerson | null> {
+  const collection = await getRosterCollection();
+  const document = await collection.findOne({ personKey: buildPersonKey(role, employeeId) });
+  return document ? toSchedulePerson(document) : null;
+}
+
 export async function createSchedulePerson(input: SchedulePersonMutation, actorAccountKey: string) {
   const active = input.active !== false;
   await assertPersonInput(input, active);
