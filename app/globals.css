@@ -8768,3 +8768,215 @@ a:hover {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Support training */
+.supportTrainingApp {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(218, 165, 32, 0.14), transparent 30%),
+    linear-gradient(180deg, #f8f5ef 0%, #eef3f1 100%);
+}
+
+.supportTrainingHeader {
+  grid-template-columns: auto 1fr auto;
+}
+
+.supportTrainingIdentity {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+}
+
+.supportTrainingIdentity strong {
+  color: #17363d;
+  font-size: 1rem;
+}
+
+.supportTrainingIdentity span {
+  color: #60767d;
+  font-size: 0.76rem;
+}
+
+.supportTrainingWorkspace {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  padding: 14px;
+}
+
+.supportTrainingSidebar,
+.supportTrainingSurface {
+  border: 1px solid rgba(20, 57, 69, 0.08);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 50px rgba(13, 40, 48, 0.08);
+}
+
+.supportTrainingSidebar {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 28px 24px;
+  position: sticky;
+  top: 12px;
+}
+
+.supportTrainingSidebar h1 {
+  margin: 0;
+  color: #17363d;
+  font-size: clamp(2rem, 2.3vw, 3rem);
+  line-height: 0.95;
+}
+
+.supportTrainingSidebar p {
+  margin: 0;
+  color: #64797d;
+  line-height: 1.65;
+}
+
+.supportTrainingProgressCard,
+.supportTrainingResultCard {
+  display: grid;
+  gap: 7px;
+  padding: 16px 17px;
+  border-radius: 18px;
+  background: #f3f7f7;
+}
+
+.supportTrainingProgressCard span,
+.supportTrainingResultCard span {
+  color: #5d767c;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.supportTrainingProgressCard strong,
+.supportTrainingResultCard strong {
+  color: #193740;
+  font-size: 1.25rem;
+}
+
+.supportTrainingProgressCard i {
+  display: block;
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dce8e8;
+}
+
+.supportTrainingProgressCard i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c08f19, #1a7a6d);
+}
+
+.supportTrainingProgressCard small,
+.supportTrainingResultCard small {
+  color: #6b7f85;
+}
+
+.supportTrainingResultCard.pass {
+  background: #eef8f4;
+}
+
+.supportTrainingResultCard.fail {
+  background: #fff3f0;
+}
+
+.supportTrainingSurface {
+  padding: 12px;
+}
+
+.supportTrainingForm {
+  display: grid;
+  gap: 14px;
+}
+
+.supportTrainingChecklist {
+  display: grid;
+  gap: 11px;
+}
+
+.supportTrainingItem {
+  display: grid;
+  gap: 6px;
+  padding: 15px 16px;
+  border: 1px solid #d6e3e3;
+  border-radius: 18px;
+  background: #fbfdfd;
+  cursor: pointer;
+}
+
+.supportTrainingItem.checked {
+  border-color: #8bc8b7;
+  background: #f0faf7;
+}
+
+.supportTrainingItem input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.supportTrainingItem strong {
+  color: #213b42;
+  font-size: 0.92rem;
+}
+
+.supportTrainingItem span {
+  color: #6e8287;
+  line-height: 1.6;
+  font-size: 0.82rem;
+}
+
+.supportTrainingNotes {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 15px;
+  border: 1px solid #d5e1e1;
+  border-radius: 18px;
+  resize: vertical;
+  font: inherit;
+  color: #18353d;
+  background: #fcfefd;
+}
+
+.supportTrainingNotes:focus {
+  outline: none;
+  border-color: #14786f;
+  box-shadow: 0 0 0 4px rgba(20, 120, 111, 0.1);
+}
+
+@media (max-width: 980px) {
+  .supportTrainingWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .supportTrainingSidebar {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .supportTrainingHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .supportTrainingWorkspace {
+    padding: 10px;
+  }
+
+  .supportTrainingSidebar,
+  .supportTrainingSurface {
+    border-radius: 22px;
+  }
+
+  .supportTrainingSidebar {
+    padding: 24px 18px;
+  }
+}

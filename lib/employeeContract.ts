@@ -1,6 +1,7 @@
 import type { Collection } from "mongodb";
 import { getMongoDatabase } from "@/lib/mongodb";
 import {
+  buildEmployeeContractCode,
   isEmployeeContractComplete,
   normalizeEmployeeContractInput,
   type EmployeeContractInput,
@@ -27,6 +28,7 @@ type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   personKey: string;
   role: EmployeeRole;
   employeeId: string;
+  contractCode: string;
   normalizedEmployeeId: string;
   employeeName: string;
   citizenIdFront?: StoredEmployeeContractFile;
@@ -42,6 +44,7 @@ type EmployeeContractDocument = NormalizedEmployeeContractInput & {
 export type EmployeeContractProfile = NormalizedEmployeeContractInput & {
   role: EmployeeRole;
   employeeId: string;
+  contractCode: string;
   employeeName: string;
   citizenIdFront?: EmployeeContractFile;
   citizenIdBack?: EmployeeContractFile;
@@ -91,6 +94,7 @@ function toProfile(document: EmployeeContractDocument): EmployeeContractProfile 
   return {
     role: document.role,
     employeeId: document.employeeId,
+    contractCode: document.contractCode,
     employeeName: document.employeeName,
     gmail: document.gmail,
     dateOfBirth: document.dateOfBirth,
@@ -130,6 +134,7 @@ export async function saveEmployeeContractProfile(input: {
       $set: {
         ...values,
         employeeId: input.person.id,
+        contractCode: buildEmployeeContractCode(input.person.id),
         normalizedEmployeeId: normalizeEmployeeId(input.person.id),
         employeeName: input.person.name,
         updatedAt: now,

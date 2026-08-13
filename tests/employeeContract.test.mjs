@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildEmployeeContractCode,
   isEmployeeContractComplete,
   normalizeEmployeeContractInput,
   validateEmployeeContractImageInput
@@ -102,4 +103,8 @@ test("rejects unsupported or oversized CCCD files", () => {
     () => validateEmployeeContractImageInput({ contentType: "image/png", size: 10 * 1024 * 1024 + 1 }),
     /10 MB/
   );
+});
+
+test("builds contract code from employee id", () => {
+  assert.equal(buildEmployeeContractCode("hrlt25"), "HRLT25_HDLT2026");
 });

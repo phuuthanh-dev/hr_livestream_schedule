@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
 import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
+import { listSupportTrainingSummaries } from "@/lib/supportTraining";
 import {
   createSchedulePerson,
   hardDeleteSchedulePerson,
@@ -30,9 +31,10 @@ export async function GET() {
   }
 
   try {
-    const [roster, contractSummaries] = await Promise.all([
+    const [roster, contractSummaries, trainingSummaries] = await Promise.all([
       listSchedulePeopleForAdmin(),
-      listEmployeeContractSummaries()
+      listEmployeeContractSummaries(),
+      listSupportTrainingSummaries()
     ]);
     const employees = roster.map((employee) => ({
       ...employee,
@@ -40,7 +42,10 @@ export async function GET() {
         completed: false,
         hasFront: false,
         hasBack: false
-      }
+      },
+      trainingProfile: employee.role === "support"
+        ? trainingSummaries.get(employeeContractPersonKey("support", employee.id))
+        : undefined
     }));
     const activeEmployees = employees.filter((employee) => employee.active !== false);
     const incomplete = activeEmployees.filter((employee) =>

@@ -66,7 +66,7 @@ function toForm(employee: SchedulePerson): EmployeeForm {
     workLocation: employee.workLocation || "",
     phone: employee.phone || "",
     cvReference: employee.cvReference || "",
-    cashOffer: employee.cashOffer || "",
+    cashOffer: employee.trainingProfile?.cashOffer || employee.cashOffer || "",
     castStatus: employee.castStatus || "",
     experience: employee.experience || "",
     trainingStatus: employee.trainingStatus || "",
@@ -321,12 +321,12 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Nhân viên"><span className={`employeeIdentity ${employee.role}`}><i>{employee.name.slice(0, 1).toUpperCase()}</i><span><strong>{employee.name}</strong><code>{employee.id}</code>{isIncomplete(employee) ? <small>Thiếu thông tin bắt buộc</small> : null}</span></span></td>
                     <td data-label="Vai trò"><span className={`employeeRoleBadge ${employee.role}`}>{employee.role === "host" ? "Host" : "Support"}</span></td>
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
-                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm" : "Support Live"}</small></span></td>
-                    <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong></span></td>
+                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm" : employee.trainingProfile ? `Rating ${employee.trainingProfile.rating} · Offer ${employee.trainingProfile.cashOffer}` : "Support Live"}</small></span></td>
+                    <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong><small>{employee.role === "support" && employee.trainingProfile ? `${employee.trainingProfile.scorePercent}% checklist` : ""}</small></span></td>
                     <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
+                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a>{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -351,7 +351,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
               <fieldset><legend>Năng lực và vận hành</legend><div className="employeeFormGrid">
                 <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => ({ ...current, level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
                 {form.role === "host" ? <label><span>Địa điểm</span><select required value={form.workLocation} onChange={(event) => setForm((current) => ({ ...current, workLocation: event.target.value }))}>{locations.map((location) => <option disabled={!location.active} key={location.code} value={location.code}>{location.name}{location.active ? "" : " · Tạm ngưng"}</option>)}</select></label> : null}
-                <label><span>Cash offer</span><input value={form.cashOffer} onChange={(event) => setForm((current) => ({ ...current, cashOffer: event.target.value }))} /></label>
+                <label><span>Cash offer</span><input readOnly={form.role === "support"} value={form.cashOffer} onChange={(event) => setForm((current) => ({ ...current, cashOffer: event.target.value }))} placeholder={form.role === "support" ? "Tự động lấy từ rating training" : ""} /></label>
                 <label><span>Kinh nghiệm</span><input value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} /></label>
                 <label><span>Training</span><input value={form.trainingStatus} onChange={(event) => setForm((current) => ({ ...current, trainingStatus: event.target.value }))} /></label>
                 <label className="wide"><span>CV / Portfolio</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} /></label>

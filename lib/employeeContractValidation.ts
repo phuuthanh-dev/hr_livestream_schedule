@@ -111,6 +111,10 @@ export function isEmployeeContractComplete(documents: ContractDocuments) {
   return Boolean(documents.citizenIdFront?.publicId && documents.citizenIdBack?.publicId);
 }
 
+export function buildEmployeeContractCode(employeeId: string) {
+  return `${String(employeeId ?? "").trim().toUpperCase()}_HDLT2026`;
+}
+
 export function validateEmployeeContractImageInput(input: { contentType: unknown; size: unknown }) {
   if (!ALLOWED_CONTRACT_IMAGE_TYPES.has(String(input.contentType ?? ""))) {
     throw new Error("Ảnh CCCD chỉ nhận định dạng JPEG, PNG hoặc WebP.");

@@ -222,6 +222,7 @@ export default function EmployeeContractForm({
 
   const employeeName = target?.employeeName || username;
   const identity = target ? `${target.role === "host" ? "Host" : "Support Live"} · ${target.employeeId}` : "Đang tải hồ sơ";
+  const contractCode = profile?.contractCode || (target?.employeeId ? `${target.employeeId}_HDLT2026` : "");
 
   return (
     <main className="contractApp">
@@ -236,6 +237,7 @@ export default function EmployeeContractForm({
           <span className="contractEyebrow">PERSONAL RECORD · PRIVATE</span>
           <h1>Thông tin để hoàn thiện hợp đồng.</h1>
           <p>Nhân viên trực tiếp cung cấp dữ liệu. Hệ thống không thu thập thông tin BHXH trong biểu mẫu này.</p>
+          <div className="contractPrivacyNote"><strong>Mã hợp đồng</strong><span>{contractCode || "Sẽ tạo sau khi xác định mã nhân viên"}</span></div>
           <div className={`contractProgress ${profile?.completed ? "complete" : ""}`}>
             <span>{profile?.completed ? "Hồ sơ hoàn tất" : profile ? "Đang bổ sung" : "Chưa bắt đầu"}</span>
             <strong>{profile?.completed ? "100%" : profile ? `${50 + (profile.citizenIdFront ? 25 : 0) + (profile.citizenIdBack ? 25 : 0)}%` : "0%"}</strong>

@@ -50,6 +50,17 @@ GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN=copy-from-generateSourceWebToken
 
 Nếu bước đẩy Google Sheet lỗi, hồ sơ và nhân viên vẫn được lưu nội bộ; submit kế tiếp với cùng số điện thoại sẽ cập nhật lại và thử đồng bộ lại thay vì tạo trùng mã mới.
 
+## Training Support Live
+
+- Trang `/support-training` dùng checklist training cho support live.
+- Checklist lấy từ SOP support live và được lưu vào `support_training_profiles`.
+- Hệ thống tự chấm `rating`, suy ra `level`, `cashOffer` và cập nhật lại hồ sơ support.
+- Mapping hiện tại:
+  - `A` từ `>= 90%` checklist: `Cấp 4` · `120.000`
+  - `B` từ `>= 75%` checklist: `Cấp 3` · `70.000`
+  - `C` từ `>= 60%` checklist: `Cấp 2` · `50.000`
+  - `D` dưới `60%`: `Cấp 1` · `30.000`
+
 ## Collections
 
 - `schedule_people`: hồ sơ Host và Support.

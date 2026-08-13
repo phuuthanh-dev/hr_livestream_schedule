@@ -27,6 +27,7 @@ export type SchedulePerson = {
   name: string;
   role: EmployeeRole;
   level?: string;
+  rating?: string;
   workLocation?: HostWorkLocation;
   phone?: string;
   cvReference?: string;
@@ -44,6 +45,13 @@ export type SchedulePerson = {
     completed: boolean;
     hasFront: boolean;
     hasBack: boolean;
+    updatedAt?: string;
+  };
+  trainingProfile?: {
+    rating: string;
+    scorePercent: number;
+    cashOffer: string;
+    passed: boolean;
     updatedAt?: string;
   };
   source?: string;

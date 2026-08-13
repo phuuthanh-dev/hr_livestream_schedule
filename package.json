@@ -9,6 +9,7 @@
     "test:applications": "node --experimental-strip-types --test tests/applicationAutomation.test.mjs",
     "start": "next start",
     "test:contract": "node --experimental-strip-types --test tests/employeeContract.test.mjs",
+    "test:training": "node --experimental-strip-types --test tests/supportTraining.test.mjs",
     "test:schedule": "node --experimental-strip-types --test tests/scheduleEngine.test.mjs",
     "test:payroll": "node --experimental-strip-types --test tests/payrollEngine.test.mjs",
     "typecheck": "tsc --noEmit"

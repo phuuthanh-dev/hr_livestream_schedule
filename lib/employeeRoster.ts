@@ -45,6 +45,7 @@ export type SchedulePersonMutation = {
   role: EmployeeRole;
   name?: string;
   level?: string;
+  rating?: string;
   workLocation?: string;
   phone?: string;
   cvReference?: string;
@@ -91,6 +92,7 @@ function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
     name: document.name || document.employeeId,
     role: document.role,
     level: document.level || undefined,
+    rating: undefined,
     workLocation: document.role === "host" ? normalizeHostWorkLocation(document.workLocation) : undefined,
     phone: document.phone || undefined,
     cvReference: document.cvReference || undefined,
