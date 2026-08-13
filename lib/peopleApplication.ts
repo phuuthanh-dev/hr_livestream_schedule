@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { Collection } from "mongodb";
+import {
+  allocateNextScheduleEmployeeId,
+  createSchedulePerson,
+  findSchedulePerson,
+  findSchedulePersonByPhone,
+  updateSchedulePerson,
+  type SchedulePersonMutation
+} from "@/lib/employeeRoster";
+import { buildAppsScriptApplicationPayload, buildEmployeeMutationFromApplication } from "@/lib/applicationAutomation";
+import { postToAppScript } from "@/lib/appScriptSync";
 import { getMongoDatabase } from "@/lib/mongodb";
 import type { EmployeeRole } from "@/lib/types";
 
@@ -28,6 +38,7 @@ export type PeopleApplicationInput = {
 
 export type PeopleApplication = {
   applicationId: string;
+  employeeId?: string;
   role: EmployeeRole;
   fullName: string;
   phone: string;
@@ -42,16 +53,20 @@ export type PeopleApplication = {
   tiktokUrl: string;
   notes: string;
   status: PeopleApplicationStatus;
+  sheetSyncStatus?: "synced" | "failed";
+  sheetSyncedAt?: string;
+  sheetSyncError?: string;
   submittedAt: string;
   updatedAt: string;
 };
 
-type PeopleApplicationDocument = Omit<PeopleApplication, "submittedAt" | "updatedAt"> & {
+type PeopleApplicationDocument = Omit<PeopleApplication, "submittedAt" | "updatedAt" | "sheetSyncedAt"> & {
   normalizedPhone: string;
   submittedAt: Date;
   updatedAt: Date;
   consentedAt: Date;
   resubmittedAt?: Date;
+  sheetSyncedAt?: Date;
 };
 
 let indexesPromise: Promise<unknown> | null = null;
@@ -142,6 +157,7 @@ function normalizeInput(input: PeopleApplicationInput) {
 function toApplication(document: PeopleApplicationDocument): PeopleApplication {
   return {
     applicationId: document.applicationId,
+    employeeId: document.employeeId || undefined,
     role: document.role,
     fullName: document.fullName,
     phone: document.phone,
@@ -156,9 +172,90 @@ function toApplication(document: PeopleApplicationDocument): PeopleApplication {
     tiktokUrl: document.tiktokUrl,
     notes: document.notes,
     status: document.status,
+    sheetSyncStatus: document.sheetSyncStatus,
+    sheetSyncedAt: document.sheetSyncedAt?.toISOString(),
+    sheetSyncError: document.sheetSyncError,
     submittedAt: document.submittedAt.toISOString(),
     updatedAt: document.updatedAt.toISOString()
   };
+}
+
+function buildApplicationEmployeeMutation(application: PeopleApplication, employeeId: string): SchedulePersonMutation {
+  return buildEmployeeMutationFromApplication({
+    applicationId: application.applicationId,
+    submittedAt: application.submittedAt,
+    role: application.role,
+    fullName: application.fullName,
+    phone: application.phone,
+    email: application.email,
+    cvUrl: application.cvUrl,
+    experience: application.experience,
+    achievements: application.achievements,
+    expectedSalary: application.expectedSalary,
+    liveLocationPreference: application.liveLocationPreference || "",
+    liveAccountPreference: application.liveAccountPreference || "",
+    introVideoUrl: application.introVideoUrl,
+    tiktokUrl: application.tiktokUrl,
+    notes: application.notes
+  }, employeeId);
+}
+
+async function upsertEmployeeFromApplication(application: PeopleApplication) {
+  const actorAccountKey = "application:auto";
+  const linkedEmployee = application.employeeId
+    ? await findSchedulePerson(application.role, application.employeeId)
+    : null;
+  const phoneMatchedEmployee = linkedEmployee || await findSchedulePersonByPhone(application.role, application.phone);
+
+  if (phoneMatchedEmployee) {
+    const mutation = buildApplicationEmployeeMutation(application, phoneMatchedEmployee.id);
+    const employee = await updateSchedulePerson(mutation, actorAccountKey);
+    return { employee, created: false };
+  }
+
+  const maxAttempts = 5;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const employeeId = await allocateNextScheduleEmployeeId(application.role);
+    try {
+      const employee = await createSchedulePerson(
+        buildApplicationEmployeeMutation(application, employeeId),
+        actorAccountKey
+      );
+      return { employee, created: true };
+    } catch (error) {
+      if (
+        error instanceof Error
+        && error.message.includes("Mã nhân viên đã tồn tại")
+        && attempt < maxAttempts - 1
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Không cấp được mã nhân sự mới.");
+}
+
+async function syncApplicationToGoogleSheet(application: PeopleApplication & { employeeId: string }) {
+  return postToAppScript(buildAppsScriptApplicationPayload({
+    applicationId: application.applicationId,
+    submittedAt: application.submittedAt,
+    employeeId: application.employeeId,
+    role: application.role,
+    fullName: application.fullName,
+    phone: application.phone,
+    email: application.email,
+    cvUrl: application.cvUrl,
+    experience: application.experience,
+    achievements: application.achievements,
+    expectedSalary: application.expectedSalary,
+    liveLocationPreference: application.liveLocationPreference || "",
+    liveAccountPreference: application.liveAccountPreference || "",
+    introVideoUrl: application.introVideoUrl,
+    tiktokUrl: application.tiktokUrl,
+    notes: application.notes
+  }));
 }
 
 async function getApplicationsCollection(): Promise<Collection<PeopleApplicationDocument>> {
@@ -184,30 +281,109 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
   const now = new Date();
   const existing = await collection.findOne({
     normalizedPhone: normalized.normalizedPhone,
-    role: normalized.role,
-    status: { $in: ["new", "reviewing"] }
+    role: normalized.role
   });
+  const baseDocument: PeopleApplicationDocument = existing
+    ? {
+        ...existing,
+        ...normalized,
+        updatedAt: now,
+        resubmittedAt: now,
+        sheetSyncStatus: existing.sheetSyncStatus,
+        sheetSyncError: existing.sheetSyncError,
+        employeeId: existing.employeeId
+      }
+    : {
+        applicationId: randomUUID(),
+        ...normalized,
+        status: "new",
+        submittedAt: now,
+        updatedAt: now,
+        consentedAt: now
+      };
 
-  if (existing) {
-    const result = await collection.findOneAndUpdate(
-      { applicationId: existing.applicationId },
-      { $set: { ...normalized, updatedAt: now, resubmittedAt: now } },
-      { returnDocument: "after" }
-    );
-    if (!result) throw new Error("Không cập nhật được hồ sơ đã gửi.");
-    return { application: toApplication(result), updated: true };
+  const application = toApplication(baseDocument);
+  const { employee, created } = await upsertEmployeeFromApplication(application);
+
+  try {
+    await syncApplicationToGoogleSheet({ ...application, employeeId: employee.id });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Không đồng bộ được dữ liệu sang Google Sheet.";
+    const failedStatus = existing
+      ? await collection.findOneAndUpdate(
+          { applicationId: existing.applicationId },
+          {
+            $set: {
+              ...normalized,
+              employeeId: employee.id,
+              status: "accepted",
+              updatedAt: now,
+              resubmittedAt: now,
+              sheetSyncStatus: "failed",
+              sheetSyncError: message
+            }
+          },
+          { upsert: true, returnDocument: "after" }
+        )
+      : await collection.findOneAndUpdate(
+          { applicationId: baseDocument.applicationId },
+          {
+            $setOnInsert: { submittedAt: now, consentedAt: now },
+            $set: {
+              ...normalized,
+              applicationId: baseDocument.applicationId,
+              normalizedPhone: normalized.normalizedPhone,
+              employeeId: employee.id,
+              status: "accepted",
+              updatedAt: now,
+              sheetSyncStatus: "failed",
+              sheetSyncError: message
+            }
+          },
+          { upsert: true, returnDocument: "after" }
+        );
+    if (!failedStatus) throw new Error(message);
+    throw new Error(`Hồ sơ đã lưu với mã ${employee.id}, nhưng chưa đẩy được sang Google Sheet: ${message}`);
   }
 
-  const document: PeopleApplicationDocument = {
-    applicationId: randomUUID(),
-    ...normalized,
-    status: "new",
-    submittedAt: now,
-    updatedAt: now,
-    consentedAt: now
-  };
-  await collection.insertOne(document);
-  return { application: toApplication(document), updated: false };
+  const persisted = existing
+    ? await collection.findOneAndUpdate(
+        { applicationId: existing.applicationId },
+        {
+          $set: {
+            ...normalized,
+            employeeId: employee.id,
+            status: "accepted",
+            updatedAt: now,
+            resubmittedAt: now,
+            sheetSyncStatus: "synced",
+            sheetSyncedAt: now,
+            sheetSyncError: ""
+          }
+        },
+        { returnDocument: "after" }
+      )
+    : await collection.findOneAndUpdate(
+        { applicationId: baseDocument.applicationId },
+        {
+          $setOnInsert: { submittedAt: now, consentedAt: now },
+          $set: {
+            ...normalized,
+            applicationId: baseDocument.applicationId,
+            normalizedPhone: normalized.normalizedPhone,
+            employeeId: employee.id,
+            status: "accepted",
+            updatedAt: now,
+            sheetSyncStatus: "synced",
+            sheetSyncedAt: now,
+            sheetSyncError: ""
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+  if (!persisted) throw new Error("Không lưu được hồ sơ ứng tuyển.");
+  return { application: toApplication(persisted), updated: !created };
 }
 
 export async function listPeopleApplications() {

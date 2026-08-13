@@ -1,6 +1,6 @@
 # HR Streaming Schedule Web
 
-Website Next.js quản lý nhân sự, lịch rảnh và lịch livestream hoàn toàn qua Website API + MongoDB. Luồng vận hành không đọc hoặc ghi Google Sheet.
+Website Next.js quản lý nhân sự, lịch rảnh và lịch livestream qua Website API + MongoDB. Riêng form ứng tuyển tự tạo nhân viên và đẩy dữ liệu sang Google Sheet nguồn thông qua Apps Script API.
 
 ## Luồng xếp lịch
 
@@ -33,6 +33,21 @@ CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 
 `ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng để khởi tạo Admin lần đầu. `CLOUDINARY_URL` chỉ được dùng ở server để ký upload trực tiếp và lưu ảnh CCCD ở chế độ `authenticated`; ảnh không đi qua giới hạn request body của Vercel Function. Không commit mật khẩu, MongoDB URI hoặc khóa Cloudinary thật vào repository.
 
+```bash
+GOOGLE_APPS_SCRIPT_API_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+GOOGLE_APPS_SCRIPT_API_TOKEN=copy-from-generateScheduleWebToken
+```
+
+`GOOGLE_APPS_SCRIPT_API_URL` và `GOOGLE_APPS_SCRIPT_API_TOKEN` dùng cho luồng ứng tuyển tự động. Khi ứng viên gửi `/apply`, server sẽ:
+
+1. lưu hồ sơ vào `people_applications`
+2. tự tạo hoặc cập nhật nhân viên trong `schedule_people`
+3. tự sinh mã nhân sự `HRLT..` hoặc `HRSL..`
+4. gọi Apps Script `action=submit_application`
+5. ghi vào tab `Thông tin Mẫu Live` hoặc `Thông tin Support Live`
+
+Nếu bước đẩy Google Sheet lỗi, hồ sơ và nhân viên vẫn được lưu nội bộ; submit kế tiếp với cùng số điện thoại sẽ cập nhật lại và thử đồng bộ lại thay vì tạo trùng mã mới.
+
 ## Collections
 
 - `schedule_people`: hồ sơ Host và Support.
@@ -44,6 +59,7 @@ CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 - `schedule_sync_runs`: lịch sử mỗi lần chạy lịch tuần.
 - `schedule_confirmation_events`: audit log xác nhận và hủy xác nhận.
 - `people_applications`: hồ sơ ứng tuyển gửi từ trang `/apply`.
+- `people_applications`: hồ sơ ứng tuyển gửi từ trang `/apply`, kèm mã nhân sự và trạng thái đồng bộ sheet.
 - `employee_contract_profiles`: thông tin hợp đồng và metadata ảnh CCCD riêng tư; không chứa BHXH.
 
 ## Local Dev

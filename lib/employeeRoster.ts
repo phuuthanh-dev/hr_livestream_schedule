@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Collection } from "mongodb";
 import { EMPLOYEE_MIGRATION_SEED, EMPLOYEE_MIGRATION_SOURCE } from "@/lib/employeeSeed";
+import { nextEmployeeIdForRole } from "@/lib/applicationAutomation";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
 import { getMongoDatabase } from "@/lib/mongodb";
@@ -203,6 +204,20 @@ export async function findSchedulePerson(role: EmployeeRole, employeeId: string)
   const collection = await getRosterCollection();
   const document = await collection.findOne({ personKey: buildPersonKey(role, employeeId) });
   return document ? toSchedulePerson(document) : null;
+}
+
+export async function findSchedulePersonByPhone(role: EmployeeRole, phone: string): Promise<SchedulePerson | null> {
+  const collection = await getRosterCollection();
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+  const document = await collection.findOne({ role, phone: normalizedPhone });
+  return document ? toSchedulePerson(document) : null;
+}
+
+export async function allocateNextScheduleEmployeeId(role: EmployeeRole) {
+  const collection = await getRosterCollection();
+  const employeeIds = await collection.find({ role }, { projection: { employeeId: 1 } }).toArray();
+  return nextEmployeeIdForRole(role, employeeIds.map((item) => item.employeeId));
 }
 
 export async function createSchedulePerson(input: SchedulePersonMutation, actorAccountKey: string) {

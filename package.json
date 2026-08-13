@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:applications": "node --experimental-strip-types --test tests/applicationAutomation.test.mjs",
     "start": "next start",
     "test:contract": "node --experimental-strip-types --test tests/employeeContract.test.mjs",
     "test:schedule": "node --experimental-strip-types --test tests/scheduleEngine.test.mjs",

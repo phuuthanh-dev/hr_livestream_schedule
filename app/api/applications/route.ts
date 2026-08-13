@@ -52,9 +52,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       applicationId: result.application.applicationId,
+      employeeId: result.application.employeeId,
       message: result.updated
-        ? "Hồ sơ trước đó đã được cập nhật bằng thông tin mới nhất."
-        : "Hồ sơ đã được gửi thành công. Đội ngũ tuyển dụng sẽ liên hệ với bạn."
+        ? `Hồ sơ trước đó đã được cập nhật. Mã nhân sự hiện tại là ${result.application.employeeId || "đang xử lý"}.`
+        : `Hồ sơ đã được gửi thành công. Mã nhân sự của bạn là ${result.application.employeeId || "đang xử lý"}.`
     }, { status: result.updated ? 200 : 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không gửi được hồ sơ.";
