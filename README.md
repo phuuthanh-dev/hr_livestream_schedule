@@ -36,9 +36,11 @@ CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
 ```bash
 GOOGLE_APPS_SCRIPT_API_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
 GOOGLE_APPS_SCRIPT_API_TOKEN=copy-from-generateScheduleWebToken
+GOOGLE_SOURCE_APPS_SCRIPT_API_URL=https://script.google.com/macros/s/SOURCE_DEPLOYMENT_ID/exec
+GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN=copy-from-generateSourceWebToken
 ```
 
-`GOOGLE_APPS_SCRIPT_API_URL` và `GOOGLE_APPS_SCRIPT_API_TOKEN` dùng cho luồng ứng tuyển tự động. Khi ứng viên gửi `/apply`, server sẽ:
+`GOOGLE_SOURCE_APPS_SCRIPT_API_URL` và `GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN` dùng cho luồng ứng tuyển tự động sang file nguồn `Thông tin Mẫu Live` / `Thông tin Support Live`. Website sẽ ưu tiên cặp biến `SOURCE`, rồi mới fallback về cặp `GOOGLE_APPS_SCRIPT_*` cũ nếu bạn chưa tách deployment.
 
 1. lưu hồ sơ vào `people_applications`
 2. tự tạo hoặc cập nhật nhân viên trong `schedule_people`

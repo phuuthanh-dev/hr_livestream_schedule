@@ -1,14 +1,16 @@
 type AppScriptSyncPayload = Record<string, unknown>;
 
 function getAppScriptApiUrl() {
-  const url = process.env.GOOGLE_APPS_SCRIPT_API_URL?.trim();
-  if (!url) throw new Error("Thiếu GOOGLE_APPS_SCRIPT_API_URL.");
+  const url = process.env.GOOGLE_SOURCE_APPS_SCRIPT_API_URL?.trim()
+    || process.env.GOOGLE_APPS_SCRIPT_API_URL?.trim();
+  if (!url) throw new Error("Thiếu GOOGLE_SOURCE_APPS_SCRIPT_API_URL.");
   return url;
 }
 
 function getAppScriptApiToken() {
-  const token = process.env.GOOGLE_APPS_SCRIPT_API_TOKEN?.trim();
-  if (!token) throw new Error("Thiếu GOOGLE_APPS_SCRIPT_API_TOKEN.");
+  const token = process.env.GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN?.trim()
+    || process.env.GOOGLE_APPS_SCRIPT_API_TOKEN?.trim();
+  if (!token) throw new Error("Thiếu GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN.");
   return token;
 }
 
