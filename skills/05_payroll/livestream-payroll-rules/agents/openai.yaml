@@ -1,0 +1,4 @@
+interface:
+  display_name: "Livestream Payroll Rules"
+  short_description: "Calculate per-session livestream payroll from HR sheets"
+  default_prompt: "Use $livestream-payroll-rules to calculate one live session payroll from Base_Salary_Card and TikTok_Sales_Import."

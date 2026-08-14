@@ -64,6 +64,7 @@ export function buildEmployeeMutationFromApplication(
     input.email ? `Email: ${input.email}` : "",
     input.introVideoUrl ? `Video: ${input.introVideoUrl}` : "",
     input.tiktokUrl ? `TikTok: ${input.tiktokUrl}` : "",
+    input.expectedSalary ? `Mức ứng viên đề xuất: ${input.expectedSalary}` : "",
     input.notes ? `Ghi chú: ${input.notes}` : ""
   ];
 
@@ -72,12 +73,11 @@ export function buildEmployeeMutationFromApplication(
       id: employeeId,
       role: "host",
       name: input.fullName,
+      rating: "Thử việc",
       level: "Thử việc",
       workLocation: input.liveLocationPreference || "home",
       phone: normalizePhone(input.phone),
       cvReference: input.cvUrl,
-      cashOffer: input.expectedSalary,
-      castStatus: "Chờ thỏa thuận",
       experience: input.experience,
       trainingStatus: "Chưa training",
       notes: compactParagraphs(baseNotes),
@@ -95,8 +95,6 @@ export function buildEmployeeMutationFromApplication(
     level: "Thử việc",
     phone: normalizePhone(input.phone),
     cvReference: input.cvUrl,
-    cashOffer: input.expectedSalary,
-    castStatus: "Chờ thỏa thuận",
     experience: input.experience,
     trainingStatus: "Chưa training",
     notes: compactParagraphs(baseNotes)

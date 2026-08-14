@@ -4,6 +4,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { FormEvent } from "react";
 import { useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import type { EmployeeAdminPayload, EmployeeRole, ScheduleLocation, ScheduleLocationsPayload, SchedulePerson } from "@/lib/types";
 
 type EmployeeAdminProps = {
@@ -14,12 +15,12 @@ type EmployeeForm = {
   id: string;
   name: string;
   role: EmployeeRole;
+  rating: string;
   level: string;
   workLocation: string;
   phone: string;
   cvReference: string;
   cashOffer: string;
-  castStatus: string;
   experience: string;
   trainingStatus: string;
   notes: string;
@@ -34,9 +35,24 @@ type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
-  cashOffer: "", castStatus: "Đồng ý", experience: "", trainingStatus: "", notes: "", achievements: "",
+  rating: "", cashOffer: "", experience: "", trainingStatus: "", notes: "", achievements: "",
   zaloStatus: "", liveAccountType: "", liveChannelId: "", active: true
 };
+
+function syncCompensationFields(current: EmployeeForm, updates: Partial<EmployeeForm>) {
+  const next = { ...current, ...updates };
+  const compensation = resolveEmployeeCompensation(next.role, {
+    rating: next.rating,
+    level: next.level,
+    cashOffer: next.cashOffer
+  });
+  return {
+    ...next,
+    rating: compensation.rating || next.rating,
+    level: compensation.level || next.level,
+    cashOffer: compensation.cashOffer || ""
+  };
+}
 
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const common = {
@@ -58,16 +74,21 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
 }
 
 function toForm(employee: SchedulePerson): EmployeeForm {
+  const compensation = resolveEmployeeCompensation(employee.role, {
+    rating: employee.trainingProfile?.rating || employee.rating,
+    level: employee.level,
+    cashOffer: employee.trainingProfile?.cashOffer || employee.cashOffer
+  });
   return {
     id: employee.id,
     name: employee.name,
     role: employee.role,
-    level: employee.level || "",
+    rating: compensation.rating || "",
+    level: compensation.level || employee.level || "",
     workLocation: employee.workLocation || "",
     phone: employee.phone || "",
     cvReference: employee.cvReference || "",
-    cashOffer: employee.trainingProfile?.cashOffer || employee.cashOffer || "",
-    castStatus: employee.castStatus || "",
+    cashOffer: compensation.cashOffer || "",
     experience: employee.experience || "",
     trainingStatus: employee.trainingStatus || "",
     notes: employee.notes || "",
@@ -162,7 +183,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
       const response = await fetch("/api/employees", {
         method: editingExisting ? "PUT" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, cashOffer: formCompensation.cashOffer || "" })
       });
       const payload = (await response.json()) as EmployeeAdminPayload;
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không lưu được hồ sơ nhân viên.");
@@ -251,8 +272,13 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     if (statusFilter === "inactive" && employee.active !== false) return false;
     if (statusFilter === "incomplete" && !isIncomplete(employee)) return false;
     if (!deferredQuery) return true;
-    return [employee.id, employee.name, employee.phone, employee.level, employee.liveChannelId]
+    return [employee.id, employee.name, employee.phone, employee.level, employee.rating, employee.liveChannelId]
       .filter(Boolean).join(" ").toLocaleLowerCase("vi").includes(deferredQuery);
+  });
+  const formCompensation = resolveEmployeeCompensation(form.role, {
+    rating: form.rating,
+    level: form.level,
+    cashOffer: form.cashOffer
   });
 
   return (
@@ -321,7 +347,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Nhân viên"><span className={`employeeIdentity ${employee.role}`}><i>{employee.name.slice(0, 1).toUpperCase()}</i><span><strong>{employee.name}</strong><code>{employee.id}</code>{isIncomplete(employee) ? <small>Thiếu thông tin bắt buộc</small> : null}</span></span></td>
                     <td data-label="Vai trò"><span className={`employeeRoleBadge ${employee.role}`}>{employee.role === "host" ? "Host" : "Support"}</span></td>
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
-                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm" : employee.trainingProfile ? `Rating ${employee.trainingProfile.rating} · Offer ${employee.trainingProfile.cashOffer}` : "Support Live"}</small></span></td>
+                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? `Rating ${employee.rating || "Chưa chấm"} · ${locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm"}` : `Rating ${employee.trainingProfile?.rating || employee.rating || "Chưa chấm"} · Offer ${employee.trainingProfile?.cashOffer || employee.cashOffer || "Chưa có"}`}</small></span></td>
                     <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong><small>{employee.role === "support" && employee.trainingProfile ? `${employee.trainingProfile.scorePercent}% checklist` : ""}</small></span></td>
                     <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
@@ -341,7 +367,18 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             <header><div><span>{editingExisting ? "CẬP NHẬT HỒ SƠ" : "THÊM NHÂN VIÊN"}</span><strong>{form.name || "Hồ sơ mới"}</strong><small>{editingExisting ? `${form.role === "host" ? "Host" : "Support"} · ${form.id}` : "Mã và vai trò sẽ trở thành khóa ổn định"}</small></div><button aria-label="Đóng" onClick={() => setEditorOpen(false)} type="button"><Icon name="close" /></button></header>
             <div className="employeeEditorBody">
               <fieldset><legend>Thông tin cơ bản</legend><div className="employeeFormGrid">
-                <label><span>Vai trò</span><select disabled={editingExisting} value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as EmployeeRole, workLocation: event.target.value === "host" ? current.workLocation || locations.find((location) => location.active)?.code || "" : "" }))}><option value="host">Host</option><option value="support">Support Live</option></select></label>
+                <label><span>Vai trò</span><select disabled={editingExisting} value={form.role} onChange={(event) => setForm((current) => ({
+                  ...current,
+                  role: event.target.value as EmployeeRole,
+                  rating: "",
+                  level: "",
+                  cashOffer: "",
+                  workLocation: event.target.value === "host" ? current.workLocation || locations.find((location) => location.active)?.code || "" : "",
+                  zaloStatus: event.target.value === "host" ? current.zaloStatus : "",
+                  liveAccountType: event.target.value === "host" ? current.liveAccountType : "",
+                  liveChannelId: event.target.value === "host" ? current.liveChannelId : "",
+                  achievements: event.target.value === "host" ? current.achievements : ""
+                }))}><option value="host">Host</option><option value="support">Support Live</option></select></label>
                 <label><span>Mã nhân viên</span><input disabled={editingExisting} required value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value.toUpperCase() }))} placeholder={form.role === "host" ? "HRLT21" : "HRSL13"} /></label>
                 <label className="wide"><span>Họ và tên</span><input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
                 <label><span>Số điện thoại</span><input inputMode="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
@@ -349,9 +386,10 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
               </div></fieldset>
 
               <fieldset><legend>Năng lực và vận hành</legend><div className="employeeFormGrid">
-                <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => ({ ...current, level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
+                <label><span>Rating</span><input value={form.rating} onChange={(event) => setForm((current) => syncCompensationFields(current, { rating: event.target.value }))} placeholder={form.role === "host" ? "Thử việc / C / B / A / S" : "A / B / C / D"} /></label>
+                <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => syncCompensationFields(current, { level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
                 {form.role === "host" ? <label><span>Địa điểm</span><select required value={form.workLocation} onChange={(event) => setForm((current) => ({ ...current, workLocation: event.target.value }))}>{locations.map((location) => <option disabled={!location.active} key={location.code} value={location.code}>{location.name}{location.active ? "" : " · Tạm ngưng"}</option>)}</select></label> : null}
-                <label><span>Cash offer</span><input readOnly={form.role === "support"} value={form.cashOffer} onChange={(event) => setForm((current) => ({ ...current, cashOffer: event.target.value }))} placeholder={form.role === "support" ? "Tự động lấy từ rating training" : ""} /></label>
+                <label><span>Cash offer</span><input readOnly value={formCompensation.cashOffer || ""} placeholder="Tự động lấy từ rating/grade" /></label>
                 <label><span>Kinh nghiệm</span><input value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} /></label>
                 <label><span>Training</span><input value={form.trainingStatus} onChange={(event) => setForm((current) => ({ ...current, trainingStatus: event.target.value }))} /></label>
                 <label className="wide"><span>CV / Portfolio</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} /></label>

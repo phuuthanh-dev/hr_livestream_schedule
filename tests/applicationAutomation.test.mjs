@@ -39,15 +39,14 @@ test("maps a Host application into an employee draft", () => {
     id: "HRLT25",
     role: "host",
     name: "Nguyen Minh Anh",
+    rating: "Thử việc",
     level: "Thử việc",
     workLocation: "studio",
     phone: "0901234567",
     cvReference: "https://drive.google.com/file/d/cv",
-    cashOffer: "150.000/giờ",
-    castStatus: "Chờ thỏa thuận",
     experience: "2 nam livestream",
     trainingStatus: "Chưa training",
-    notes: "Email: minhanh@gmail.com\nVideo: https://youtu.be/demo\nTikTok: https://tiktok.com/@demo\nGhi chú: Có thể bắt đầu ngay",
+    notes: "Email: minhanh@gmail.com\nVideo: https://youtu.be/demo\nTikTok: https://tiktok.com/@demo\nMức ứng viên đề xuất: 150.000/giờ\nGhi chú: Có thể bắt đầu ngay",
     achievements: "Top 3 doanh so",
     zaloStatus: "",
     liveAccountType: "Cá nhân",
@@ -75,11 +74,9 @@ test("maps a Support application into an employee draft", () => {
     level: "Thử việc",
     phone: "+84901234567",
     cvReference: "https://drive.google.com/file/d/support-cv",
-    cashOffer: "80.000/giờ",
-    castStatus: "Chờ thỏa thuận",
     experience: "Biết OBS và ghim giỏ hàng",
     trainingStatus: "Chưa training",
-    notes: "Email: tranha@gmail.com\nGhi chú: Đã từng support mỹ phẩm"
+    notes: "Email: tranha@gmail.com\nMức ứng viên đề xuất: 80.000/giờ\nGhi chú: Đã từng support mỹ phẩm"
   });
 });
 

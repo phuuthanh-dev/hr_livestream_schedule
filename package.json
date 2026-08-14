@@ -7,12 +7,19 @@
     "dev": "next dev",
     "build": "next build",
     "test:applications": "node --experimental-strip-types --test tests/applicationAutomation.test.mjs",
+    "test:compensation": "node --experimental-strip-types --test tests/employeeCompensation.test.mjs",
     "start": "next start",
     "test:contract": "node --experimental-strip-types --test tests/employeeContract.test.mjs",
     "test:training": "node --experimental-strip-types --test tests/supportTraining.test.mjs",
     "test:schedule": "node --experimental-strip-types --test tests/scheduleEngine.test.mjs",
     "test:payroll": "node --experimental-strip-types --test tests/payrollEngine.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "test:contract-drive-sync": "node --test tests/contractDriveSync.test.mjs tests/contractDriveSyncTargets.test.mjs",
+    "test:host-offer-sync": "node --test tests/hostOfferSync.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "sync:offers:host": "node local_programs/host_offer_sync/sync-host-offers.mjs",
+    "sync:contracts:drive": "node local_programs/contract_drive_sync/sync-contracts.mjs",
+    "sync:contracts:drive:watch": "node local_programs/contract_drive_sync/sync-contracts.mjs --watch",
+    "sync:contracts:drive:install-agent": "node local_programs/contract_drive_sync/install-macos-launch-agent.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

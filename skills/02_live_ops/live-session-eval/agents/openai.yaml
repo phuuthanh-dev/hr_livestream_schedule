@@ -1,0 +1,4 @@
+interface:
+  display_name: "Live Session Eval"
+  short_description: "Score one live session from TikTok and post-live sheets"
+  default_prompt: "Use $live-session-eval to score one completed live session and draft dry-run updates for Grade_Review and Portfolio_Master."

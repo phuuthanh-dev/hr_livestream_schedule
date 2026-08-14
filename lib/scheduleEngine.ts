@@ -29,7 +29,6 @@ type GeneratedItem = {
   host?: SchedulePerson;
 };
 
-const POSITIVE_CAST_VALUES = ["dong y", "accepted", "chap nhan", "yes"];
 const POSITIVE_TRAINING_VALUES = ["roi", "da training", "da train", "hoan thanh", "completed"];
 
 function normalizeText(value: unknown) {
@@ -54,7 +53,6 @@ function hasPositiveStatus(value: unknown, acceptedValues: string[]) {
 
 function isQualified(person: SchedulePerson) {
   return person.active !== false
-    && hasPositiveStatus(person.castStatus, POSITIVE_CAST_VALUES)
     && hasPositiveStatus(person.trainingStatus, POSITIVE_TRAINING_VALUES);
 }
 

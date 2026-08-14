@@ -160,6 +160,7 @@ export async function saveSupportTrainingProfile(input: {
   await updateSchedulePerson({
     id: person.id,
     role: "support",
+    rating: evaluation.rating,
     level: evaluation.level,
     cashOffer: evaluation.cashOffer,
     trainingStatus: evaluation.trainingStatus,

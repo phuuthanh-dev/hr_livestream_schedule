@@ -36,17 +36,22 @@ export async function GET() {
       listEmployeeContractSummaries(),
       listSupportTrainingSummaries()
     ]);
-    const employees = roster.map((employee) => ({
-      ...employee,
-      contractProfile: contractSummaries.get(employeeContractPersonKey(employee.role, employee.id)) || {
-        completed: false,
-        hasFront: false,
-        hasBack: false
-      },
-      trainingProfile: employee.role === "support"
+    const employees = roster.map((employee) => {
+      const trainingProfile = employee.role === "support"
         ? trainingSummaries.get(employeeContractPersonKey("support", employee.id))
-        : undefined
-    }));
+        : undefined;
+      return {
+        ...employee,
+        rating: trainingProfile?.rating || employee.rating,
+        cashOffer: trainingProfile?.cashOffer || employee.cashOffer,
+        contractProfile: contractSummaries.get(employeeContractPersonKey(employee.role, employee.id)) || {
+          completed: false,
+          hasFront: false,
+          hasBack: false
+        },
+        trainingProfile
+      };
+    });
     const activeEmployees = employees.filter((employee) => employee.active !== false);
     const incomplete = activeEmployees.filter((employee) =>
       !employee.name || !employee.phone || !employee.level || (employee.role === "host" && !employee.workLocation)

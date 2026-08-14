@@ -18,7 +18,6 @@ function person(id, role, overrides = {}) {
     level: role === "host" ? "A" : "Cấp 1",
     workLocation: role === "host" ? "studio" : undefined,
     cashOffer: role === "host" ? "100.000" : "30.000",
-    castStatus: "Đồng ý",
     trainingStatus: role === "host" ? "Rồi" : "Đã Training",
     active: true,
     ...overrides
@@ -113,6 +112,17 @@ test("one slot can contain one Studio live and one Home live", () => {
   assert.equal(rows.length, 2);
   assert.deepEqual(new Set(rows.map((row) => row.format)), new Set(["Home", "Studio"]));
   assert.equal(new Set(rows.map((row) => row.sessionId)).size, 2);
+});
+
+test("schedule generation no longer depends on cast status", () => {
+  const host = person("HRLT01", "host", { workLocation: "home", castStatus: "" });
+  const rows = run(
+    [host],
+    [available("host", host.id, "2026-08-13", slots[0], "home")]
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].hostId, host.id);
+  assert.equal(rows[0].status, "published");
 });
 
 test("host is limited to two sessions in one day", () => {

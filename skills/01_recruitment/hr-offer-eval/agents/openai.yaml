@@ -1,0 +1,4 @@
+interface:
+  display_name: "HR Offer Eval"
+  short_description: "Chấm test live và đề xuất offer host"
+  default_prompt: "Use $hr-offer-eval to review a host test live and draft a dry-run salary proposal for cột H."

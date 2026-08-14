@@ -3,6 +3,7 @@ import type { Collection } from "mongodb";
 import { EMPLOYEE_MIGRATION_SEED, EMPLOYEE_MIGRATION_SOURCE } from "@/lib/employeeSeed";
 import { nextEmployeeIdForRole } from "@/lib/applicationAutomation";
 import { deleteContractImage } from "@/lib/contractCloudinary";
+import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
 import { getMongoDatabase } from "@/lib/mongodb";
@@ -15,6 +16,7 @@ type SchedulePersonDocument = {
   normalizedEmployeeId: string;
   name: string;
   role: EmployeeRole;
+  rating?: string;
   level: string;
   workLocation?: HostWorkLocation | "";
   phone?: string;
@@ -87,17 +89,21 @@ function normalizePhone(value: unknown) {
 }
 
 function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
+  const compensation = resolveEmployeeCompensation(document.role, {
+    rating: document.rating,
+    level: document.level,
+    cashOffer: document.cashOffer
+  });
   return {
     id: document.employeeId,
     name: document.name || document.employeeId,
     role: document.role,
-    level: document.level || undefined,
-    rating: undefined,
+    level: compensation.level || undefined,
+    rating: compensation.rating || undefined,
     workLocation: document.role === "host" ? normalizeHostWorkLocation(document.workLocation) : undefined,
     phone: document.phone || undefined,
     cvReference: document.cvReference || undefined,
-    cashOffer: document.cashOffer || undefined,
-    castStatus: document.castStatus || undefined,
+    cashOffer: compensation.cashOffer || undefined,
     experience: document.experience || undefined,
     trainingStatus: document.trainingStatus || undefined,
     notes: document.notes || undefined,
@@ -113,14 +119,19 @@ function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
 }
 
 function personFields(input: SchedulePersonMutation) {
+  const compensation = resolveEmployeeCompensation(input.role, {
+    rating: input.rating,
+    level: input.level,
+    cashOffer: input.cashOffer
+  });
   return {
     name: normalizeText(input.name),
-    level: normalizeText(input.level),
+    rating: normalizeText(compensation.rating),
+    level: normalizeText(compensation.level),
     workLocation: input.role === "host" ? normalizeLocationCode(input.workLocation) : "",
     phone: normalizePhone(input.phone),
     cvReference: normalizeText(input.cvReference),
-    cashOffer: normalizeText(input.cashOffer),
-    castStatus: normalizeText(input.castStatus),
+    cashOffer: normalizeText(compensation.cashOffer),
     experience: normalizeText(input.experience),
     trainingStatus: normalizeText(input.trainingStatus),
     notes: normalizeText(input.notes),
@@ -341,6 +352,9 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
         updatedAt: now,
         updatedBy: actorAccountKey,
         deactivatedAt: active ? null : now
+      },
+      $unset: {
+        castStatus: "" as const
       }
     },
     { returnDocument: "after" }
@@ -373,6 +387,9 @@ export async function bootstrapSchedulePeople(): Promise<PeopleSyncPayload> {
             updatedAt: now,
             updatedBy: "migration",
             deactivatedAt: null
+          },
+          $unset: {
+            castStatus: "" as const
           },
           $setOnInsert: {
             personKey: buildPersonKey(person.role, person.id),

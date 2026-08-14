@@ -55,6 +55,7 @@ Nếu bước đẩy Google Sheet lỗi, hồ sơ và nhân viên vẫn được
 - Trang `/support-training` dùng checklist training cho support live.
 - Checklist lấy từ SOP support live và được lưu vào `support_training_profiles`.
 - Hệ thống tự chấm `rating`, suy ra `level`, `cashOffer` và cập nhật lại hồ sơ support.
+- Trang quản lý nhân sự không còn nhập tay `cashOffer` hay `castStatus`; Admin chỉ cập nhật `rating/grade`, hệ thống tự chuẩn hóa `cashOffer`.
 - Mapping hiện tại:
   - `A` từ `>= 90%` checklist: `Cấp 4` · `120.000`
   - `B` từ `>= 75%` checklist: `Cấp 3` · `70.000`
@@ -74,6 +75,29 @@ Nếu bước đẩy Google Sheet lỗi, hồ sơ và nhân viên vẫn được
 - `people_applications`: hồ sơ ứng tuyển gửi từ trang `/apply`.
 - `people_applications`: hồ sơ ứng tuyển gửi từ trang `/apply`, kèm mã nhân sự và trạng thái đồng bộ sheet.
 - `employee_contract_profiles`: thông tin hợp đồng và metadata ảnh CCCD riêng tư; không chứa BHXH.
+
+## Local Program: Contract Drive Sync
+
+- Local program nằm ở `local_programs/contract_drive_sync/`.
+- Nhiệm vụ: đọc `schedule_people`, `employee_contract_profiles`, `people_applications`, tải ảnh CCCD từ Cloudinary, và sync bundle hồ sơ nhân sự lên Google Drive mỗi 1 giờ.
+- Auth Google Drive dùng phiên đăng nhập hiện tại của `gws` CLI.
+- Lệnh:
+  - `npm run sync:contracts:drive`
+  - `npm run sync:contracts:drive -- --dry-run`
+  - `npm run sync:contracts:drive:watch`
+  - `npm run sync:contracts:drive:install-agent`
+- Tài liệu cấu hình: `docs/local-program-contract-drive-sync.md`
+
+## Local Program: Host Offer Sync
+
+- Local program nằm ở `local_programs/host_offer_sync/`.
+- Nhiệm vụ: đọc `Thông tin Mẫu Live`, lấy `Đánh giá level` hoặc `Rating`, đề xuất `Lương thỏa thuận`, và ghi cột H cho các row company-account đủ điều kiện.
+- Auth Google Sheets dùng phiên đăng nhập hiện tại của `gws` CLI.
+- Lệnh:
+  - `npm run sync:offers:host`
+  - `npm run sync:offers:host -- --employee-id=HRLT25`
+  - `npm run sync:offers:host -- --employee-id=HRLT25 --apply`
+- Tài liệu cấu hình: `docs/local-program-host-offer-sync.md`
 
 ## Local Dev
 

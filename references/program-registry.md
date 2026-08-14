@@ -1,0 +1,72 @@
+# Program Registry
+
+## contract-drive-sync
+
+- Canonical command: `npm run sync:contracts:drive`
+- Related commands:
+  - `npm run sync:contracts:drive -- --dry-run`
+  - `npm run sync:contracts:drive:watch`
+  - `npm run sync:contracts:drive:install-agent`
+- Scope: Đồng bộ hồ sơ nhân sự tổng hợp từ `schedule_people`, `employee_contract_profiles`, `people_applications` và CV reference/file lên Google Drive theo folder nhân sự.
+- Inputs:
+  - `local_programs/contract_drive_sync/.env.local`
+  - phiên đăng nhập `gws` CLI có quyền vào folder Drive đích
+  - collection `schedule_people`
+  - collection `employee_contract_profiles`
+  - collection `people_applications`
+  - ảnh CCCD private trên Cloudinary
+- Outputs:
+  - folder con theo nhân sự trong folder Drive đích
+  - `person-profile.json`
+  - `contract-profile.json`
+  - `application-profile.json`
+  - `cv-reference.txt`
+  - `README.md`
+  - ảnh `cccd-front.*`
+  - ảnh `cccd-back.*`
+  - state file tại `LOCAL_CONTRACT_SYNC_STATE_PATH`
+- Side effects:
+  - đọc MongoDB
+  - tải ảnh từ Cloudinary
+  - tải CV file từ URL nếu nguồn trả về file trực tiếp
+  - tạo/cập nhật file và folder trên Google Drive
+  - ghi state local
+- Acceptance checks:
+  - `npm run test:contract-drive-sync`
+  - `npm run sync:contracts:drive -- --help`
+  - `npm run sync:contracts:drive -- --dry-run`
+- Safety limits:
+  - mặc định không xóa dữ liệu nguồn MongoDB hoặc Cloudinary
+  - nếu CV source chỉ là nhãn hoặc URL trả về HTML thì chỉ lưu reference, không ép copy file
+  - `--dry-run` không ghi Drive
+
+## host-offer-sync
+
+- Canonical command: `npm run sync:offers:host`
+- Related commands:
+  - `npm run sync:offers:host -- --employee-id=HRLT25`
+  - `npm run sync:offers:host -- --employee-id=HRLT25 --apply`
+  - `npm run sync:offers:host -- --employee-id=HRLT25 --apply --allow-overwrite`
+- Scope: Đọc `Thông tin Mẫu Live`, lấy `Đánh giá level` hoặc `Rating`, đề xuất `Lương thỏa thuận`, và ghi cột H cho các row company-account đủ điều kiện.
+- Inputs:
+  - `local_programs/host_offer_sync/.env.local`
+  - phiên đăng nhập `gws` CLI có quyền vào source spreadsheet
+  - tab `Thông tin Mẫu Live`
+  - cột `Đánh giá level` hoặc `Rating`
+- Outputs:
+  - báo cáo dry-run/apply dạng JSON
+  - cập nhật cột H `Lương thỏa thuận` khi chạy với `--apply`
+  - state file tại `LOCAL_HOST_OFFER_STATE_PATH`
+- Side effects:
+  - đọc Google Sheet qua `gws`
+  - cập nhật Google Sheet qua `gws` khi có `--apply`
+  - ghi state local
+- Acceptance checks:
+  - `npm run test:host-offer-sync`
+  - `npm run sync:offers:host -- --help`
+  - `npm run sync:offers:host -- --include-filled --limit=3`
+- Safety limits:
+  - mặc định chỉ dry-run
+  - mặc định khi chạy theo lô chỉ quét các dòng đang trống cột H
+  - row `personal-account`, `mixed`, hoặc thiếu grade sẽ trả về `hold`
+  - không ghi đè cột H đang có giá trị khác nếu không thêm `--allow-overwrite`
