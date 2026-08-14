@@ -3303,6 +3303,258 @@ a:hover {
   .signalHeader strong i { animation: none; }
 }
 
+/* Marketing */
+.marketingPage {
+  min-height: 100vh;
+  color: #16373d;
+  background:
+    radial-gradient(circle at 8% 6%, rgba(14, 119, 111, 0.08), transparent 24rem),
+    radial-gradient(circle at 92% 9%, rgba(219, 152, 30, 0.12), transparent 26rem),
+    linear-gradient(180deg, #faf8f3 0%, #edf3f1 100%);
+}
+
+.marketingHeader,
+.marketingHero,
+.marketingSection {
+  width: min(1380px, calc(100% - 56px));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.marketingHeader {
+  display: grid;
+  min-height: 82px;
+  padding: 18px 0;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+
+.marketingBrand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.marketingBrand img {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(18, 55, 60, 0.12);
+}
+
+.marketingBrand span {
+  display: flex;
+  flex-direction: column;
+}
+
+.marketingBrand small,
+.marketingEyebrow {
+  color: #0f766e;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.marketingBrand strong {
+  font-family: var(--font-fraunces), serif;
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.marketingNav {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+}
+
+.marketingNav a,
+.marketingHeaderActions a,
+.marketingHeroActions a {
+  text-decoration: none;
+}
+
+.marketingNav a {
+  color: #5f787d;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.marketingHeaderActions,
+.marketingHeroActions {
+  display: flex;
+  gap: 10px;
+}
+
+.marketingPrimaryButton,
+.marketingGhostButton {
+  display: inline-flex;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.marketingPrimaryButton {
+  color: #fff;
+  background: #0f766e;
+  box-shadow: 0 14px 28px rgba(15, 118, 110, 0.2);
+}
+
+.marketingGhostButton {
+  color: #17363d;
+  border: 1px solid #d4e0dd;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.marketingHero {
+  display: grid;
+  padding: 48px 0 36px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
+  gap: 28px;
+  align-items: center;
+}
+
+.marketingHeroCopy h1 {
+  max-width: 760px;
+  margin: 14px 0 0;
+  font-family: var(--font-fraunces), serif;
+  font-size: clamp(2.9rem, 6vw, 5.8rem);
+  line-height: 0.92;
+  letter-spacing: -0.06em;
+}
+
+.marketingHeroCopy p {
+  max-width: 720px;
+  margin: 24px 0 0;
+  color: #62797c;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.marketingHeroPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.marketingHeroPanel article,
+.marketingModuleGrid article,
+.marketingFlow article,
+.marketingIntegrationCard {
+  border: 1px solid rgba(20, 57, 69, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 20px 48px rgba(19, 52, 57, 0.08);
+}
+
+.marketingHeroPanel article {
+  display: grid;
+  gap: 8px;
+  padding: 20px 22px;
+}
+
+.marketingHeroPanel span {
+  color: #0f766e;
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.marketingHeroPanel strong {
+  font-size: 1rem;
+}
+
+.marketingHeroPanel small {
+  color: #647b7f;
+  line-height: 1.65;
+}
+
+.marketingSection {
+  padding: 22px 0 44px;
+}
+
+.marketingSectionHeading {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.marketingSectionHeading h2 {
+  margin: 0;
+  font-family: var(--font-fraunces), serif;
+  font-size: clamp(2rem, 3vw, 3rem);
+  letter-spacing: -0.045em;
+}
+
+.marketingModuleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.marketingModuleGrid article,
+.marketingFlow article {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+}
+
+.marketingModuleGrid strong,
+.marketingFlow strong,
+.marketingIntegrationCard strong {
+  font-size: 0.98rem;
+}
+
+.marketingModuleGrid p,
+.marketingFlow p,
+.marketingIntegrationCard p,
+.marketingIntegrationCard li {
+  margin: 0;
+  color: #657c7f;
+  line-height: 1.75;
+  font-size: 0.84rem;
+}
+
+.marketingFlow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.marketingFlow article b {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: #fff;
+  background: #0f766e;
+  place-items: center;
+  font-size: 0.82rem;
+}
+
+.marketingIntegrationSection {
+  padding-bottom: 70px;
+}
+
+.marketingIntegrationCard {
+  display: grid;
+  padding: 26px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 24px;
+}
+
+.marketingIntegrationCard ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
 /* Payroll */
 .payrollApp {
   --payroll-ink: #153635;
@@ -3436,6 +3688,7 @@ a:hover {
 }
 
 .payrollHero,
+.payrollSyncPanel,
 .payrollToolbar,
 .payrollMessage,
 .payrollSummaryGrid,
@@ -3583,6 +3836,58 @@ a:hover {
 
 .payrollPrimaryButton:hover {
   background: var(--payroll-green-dark);
+}
+
+.payrollSyncPanel {
+  display: grid;
+  margin-top: -8px;
+  margin-bottom: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payrollSyncCard {
+  display: grid;
+  min-height: 128px;
+  padding: 18px 19px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 18px;
+  background: rgba(255, 253, 247, 0.88);
+  box-shadow: 0 12px 28px rgba(21, 54, 53, 0.05);
+  align-content: end;
+  gap: 7px;
+}
+
+.payrollSyncCard.primary {
+  color: #fff;
+  border-color: var(--payroll-green-dark);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 60%),
+    var(--payroll-green-dark);
+}
+
+.payrollSyncCard span {
+  margin-bottom: auto;
+  color: var(--payroll-muted);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.payrollSyncCard.primary span,
+.payrollSyncCard.primary small {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.payrollSyncCard strong {
+  font-size: 0.95rem;
+}
+
+.payrollSyncCard small {
+  color: var(--payroll-muted);
+  line-height: 1.6;
+  font-size: 0.68rem;
 }
 
 .payrollToolbar {
@@ -4195,9 +4500,42 @@ a:hover {
 }
 
 @media (max-width: 1050px) {
+  .marketingHeader,
+  .marketingHero,
+  .marketingSection {
+    width: calc(100% - 28px);
+  }
+
+  .marketingHeader {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .marketingNav {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .marketingHero,
+  .marketingIntegrationCard {
+    grid-template-columns: 1fr;
+  }
+
+  .marketingModuleGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .marketingFlow {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .payrollHero {
     grid-template-columns: minmax(0, 1fr) minmax(310px, 0.8fr);
     gap: 36px;
+  }
+
+  .payrollSyncPanel {
+    grid-template-columns: 1fr 1fr;
   }
 
   .payrollSummaryGrid {
@@ -4226,6 +4564,24 @@ a:hover {
 }
 
 @media (max-width: 720px) {
+  .marketingHeaderActions,
+  .marketingHeroActions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .marketingPrimaryButton,
+  .marketingGhostButton {
+    width: 100%;
+  }
+
+  .marketingModuleGrid,
+  .marketingFlow,
+  .marketingIntegrationCard,
+  .payrollSyncPanel {
+    grid-template-columns: 1fr;
+  }
+
   .payrollHeader {
     min-height: 62px;
     padding: 0 12px;
@@ -4247,6 +4603,7 @@ a:hover {
   }
 
   .payrollHero,
+  .payrollSyncPanel,
   .payrollToolbar,
   .payrollMessage,
   .payrollSummaryGrid,

@@ -201,6 +201,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const isLocked = payload?.periodStatus === "locked";
   const entries = payload?.entries || [];
   const exceptions = payload?.exceptions || [];
+  const latestImport = payload?.imports?.[0];
 
   return (
     <main className="payrollApp">
@@ -215,20 +216,50 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
 
       <section className="payrollHero">
         <div className="payrollHeroCopy">
-          <span className="payrollEyebrow">LƯƠNG LIVESTREAM · TUẦN</span>
-          <h1>Từ ca đã xác nhận<br />đến lương minh bạch.</h1>
-          <p>Giờ công lấy từ lịch. GMV lấy từ báo cáo TikTok Shop. Mọi dòng thiếu dữ liệu được giữ lại thành ngoại lệ để Admin xử lý.</p>
+          <span className="payrollEyebrow">LIVESTREAM PAYROLL · OPERATIONS</span>
+          <h1>From confirmed sessions<br />to auditable payroll.</h1>
+          <p>
+            The payroll engine matches confirmed work sessions with livestream report records, then calculates base pay,
+            commission, tax, and exception handling inside one internal operations workflow.
+          </p>
         </div>
         <div className="payrollImportCard">
           <div className="payrollImportIcon"><Icon name="upload" /></div>
-          <div><strong>Nhập báo cáo TikTok Shop</strong><span>Hỗ trợ .xlsx và .csv · tối đa 10 MB</span></div>
+          <div><strong>Livestream report ingestion</strong><span>Accepts report batches in .xlsx or .csv format · max 10 MB</span></div>
           <input ref={fileInputRef} type="file" accept=".xlsx,.csv" onChange={(event) => setFile(event.target.files?.[0] || null)} hidden />
           <button className="payrollFilePicker" onClick={() => fileInputRef.current?.click()} type="button">
-            <span>{file ? file.name : "Chọn file báo cáo"}</span><small>{file ? `${(file.size / 1024).toFixed(0)} KB` : "Kéo thả hoặc chọn từ máy"}</small>
+            <span>{file ? file.name : "Select report batch"}</span><small>{file ? `${(file.size / 1024).toFixed(0)} KB` : "Choose an exported livestream report file"}</small>
           </button>
           <button className="payrollPrimaryButton" disabled={working === "upload"} onClick={() => void uploadReport()} type="button">
-            <Icon name="upload" />{working === "upload" ? "Đang import..." : "Import báo cáo"}
+            <Icon name="upload" />{working === "upload" ? "Ingesting..." : "Ingest report batch"}
           </button>
+        </div>
+      </section>
+
+      <section className="payrollSyncPanel">
+        <div className="payrollSyncCard primary">
+          <span>Livestream Report Sync</span>
+          <strong>{latestImport ? "Batch received" : "Waiting for report batch"}</strong>
+          <small>
+            {latestImport
+              ? `Latest batch: ${latestImport.fileName}`
+              : "No livestream report batch has been ingested for the selected week yet."}
+          </small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Source</span>
+          <strong>Livestream report ingestion pipeline</strong>
+          <small>Report batches are normalized before payroll matching starts.</small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Batch Range</span>
+          <strong>{latestImport ? `${formatDate(latestImport.dateFrom)} - ${formatDate(latestImport.dateTo)}` : "-"}</strong>
+          <small>{latestImport ? `${latestImport.totalRows} rows · ${latestImport.inserted} inserted` : "No imported rows yet."}</small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Last Ingested</span>
+          <strong>{latestImport ? new Date(latestImport.importedAt).toLocaleString("vi-VN") : "-"}</strong>
+          <small>These records are then matched against confirmed sessions to calculate payroll.</small>
         </div>
       </section>
 
@@ -266,8 +297,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
 
         {tab === "payroll" ? (
           <div className="payrollTablePanel">
-            <div className="payrollPanelTitle"><div><strong>Chi tiết lương theo phiên</strong><span>Giờ lịch × đơn giá + GMV hợp lệ × hoa hồng - thuế 10%</span></div><small>{payload?.generatedAt ? `Tính lúc ${new Date(payload.generatedAt).toLocaleString("vi-VN")}` : "Chưa tính"}</small></div>
-            {loading ? <div className="payrollEmpty">Đang tải dữ liệu tuần...</div> : entries.length === 0 ? <div className="payrollEmpty"><Icon name="calculate" /><strong>Chưa có dòng lương</strong><span>Import báo cáo TikTok rồi bấm “Tính lương tuần”.</span></div> : (
+            <div className="payrollPanelTitle"><div><strong>Payroll entries by livestream session</strong><span>Confirmed session time + matched livestream report data + payroll rules</span></div><small>{payload?.generatedAt ? `Calculated at ${new Date(payload.generatedAt).toLocaleString("vi-VN")}` : "Not calculated yet"}</small></div>
+            {loading ? <div className="payrollEmpty">Loading selected payroll week...</div> : entries.length === 0 ? <div className="payrollEmpty"><Icon name="calculate" /><strong>No payroll entries yet</strong><span>Ingest a livestream report batch, then run payroll calculation for the selected week.</span></div> : (
               <div className="payrollTableScroll"><table className="payrollTable"><thead><tr><th>Nhân sự</th><th>Phiên</th><th>Giờ / Đơn giá</th><th>GMV tính HH</th><th>Lương cứng</th><th>Hoa hồng</th><th>Thuế</th><th>Thực nhận</th></tr></thead><tbody>
                 {entries.map((entry) => <tr key={entry.entryKey}>
                   <td data-label="Nhân sự"><span className={`payrollPerson ${entry.role}`}><i>{entry.employeeName.slice(0, 1)}</i><span><strong>{entry.employeeName}</strong><small>{entry.employeeId} · {entry.role === "host" ? "Host" : "Support"} {entry.grade ? `· ${entry.grade}` : ""}</small></span></span></td>
@@ -286,11 +317,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
 
         {tab === "exceptions" ? (
           <div className="payrollExceptionGrid">
-            <div className="payrollTablePanel payrollExceptionPanel"><div className="payrollPanelTitle"><div><strong>Hàng chờ xử lý</strong><span>Các dòng này không được tự động trả lương</span></div></div>
-              {exceptions.length === 0 ? <div className="payrollEmpty"><strong>Không có ngoại lệ</strong><span>Lịch và báo cáo TikTok đã khớp.</span></div> : exceptions.map((item) => <article className="payrollException" key={item.exceptionKey}><i><Icon name="alert" /></i><div><span>{item.type.replace(/_/g, " ")}</span><strong>{item.message}</strong><small>{formatDate(item.dateKey)}{item.accountId ? ` · @${item.accountId}` : ""}{item.sessionId ? ` · ${item.sessionId}` : ""}</small></div></article>)}
+            <div className="payrollTablePanel payrollExceptionPanel"><div className="payrollPanelTitle"><div><strong>Exception review queue</strong><span>These records require admin review before they can be finalized in payroll</span></div></div>
+              {exceptions.length === 0 ? <div className="payrollEmpty"><strong>No exceptions</strong><span>Confirmed sessions and livestream report data are currently aligned.</span></div> : exceptions.map((item) => <article className="payrollException" key={item.exceptionKey}><i><Icon name="alert" /></i><div><span>{item.type.replace(/_/g, " ")}</span><strong>{item.message}</strong><small>{formatDate(item.dateKey)}{item.accountId ? ` · @${item.accountId}` : ""}{item.sessionId ? ` · ${item.sessionId}` : ""}</small></div></article>)}
             </div>
-            <aside className="payrollImports"><div className="payrollPanelTitle"><div><strong>Lịch sử import</strong><span>File liên quan tuần đang chọn</span></div></div>
-              {(payload?.imports || []).length === 0 ? <div className="payrollEmpty compact">Chưa có file cho tuần này.</div> : payload?.imports?.map((item) => <article key={item.batchId}><span>.{item.fileName.split(".").pop()?.toUpperCase()}</span><div><strong>{item.fileName}</strong><small>{formatDate(item.dateFrom)} - {formatDate(item.dateTo)} · {item.totalRows} dòng</small></div><time>{new Date(item.importedAt).toLocaleDateString("vi-VN")}</time></article>)}
+            <aside className="payrollImports"><div className="payrollPanelTitle"><div><strong>Ingestion history</strong><span>Report batches linked to the selected payroll week</span></div></div>
+              {(payload?.imports || []).length === 0 ? <div className="payrollEmpty compact">No report batches for this week yet.</div> : payload?.imports?.map((item) => <article key={item.batchId}><span>.{item.fileName.split(".").pop()?.toUpperCase()}</span><div><strong>{item.fileName}</strong><small>{formatDate(item.dateFrom)} - {formatDate(item.dateTo)} · {item.totalRows} rows</small></div><time>{new Date(item.importedAt).toLocaleDateString("vi-VN")}</time></article>)}
             </aside>
           </div>
         ) : null}
