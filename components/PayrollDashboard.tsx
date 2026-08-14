@@ -209,57 +209,57 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <a className="payrollBack" href="/" aria-label="Về lịch chính"><Icon name="back" /></a>
         <div className="payrollBrand">
           <img src="/rr-logo-submark-square.png" alt="" />
-          <span><small>ROOT ROTATION</small><strong>Payroll Studio</strong></span>
+          <span><small>ROOT ROTATION</small><strong>Trung tâm tính lương</strong></span>
         </div>
         <div className="payrollHeaderUser"><span>{username.slice(0, 1).toUpperCase()}</span><div><small>Admin</small><strong>{username}</strong></div></div>
       </header>
 
       <section className="payrollHero">
         <div className="payrollHeroCopy">
-          <span className="payrollEyebrow">LIVESTREAM PAYROLL · OPERATIONS</span>
-          <h1>From confirmed sessions<br />to auditable payroll.</h1>
+          <span className="payrollEyebrow">PAYROLL LIVESTREAM · VẬN HÀNH</span>
+          <h1>Từ ca đã xác nhận<br />đến bảng lương có thể đối soát.</h1>
           <p>
-            The payroll engine matches confirmed work sessions with livestream report records, then calculates base pay,
-            commission, tax, and exception handling inside one internal operations workflow.
+            Bộ máy payroll đối chiếu ca làm đã xác nhận với dữ liệu báo cáo livestream, sau đó tính lương cứng,
+            hoa hồng, thuế và xử lý ngoại lệ trong một luồng vận hành nội bộ thống nhất.
           </p>
         </div>
         <div className="payrollImportCard">
           <div className="payrollImportIcon"><Icon name="upload" /></div>
-          <div><strong>Livestream report ingestion</strong><span>Accepts report batches in .xlsx or .csv format · max 10 MB</span></div>
+          <div><strong>Nhập báo cáo livestream</strong><span>Nhận batch báo cáo định dạng .xlsx hoặc .csv · tối đa 10 MB</span></div>
           <input ref={fileInputRef} type="file" accept=".xlsx,.csv" onChange={(event) => setFile(event.target.files?.[0] || null)} hidden />
           <button className="payrollFilePicker" onClick={() => fileInputRef.current?.click()} type="button">
-            <span>{file ? file.name : "Select report batch"}</span><small>{file ? `${(file.size / 1024).toFixed(0)} KB` : "Choose an exported livestream report file"}</small>
+            <span>{file ? file.name : "Chọn batch báo cáo"}</span><small>{file ? `${(file.size / 1024).toFixed(0)} KB` : "Chọn file báo cáo livestream đã xuất"}</small>
           </button>
           <button className="payrollPrimaryButton" disabled={working === "upload"} onClick={() => void uploadReport()} type="button">
-            <Icon name="upload" />{working === "upload" ? "Ingesting..." : "Ingest report batch"}
+            <Icon name="upload" />{working === "upload" ? "Đang nhập..." : "Nhập batch báo cáo"}
           </button>
         </div>
       </section>
 
       <section className="payrollSyncPanel">
         <div className="payrollSyncCard primary">
-          <span>Livestream Report Sync</span>
-          <strong>{latestImport ? "Batch received" : "Waiting for report batch"}</strong>
+          <span>Đồng bộ báo cáo livestream</span>
+          <strong>{latestImport ? "Đã nhận batch báo cáo" : "Đang chờ batch báo cáo"}</strong>
           <small>
             {latestImport
-              ? `Latest batch: ${latestImport.fileName}`
-              : "No livestream report batch has been ingested for the selected week yet."}
+              ? `Batch gần nhất: ${latestImport.fileName}`
+              : "Tuần đang chọn chưa có batch báo cáo livestream nào được nhập vào."}
           </small>
         </div>
         <div className="payrollSyncCard">
-          <span>Source</span>
-          <strong>Livestream report ingestion pipeline</strong>
-          <small>Report batches are normalized before payroll matching starts.</small>
+          <span>Nguồn dữ liệu</span>
+          <strong>Pipeline nhập báo cáo livestream</strong>
+          <small>Dữ liệu báo cáo sẽ được chuẩn hóa trước khi bắt đầu đối chiếu payroll.</small>
         </div>
         <div className="payrollSyncCard">
-          <span>Batch Range</span>
+          <span>Phạm vi batch</span>
           <strong>{latestImport ? `${formatDate(latestImport.dateFrom)} - ${formatDate(latestImport.dateTo)}` : "-"}</strong>
-          <small>{latestImport ? `${latestImport.totalRows} rows · ${latestImport.inserted} inserted` : "No imported rows yet."}</small>
+          <small>{latestImport ? `${latestImport.totalRows} dòng · ${latestImport.inserted} dòng đã nhập` : "Chưa có dòng dữ liệu nào được nhập."}</small>
         </div>
         <div className="payrollSyncCard">
-          <span>Last Ingested</span>
+          <span>Lần nhập gần nhất</span>
           <strong>{latestImport ? new Date(latestImport.importedAt).toLocaleString("vi-VN") : "-"}</strong>
-          <small>These records are then matched against confirmed sessions to calculate payroll.</small>
+          <small>Dữ liệu này sẽ tiếp tục được đối chiếu với ca đã xác nhận để tính lương.</small>
         </div>
       </section>
 
