@@ -50,7 +50,7 @@ export function isHttpUrl(value) {
 }
 
 export function deriveCvReference(target) {
-  return preferText(target?.application?.cvUrl, target?.person?.cvReference);
+  return preferText(target?.recruitment?.cvUrl, target?.application?.cvUrl, target?.person?.cvReference);
 }
 
 export function buildSyncStamp(target) {
@@ -59,8 +59,11 @@ export function buildSyncStamp(target) {
     target?.person?.lastSeenAt,
     target?.contract?.updatedAt,
     target?.contract?.submittedAt,
+    target?.recruitment?.updatedAt,
     target?.application?.updatedAt,
-    target?.application?.submittedAt
+    target?.application?.submittedAt,
+    target?.supportTraining?.updatedAt,
+    target?.supportTraining?.completedAt
   ]);
 }
 
@@ -71,12 +74,14 @@ function ensureTarget(map, key) {
       employeeId: "",
       role: "",
       employeeName: "",
-      phone: "",
-      person: null,
-      contract: null,
-      application: null,
-      updatedAt: ""
-    });
+        phone: "",
+        person: null,
+        contract: null,
+        recruitment: null,
+        application: null,
+        supportTraining: null,
+        updatedAt: ""
+      });
   }
   return map.get(key);
 }
@@ -84,7 +89,9 @@ function ensureTarget(map, key) {
 export function buildSyncTargets({
   people = [],
   contracts = [],
+  recruitmentProfiles = [],
   applications = [],
+  supportTrainingProfiles = [],
   employeeId = ""
 } = {}) {
   const normalizedFilter = normalizeEmployeeId(employeeId);
@@ -119,6 +126,23 @@ export function buildSyncTargets({
     target.employeeName = preferText(target.employeeName, contract.employeeName, contract.employeeId);
   }
 
+  for (const recruitment of recruitmentProfiles) {
+    const key = buildTargetKey([
+      normalizeEmployeeId(recruitment.employeeId),
+      `${cleanText(recruitment.role)}:${normalizePhone(recruitment.phone)}`,
+      cleanText(recruitment.personKey)
+    ]);
+    const target = ensureTarget(targets, key);
+    target.recruitment = recruitment;
+    target.employeeId = preferText(target.employeeId, recruitment.employeeId);
+    target.role = preferText(target.role, recruitment.role);
+    target.employeeName = preferText(target.employeeName, recruitment.aliasName, recruitment.fullName, recruitment.employeeId);
+    target.phone = preferText(target.phone, recruitment.phone);
+    if (target.phone && target.role) {
+      personKeyByPhoneRole.set(`${target.role}:${normalizePhone(target.phone)}`, key);
+    }
+  }
+
   for (const application of applications) {
     const phoneRoleKey = `${cleanText(application.role)}:${normalizePhone(application.phone || application.normalizedPhone)}`;
     const key = buildTargetKey([
@@ -132,6 +156,18 @@ export function buildSyncTargets({
     target.role = preferText(target.role, application.role);
     target.employeeName = preferText(target.employeeName, application.fullName, application.employeeId);
     target.phone = preferText(target.phone, application.phone, application.normalizedPhone);
+  }
+
+  for (const supportTraining of supportTrainingProfiles) {
+    const key = buildTargetKey([
+      normalizeEmployeeId(supportTraining.employeeId),
+      cleanText(supportTraining.personKey)
+    ]);
+    const target = ensureTarget(targets, key);
+    target.supportTraining = supportTraining;
+    target.employeeId = preferText(target.employeeId, supportTraining.employeeId);
+    target.role = preferText(target.role, "support");
+    target.employeeName = preferText(target.employeeName, supportTraining.employeeName, supportTraining.employeeId);
   }
 
   const rows = Array.from(targets.values())

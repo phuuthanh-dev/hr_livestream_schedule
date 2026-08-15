@@ -310,6 +310,7 @@ function buildContractPayload(contract) {
 function buildCvReferenceContent(target) {
   const lines = [];
   if (target.person?.cvReference) lines.push(`schedule_people.cvReference=${target.person.cvReference}`);
+  if (target.recruitment?.cvUrl) lines.push(`recruitment_profiles.cvUrl=${target.recruitment.cvUrl}`);
   if (target.application?.cvUrl) lines.push(`people_applications.cvUrl=${target.application.cvUrl}`);
   return lines.join("\n");
 }
@@ -323,7 +324,9 @@ function buildSummaryMarkdown(target) {
     `- Sync stamp: ${target.updatedAt || "chưa có"}`,
     `- Có people: ${target.person ? "Có" : "Không"}`,
     `- Có contract: ${target.contract ? "Có" : "Không"}`,
+    `- Có recruitment: ${target.recruitment ? "Có" : "Không"}`,
     `- Có application: ${target.application ? "Có" : "Không"}`,
+    `- Có support training: ${target.supportTraining ? "Có" : "Không"}`,
     `- CV reference: ${deriveCvReference(target) || "Không có"}`,
     ""
   ];
@@ -353,6 +356,23 @@ function buildSummaryMarkdown(target) {
     );
   }
 
+  if (target.recruitment) {
+    lines.push(
+      "## Recruitment",
+      "",
+      `- Họ tên: ${target.recruitment.fullName || target.employeeName || ""}`,
+      `- Tên gọi khác: ${target.recruitment.aliasName || "Không có"}`,
+      `- Phone: ${target.recruitment.phone || "Không có"}`,
+      `- Email: ${target.recruitment.email || "Không có"}`,
+      `- Level: ${target.recruitment.level || "Không có"}`,
+      `- Rating: ${target.recruitment.rating || "Không có"}`,
+      `- Salary offered: ${target.recruitment.salaryOffered || "Không có"}`,
+      `- Source tab: ${target.recruitment.sourceTab || "Không có"}`,
+      `- Updated: ${formatIso(target.recruitment.updatedAt)}`,
+      ""
+    );
+  }
+
   if (target.application) {
     lines.push(
       "## Application",
@@ -363,6 +383,21 @@ function buildSummaryMarkdown(target) {
       `- Trạng thái: ${target.application.status || "Không có"}`,
       `- Submitted: ${formatIso(target.application.submittedAt)}`,
       `- Updated: ${formatIso(target.application.updatedAt)}`,
+      ""
+    );
+  }
+
+  if (target.supportTraining) {
+    lines.push(
+      "## Support Training",
+      "",
+      `- Nhân sự: ${target.supportTraining.employeeName || target.employeeName || ""}`,
+      `- Rating: ${target.supportTraining.rating || "Không có"}`,
+      `- Score: ${target.supportTraining.scorePercent ?? "Không có"}%`,
+      `- Cash offer: ${target.supportTraining.cashOffer || "Không có"}`,
+      `- Passed: ${target.supportTraining.passed ? "Có" : "Không"}`,
+      `- Completed: ${formatIso(target.supportTraining.completedAt) || "Chưa có"}`,
+      `- Updated: ${formatIso(target.supportTraining.updatedAt)}`,
       ""
     );
   }
@@ -416,17 +451,23 @@ async function downloadRemoteFile(url) {
 async function listSyncTargets(db, employeeId) {
   const personFilter = employeeId ? { employeeId: employeeId.toUpperCase() } : {};
   const contractFilter = employeeId ? { employeeId: employeeId.toUpperCase() } : {};
+  const recruitmentFilter = employeeId ? { employeeId: employeeId.toUpperCase() } : {};
   const applicationFilter = employeeId ? { employeeId: employeeId.toUpperCase() } : {};
-  const [people, contracts, applications] = await Promise.all([
+  const supportTrainingFilter = employeeId ? { employeeId: employeeId.toUpperCase() } : {};
+  const [people, contracts, recruitmentProfiles, applications, supportTrainingProfiles] = await Promise.all([
     db.collection("schedule_people").find(personFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray(),
     db.collection("employee_contract_profiles").find(contractFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray(),
-    db.collection("people_applications").find(applicationFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray()
+    db.collection("recruitment_profiles").find(recruitmentFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray(),
+    db.collection("people_applications").find(applicationFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray(),
+    db.collection("support_training_profiles").find(supportTrainingFilter).sort({ updatedAt: 1, employeeId: 1 }).toArray()
   ]);
 
   return buildSyncTargets({
     people,
     contracts,
+    recruitmentProfiles,
     applications,
+    supportTrainingProfiles,
     employeeId
   });
 }
@@ -614,10 +655,24 @@ async function syncTarget(drive, target, config) {
     });
   }
 
+  if (target.recruitment) {
+    files.push({
+      name: "recruitment-profile.json",
+      ...(await upsertTextFile(drive, folderId, "recruitment-profile.json", JSON.stringify(toSerializable(target.recruitment), null, 2), config.dryRun))
+    });
+  }
+
   if (target.application) {
     files.push({
       name: "application-profile.json",
       ...(await upsertTextFile(drive, folderId, "application-profile.json", JSON.stringify(toSerializable(target.application), null, 2), config.dryRun))
+    });
+  }
+
+  if (target.supportTraining) {
+    files.push({
+      name: "support-training-profile.json",
+      ...(await upsertTextFile(drive, folderId, "support-training-profile.json", JSON.stringify(toSerializable(target.supportTraining), null, 2), config.dryRun))
     });
   }
 
