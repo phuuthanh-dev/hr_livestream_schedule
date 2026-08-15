@@ -462,48 +462,80 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
             <p>{summary?.submittedPeople || 0}/{summary?.totalPeople || 0} nhân sự đã gửi lịch rảnh cho tuần {formatWeekRange(weekStartKey)}.</p>
           </section>
 
-          <section className="employeeRosterCard">
+          <section className={`employeeRosterCard availabilitySyncCard ${syncRuns.length === 0 && syncConflicts.length === 0 ? "isCompact" : ""}`}>
             <div className="employeeRosterMeta">
               <strong>Sync log tuần {formatWeekRange(weekStartKey)}</strong>
               <span>{syncRuns.length} lần chạy · {syncConflicts.length} conflict gần nhất</span>
             </div>
-            {syncRuns.length === 0 ? <div className="employeeEmptyState">Chưa có log sync nào cho tuần này.</div> : null}
+            {syncRuns.length === 0 ? (
+              <div className="employeeEmptyState compact">
+                <strong>Chưa có log sync</strong>
+                <span>Tuần này chưa phát sinh lần pull hoặc push nào.</span>
+              </div>
+            ) : null}
             {syncRuns.length > 0 ? (
-              <div className="availabilitySyncLogList">
-                {syncRuns.slice(0, 6).map((run) => (
-                  <article className="managedAccount" key={run.runId}>
-                    <div className="managedAccountIdentity">
-                      <span className="managedAccountAvatar">{run.direction === "sheet_to_website" ? "IN" : "OUT"}</span>
-                      <div>
-                        <strong>{run.operation === "import_week" ? "Pull sheet -> web" : "Push web -> sheet"}</strong>
-                        <span>{formatTimestamp(run.finishedAt)} · {run.success ? "Thành công" : "Lỗi"}</span>
-                      </div>
-                      <em>{run.conflictCount} conflict</em>
-                    </div>
-                    <div className="availabilitySyncLogMeta">
-                      <span>{run.message || run.error || "Không có ghi chú."}</span>
-                    </div>
-                  </article>
-                ))}
+              <div className="employeeTableWrap availabilitySyncTableWrap">
+                <table className="employeeTable availabilitySyncTable">
+                  <thead>
+                    <tr>
+                      <th>Chiều sync</th>
+                      <th>Thao tác</th>
+                      <th>Thời gian</th>
+                      <th>Trạng thái</th>
+                      <th>Conflict</th>
+                      <th>Ghi chú</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {syncRuns.slice(0, 6).map((run) => (
+                      <tr key={run.runId}>
+                        <td>
+                          <span className={`availabilitySyncDirection ${run.direction === "sheet_to_website" ? "inbound" : "outbound"}`}>
+                            {run.direction === "sheet_to_website" ? "Sheet -> Web" : "Web -> Sheet"}
+                          </span>
+                        </td>
+                        <td>{run.operation === "import_week" ? "Kéo từ sheet" : "Đẩy xuống sheet"}</td>
+                        <td>{formatTimestamp(run.finishedAt)}</td>
+                        <td>
+                          <span className={`availabilitySyncStatus ${run.success ? "success" : "error"}`}>
+                            {run.success ? "Thành công" : "Lỗi"}
+                          </span>
+                        </td>
+                        <td>{run.conflictCount}</td>
+                        <td className="availabilitySyncMessageCell">{run.message || run.error || "Không có ghi chú."}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : null}
             {syncConflicts.length > 0 ? (
-              <div className="managedAccountList">
-                {syncConflicts.slice(0, 12).map((conflict) => (
-                  <article className="managedAccount locked" key={`${conflict.runId}-${conflict.createdAt}-${conflict.kind}-${conflict.details}`}>
-                    <div className="managedAccountIdentity">
-                      <span className="managedAccountAvatar">!</span>
-                      <div>
-                        <strong>{conflict.kind}</strong>
-                        <span>{conflict.dateKey ? `${formatShortDate(conflict.dateKey)} · ` : ""}{conflict.slot || conflict.employeeId || conflict.tabName || "N/A"}</span>
-                      </div>
-                      <em>{conflict.direction === "sheet_to_website" ? "Pull" : "Push"}</em>
-                    </div>
-                    <div className="availabilitySyncLogMeta">
-                      <span>{conflict.details}</span>
-                    </div>
-                  </article>
-                ))}
+              <div className="employeeTableWrap availabilitySyncTableWrap conflictTable">
+                <table className="employeeTable availabilitySyncTable">
+                  <thead>
+                    <tr>
+                      <th>Conflict</th>
+                      <th>Chiều sync</th>
+                      <th>Ngữ cảnh</th>
+                      <th>Chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {syncConflicts.slice(0, 12).map((conflict) => (
+                      <tr key={`${conflict.runId}-${conflict.createdAt}-${conflict.kind}-${conflict.details}`}>
+                        <td>
+                          <span className="availabilitySyncStatus warning">{conflict.kind}</span>
+                        </td>
+                        <td>{conflict.direction === "sheet_to_website" ? "Pull" : "Push"}</td>
+                        <td>
+                          {conflict.dateKey ? `${formatShortDate(conflict.dateKey)} · ` : ""}
+                          {conflict.slot || conflict.employeeId || conflict.tabName || "N/A"}
+                        </td>
+                        <td className="availabilitySyncMessageCell">{conflict.details}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             ) : null}
           </section>

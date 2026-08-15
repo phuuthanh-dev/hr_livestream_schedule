@@ -8364,6 +8364,68 @@ a:hover {
   box-shadow: 0 16px 44px rgba(35, 66, 73, 0.08);
 }
 
+.availabilitySyncCard.isCompact {
+  min-height: 0;
+}
+
+.availabilitySyncTableWrap {
+  border-top: 1px solid #edf1f1;
+}
+
+.availabilitySyncTableWrap.conflictTable {
+  border-top-color: #e5ebeb;
+}
+
+.availabilitySyncTable th:nth-child(5),
+.availabilitySyncTable td:nth-child(5) {
+  text-align: center;
+}
+
+.availabilitySyncDirection,
+.availabilitySyncStatus {
+  display: inline-flex;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.availabilitySyncDirection.inbound {
+  color: #15558a;
+  background: #e7f1ff;
+}
+
+.availabilitySyncDirection.outbound {
+  color: #0f615b;
+  background: #def7f1;
+}
+
+.availabilitySyncStatus.success {
+  color: #0f615b;
+  background: #dff5f0;
+}
+
+.availabilitySyncStatus.error {
+  color: #8e2f22;
+  background: #fff1ef;
+}
+
+.availabilitySyncStatus.warning {
+  color: #8a5800;
+  background: #fff3cf;
+  text-transform: none;
+}
+
+.availabilitySyncMessageCell {
+  min-width: 280px;
+  max-width: 520px;
+  line-height: 1.55;
+}
+
 .employeeToolbar {
   display: grid;
   padding: 16px;
@@ -8715,6 +8777,11 @@ a:hover {
   text-align: center;
   gap: 6px;
   font-size: 0.65rem;
+}
+
+.employeeEmptyState.compact {
+  min-height: 108px;
+  padding: 20px 16px;
 }
 
 .employeeEmptyState strong {
