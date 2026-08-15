@@ -269,13 +269,7 @@ export async function upsertEmployeeContractProfileFields(input: {
         personKey: key,
         completed: false,
         createdAt: now,
-        createdBy: input.actorAccountKey,
-        dateOfBirth: "",
-        citizenId: "",
-        citizenIdIssuedDate: "",
-        citizenIdIssuedPlace: "",
-        permanentAddress: "",
-        temporaryAddress: ""
+        createdBy: input.actorAccountKey
       }
     },
     { upsert: true, returnDocument: "after" }
