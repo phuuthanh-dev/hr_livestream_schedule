@@ -6,12 +6,17 @@ export type ApplicationAutomationInput = {
   submittedAt?: string;
   role: EmployeeRole;
   fullName: string;
+  aliasName?: string;
   phone: string;
   email: string;
   cvUrl: string;
   experience: string;
   achievements: string;
   expectedSalary: string;
+  canLiveHome?: boolean;
+  canLiveStudio?: boolean;
+  canUsePersonalAccount?: boolean;
+  canUseCompanyAccount?: boolean;
   liveLocationPreference?: "home" | "studio" | "";
   liveAccountPreference?: "personal" | "company" | "";
   introVideoUrl?: string;
@@ -61,6 +66,7 @@ export function buildEmployeeMutationFromApplication(
   employeeId: string
 ): SchedulePersonMutation {
   const baseNotes = [
+    input.aliasName && input.aliasName !== input.fullName ? `Tên gọi khác: ${input.aliasName}` : "",
     input.email ? `Email: ${input.email}` : "",
     input.introVideoUrl ? `Video: ${input.introVideoUrl}` : "",
     input.tiktokUrl ? `TikTok: ${input.tiktokUrl}` : "",
@@ -69,13 +75,23 @@ export function buildEmployeeMutationFromApplication(
   ];
 
   if (input.role === "host") {
+    const canLiveHome = input.canLiveHome ?? input.liveLocationPreference === "home";
+    const canLiveStudio = input.canLiveStudio ?? input.liveLocationPreference === "studio";
+    const workLocation = canLiveHome && canLiveStudio ? "both" : canLiveStudio ? "studio" : "home";
+    const canUsePersonalAccount = input.canUsePersonalAccount ?? input.liveAccountPreference === "personal";
+    const canUseCompanyAccount = input.canUseCompanyAccount ?? input.liveAccountPreference === "company";
+    const liveAccountType = canUsePersonalAccount && canUseCompanyAccount
+      ? "Cá nhân + Công ty"
+      : canUsePersonalAccount
+        ? "Cá nhân"
+        : "Công ty";
     return {
       id: employeeId,
       role: "host",
-      name: input.fullName,
+      name: input.aliasName || input.fullName,
       rating: "Thử việc",
       level: "Thử việc",
-      workLocation: input.liveLocationPreference || "home",
+      workLocation,
       phone: normalizePhone(input.phone),
       cvReference: input.cvUrl,
       experience: input.experience,
@@ -83,7 +99,7 @@ export function buildEmployeeMutationFromApplication(
       notes: compactParagraphs(baseNotes),
       achievements: input.achievements,
       zaloStatus: "",
-      liveAccountType: input.liveAccountPreference === "personal" ? "Cá nhân" : "Công ty",
+      liveAccountType,
       liveChannelId: ""
     };
   }
@@ -113,12 +129,17 @@ export function buildAppsScriptApplicationPayload(input: ApplicationAutomationIn
     employeeId: input.employeeId,
     role: input.role,
     fullName: input.fullName,
+    aliasName: input.aliasName || "",
     phone: normalizePhone(input.phone),
     email: input.email,
     cvUrl: input.cvUrl,
     experience: input.experience,
     achievements: input.achievements,
     expectedSalary: input.expectedSalary,
+    canLiveHome: Boolean(input.canLiveHome),
+    canLiveStudio: Boolean(input.canLiveStudio),
+    canUsePersonalAccount: Boolean(input.canUsePersonalAccount),
+    canUseCompanyAccount: Boolean(input.canUseCompanyAccount),
     liveLocationPreference: input.liveLocationPreference || "",
     liveAccountPreference: input.liveAccountPreference || "",
     introVideoUrl: input.introVideoUrl || "",

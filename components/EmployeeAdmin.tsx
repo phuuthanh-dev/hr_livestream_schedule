@@ -290,6 +290,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
         </div>
         <nav className="employeeHeaderNavigation">
           <a className="todayButton" href="/">Lịch chính</a>
+          <a className="todayButton" href="/applications"><Icon name="users" size={16} /><span>Ứng tuyển</span></a>
           <a className="todayButton" href="/availability/summary"><Icon name="calendar" size={16} /><span>Lịch rảnh</span></a>
           <a className="todayButton" href="/locations"><Icon name="location" size={16} /><span>Địa điểm</span></a>
         </nav>

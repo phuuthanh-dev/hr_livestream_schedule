@@ -11,6 +11,7 @@ import {
 import { buildAppsScriptApplicationPayload, buildEmployeeMutationFromApplication } from "@/lib/applicationAutomation";
 import { postToAppScript } from "@/lib/appScriptSync";
 import { getMongoDatabase } from "@/lib/mongodb";
+import { upsertRecruitmentProfileFromApplication } from "@/lib/recruitmentProfile";
 import type { EmployeeRole } from "@/lib/types";
 
 const APPLICATIONS_COLLECTION = "people_applications";
@@ -22,12 +23,17 @@ export type PeopleApplicationLiveAccountPreference = "personal" | "company";
 export type PeopleApplicationInput = {
   role?: EmployeeRole;
   fullName?: string;
+  aliasName?: string;
   phone?: string;
   email?: string;
   cvUrl?: string;
   experience?: string;
   achievements?: string;
   expectedSalary?: string;
+  canLiveHome?: boolean;
+  canLiveStudio?: boolean;
+  canUsePersonalAccount?: boolean;
+  canUseCompanyAccount?: boolean;
   liveLocationPreference?: PeopleApplicationLiveLocationPreference;
   liveAccountPreference?: PeopleApplicationLiveAccountPreference;
   introVideoUrl?: string;
@@ -41,12 +47,17 @@ export type PeopleApplication = {
   employeeId?: string;
   role: EmployeeRole;
   fullName: string;
+  aliasName: string;
   phone: string;
   email: string;
   cvUrl: string;
   experience: string;
   achievements: string;
   expectedSalary: string;
+  canLiveHome: boolean;
+  canLiveStudio: boolean;
+  canUsePersonalAccount: boolean;
+  canUseCompanyAccount: boolean;
   liveLocationPreference: PeopleApplicationLiveLocationPreference | "";
   liveAccountPreference: PeopleApplicationLiveAccountPreference | "";
   introVideoUrl: string;
@@ -113,14 +124,37 @@ function normalizeLiveAccountPreference(value: unknown, role?: EmployeeRole): Pe
 function normalizeInput(input: PeopleApplicationInput) {
   const role = input.role;
   const fullName = cleanText(input.fullName, 120);
+  const aliasName = cleanText(input.aliasName, 120);
   const phone = normalizePhone(input.phone);
   const email = cleanText(input.email, 180).toLowerCase();
   const cvUrl = cleanText(input.cvUrl, 1000);
   const experience = cleanMultilineText(input.experience, 3000);
   const achievements = cleanMultilineText(input.achievements, 2000);
   const expectedSalary = cleanText(input.expectedSalary, 120);
-  const liveLocationPreference = normalizeLiveLocationPreference(input.liveLocationPreference, role);
-  const liveAccountPreference = normalizeLiveAccountPreference(input.liveAccountPreference, role);
+  const canLiveHome = role === "host"
+    ? (typeof input.canLiveHome === "boolean" ? input.canLiveHome : input.liveLocationPreference === "home")
+    : false;
+  const canLiveStudio = role === "host"
+    ? (typeof input.canLiveStudio === "boolean" ? input.canLiveStudio : input.liveLocationPreference === "studio")
+    : false;
+  const canUsePersonalAccount = role === "host"
+    ? (typeof input.canUsePersonalAccount === "boolean" ? input.canUsePersonalAccount : input.liveAccountPreference === "personal")
+    : false;
+  const canUseCompanyAccount = role === "host"
+    ? (typeof input.canUseCompanyAccount === "boolean" ? input.canUseCompanyAccount : input.liveAccountPreference === "company")
+    : false;
+  const liveLocationPreference = role === "host"
+    ? normalizeLiveLocationPreference(
+      canLiveHome ? "home" : canLiveStudio ? "studio" : input.liveLocationPreference,
+      role
+    )
+    : "";
+  const liveAccountPreference = role === "host"
+    ? normalizeLiveAccountPreference(
+      canUseCompanyAccount ? "company" : canUsePersonalAccount ? "personal" : input.liveAccountPreference,
+      role
+    )
+    : "";
   const introVideoUrl = role === "host" ? cleanText(input.introVideoUrl, 1000) : "";
   const tiktokUrl = role === "host" ? cleanText(input.tiktokUrl, 1000) : "";
   const notes = cleanMultilineText(input.notes, 2000);
@@ -129,6 +163,8 @@ function normalizeInput(input: PeopleApplicationInput) {
   if (fullName.length < 2) throw new Error("Vui lòng nhập đầy đủ họ tên.");
   if (!/^\+?\d{9,15}$/.test(phone)) throw new Error("Số điện thoại không hợp lệ.");
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Email không hợp lệ.");
+  if (role === "host" && !canLiveHome && !canLiveStudio) throw new Error("Vui lòng chọn ít nhất một nơi có thể live.");
+  if (role === "host" && !canUsePersonalAccount && !canUseCompanyAccount) throw new Error("Vui lòng chọn ít nhất một loại tài khoản live.");
   if (experience.length < 10) throw new Error("Vui lòng mô tả kinh nghiệm cụ thể hơn.");
   if (!expectedSalary) throw new Error("Vui lòng nhập mức lương mong muốn.");
   if (input.consent !== true) throw new Error("Bạn cần đồng ý để hệ thống lưu thông tin ứng tuyển.");
@@ -139,6 +175,7 @@ function normalizeInput(input: PeopleApplicationInput) {
   return {
     role,
     fullName,
+    aliasName,
     phone,
     normalizedPhone: phone.replace(/\D/g, ""),
     email,
@@ -146,6 +183,10 @@ function normalizeInput(input: PeopleApplicationInput) {
     experience,
     achievements,
     expectedSalary,
+    canLiveHome,
+    canLiveStudio,
+    canUsePersonalAccount,
+    canUseCompanyAccount,
     liveLocationPreference,
     liveAccountPreference,
     introVideoUrl,
@@ -168,12 +209,17 @@ function toApplication(document: PeopleApplicationDocument): PeopleApplication {
     employeeId: document.employeeId || undefined,
     role: document.role,
     fullName: document.fullName,
+    aliasName: document.aliasName,
     phone: document.phone,
     email: document.email,
     cvUrl: document.cvUrl,
     experience: document.experience,
     achievements: document.achievements,
     expectedSalary: document.expectedSalary,
+    canLiveHome: Boolean(document.canLiveHome),
+    canLiveStudio: Boolean(document.canLiveStudio),
+    canUsePersonalAccount: Boolean(document.canUsePersonalAccount),
+    canUseCompanyAccount: Boolean(document.canUseCompanyAccount),
     liveLocationPreference: document.liveLocationPreference || "",
     liveAccountPreference: document.liveAccountPreference || "",
     introVideoUrl: document.introVideoUrl,
@@ -194,12 +240,17 @@ function buildApplicationEmployeeMutation(application: PeopleApplication, employ
     submittedAt: application.submittedAt,
     role: application.role,
     fullName: application.fullName,
+    aliasName: application.aliasName,
     phone: application.phone,
     email: application.email,
     cvUrl: application.cvUrl,
     experience: application.experience,
     achievements: application.achievements,
     expectedSalary: application.expectedSalary,
+    canLiveHome: application.canLiveHome,
+    canLiveStudio: application.canLiveStudio,
+    canUsePersonalAccount: application.canUsePersonalAccount,
+    canUseCompanyAccount: application.canUseCompanyAccount,
     liveLocationPreference: application.liveLocationPreference || "",
     liveAccountPreference: application.liveAccountPreference || "",
     introVideoUrl: application.introVideoUrl,
@@ -252,12 +303,17 @@ async function syncApplicationToGoogleSheet(application: PeopleApplication & { e
     employeeId: application.employeeId,
     role: application.role,
     fullName: application.fullName,
+    aliasName: application.aliasName,
     phone: application.phone,
     email: application.email,
     cvUrl: application.cvUrl,
     experience: application.experience,
     achievements: application.achievements,
     expectedSalary: application.expectedSalary,
+    canLiveHome: application.canLiveHome,
+    canLiveStudio: application.canLiveStudio,
+    canUsePersonalAccount: application.canUsePersonalAccount,
+    canUseCompanyAccount: application.canUseCompanyAccount,
     liveLocationPreference: application.liveLocationPreference || "",
     liveAccountPreference: application.liveAccountPreference || "",
     introVideoUrl: application.introVideoUrl,
@@ -312,6 +368,11 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
 
   const application = toApplication(baseDocument);
   const { employee, created } = await upsertEmployeeFromApplication(application);
+  await upsertRecruitmentProfileFromApplication({
+    application: { ...application, employeeId: employee.id },
+    employeeId: employee.id,
+    actorAccountKey: "application:auto"
+  });
 
   try {
     await syncApplicationToGoogleSheet({ ...application, employeeId: employee.id });

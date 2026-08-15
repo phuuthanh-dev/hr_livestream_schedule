@@ -60,6 +60,10 @@ export type EmployeeContractSummary = {
   updatedAt?: string;
 };
 
+export type EmployeeContractProfileRecord = EmployeeContractProfile & {
+  personKey: string;
+};
+
 let contractIndexesPromise: Promise<unknown> | null = null;
 
 function normalizeEmployeeId(employeeId: string) {
@@ -68,6 +72,10 @@ function normalizeEmployeeId(employeeId: string) {
 
 function personKey(role: EmployeeRole, employeeId: string) {
   return `${role}:${normalizeEmployeeId(employeeId)}`;
+}
+
+function cleanText(value: unknown, maxLength: number) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
 async function getContractCollection(): Promise<Collection<EmployeeContractDocument>> {
@@ -154,6 +162,71 @@ export async function saveEmployeeContractProfile(input: {
   return toProfile(document);
 }
 
+export async function upsertEmployeeContractProfileFields(input: {
+  person: SchedulePerson;
+  actorAccountKey: string;
+  gmail?: string;
+  bankAccountNumber?: string;
+  bankName?: string;
+}) {
+  const collection = await getContractCollection();
+  const key = personKey(input.person.role, input.person.id);
+  const now = new Date();
+  const gmail = cleanText(input.gmail, 180).toLowerCase();
+  const bankAccountNumber = cleanText(input.bankAccountNumber, 30).replace(/\s+/g, "");
+  const bankName = cleanText(input.bankName, 120);
+  if (gmail && !/^[^\s@]+@gmail\.com$/i.test(gmail)) {
+    throw new Error("Gmail phải là địa chỉ @gmail.com hợp lệ.");
+  }
+  if (bankAccountNumber && !/^\d{6,30}$/.test(bankAccountNumber)) {
+    throw new Error("Số tài khoản ngân hàng không hợp lệ.");
+  }
+
+  const existing = await collection.findOne({ personKey: key });
+  const next = await collection.findOneAndUpdate(
+    { personKey: key },
+    {
+      $set: {
+        role: input.person.role,
+        employeeId: input.person.id,
+        contractCode: buildEmployeeContractCode(input.person.id),
+        normalizedEmployeeId: normalizeEmployeeId(input.person.id),
+        employeeName: input.person.name,
+        ...(gmail ? { gmail } : {}),
+        ...(bankAccountNumber ? { bankAccountNumber } : {}),
+        ...(bankName ? { bankName } : {}),
+        updatedAt: now,
+        updatedBy: input.actorAccountKey
+      },
+      $setOnInsert: {
+        personKey: key,
+        completed: false,
+        createdAt: now,
+        createdBy: input.actorAccountKey,
+        dateOfBirth: "",
+        citizenId: "",
+        citizenIdIssuedDate: "",
+        citizenIdIssuedPlace: "",
+        permanentAddress: "",
+        temporaryAddress: ""
+      }
+    },
+    { upsert: true, returnDocument: "after" }
+  );
+  if (!next) throw new Error("Không cập nhật được dữ liệu hợp đồng từ sheet.");
+  const completed = isEmployeeContractComplete(next);
+  if (next.completed !== completed) {
+    const adjusted = await collection.findOneAndUpdate(
+      { personKey: key },
+      { $set: { completed } },
+      { returnDocument: "after" }
+    );
+    if (!adjusted) throw new Error("Không cập nhật được trạng thái hồ sơ hợp đồng.");
+    return { profile: toProfile(adjusted), existed: Boolean(existing) };
+  }
+  return { profile: toProfile(next), existed: Boolean(existing) };
+}
+
 export async function saveEmployeeContractFile(input: {
   role: EmployeeRole;
   employeeId: string;
@@ -209,6 +282,15 @@ export async function listEmployeeContractSummaries() {
     hasBack: Boolean(document.citizenIdBack?.publicId),
     updatedAt: document.updatedAt?.toISOString()
   } satisfies EmployeeContractSummary]));
+}
+
+export async function listEmployeeContractProfiles() {
+  const collection = await getContractCollection();
+  const documents = await collection.find({}).toArray();
+  return documents.map((document) => ({
+    personKey: document.personKey,
+    ...toProfile(document)
+  } satisfies EmployeeContractProfileRecord));
 }
 
 export function employeeContractPersonKey(role: EmployeeRole, employeeId: string) {

@@ -246,6 +246,7 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
   const availabilitySlots = database.collection("schedule_availability_slots");
   const userAccounts = database.collection("schedule_users");
   const applications = database.collection("people_applications");
+  const recruitmentProfiles = database.collection("recruitment_profiles");
   const contractDocument = await contractCollection.findOne(
     { personKey },
     {
@@ -262,13 +263,14 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
   const applicationFilters: Array<Record<string, unknown>> = [{ employeeId }];
   if (existing.phone) applicationFilters.push({ normalizedPhone: existing.phone, role });
 
-  const [rosterResult, accountResult, contractResult, availabilityWeekResult, availabilitySlotResult, applicationResult] = await Promise.all([
+  const [rosterResult, accountResult, contractResult, availabilityWeekResult, availabilitySlotResult, applicationResult, recruitmentResult] = await Promise.all([
     collection.deleteOne({ personKey }),
     userAccounts.deleteOne({ accountKey: `employee:${role}:${normalizeEmployeeId(employeeId)}` }),
     contractCollection.deleteOne({ personKey }),
     availabilityWeeks.deleteMany({ personKey }),
     availabilitySlots.deleteMany({ personKey }),
-    applications.deleteMany({ $or: applicationFilters })
+    applications.deleteMany({ $or: applicationFilters }),
+    recruitmentProfiles.deleteOne({ personKey })
   ]);
 
   if (rosterResult.deletedCount !== 1) {
@@ -286,7 +288,8 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
       contracts: contractResult.deletedCount,
       availabilityWeeks: availabilityWeekResult.deletedCount,
       availabilitySlots: availabilitySlotResult.deletedCount,
-      applications: applicationResult.deletedCount
+      applications: applicationResult.deletedCount,
+      recruitmentProfiles: recruitmentResult.deletedCount
     }
   };
 }

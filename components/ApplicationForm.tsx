@@ -7,12 +7,17 @@ import type { EmployeeRole } from "@/lib/types";
 type ApplicationFormState = {
   role: EmployeeRole;
   fullName: string;
+  aliasName: string;
   phone: string;
   email: string;
   cvUrl: string;
   experience: string;
   achievements: string;
   expectedSalary: string;
+  canLiveHome: boolean;
+  canLiveStudio: boolean;
+  canUsePersonalAccount: boolean;
+  canUseCompanyAccount: boolean;
   liveLocationPreference: "" | "home" | "studio";
   liveAccountPreference: "" | "personal" | "company";
   introVideoUrl: string;
@@ -25,12 +30,17 @@ type ApplicationFormState = {
 const INITIAL_FORM: ApplicationFormState = {
   role: "host",
   fullName: "",
+  aliasName: "",
   phone: "",
   email: "",
   cvUrl: "",
   experience: "",
   achievements: "",
   expectedSalary: "",
+  canLiveHome: true,
+  canLiveStudio: false,
+  canUsePersonalAccount: false,
+  canUseCompanyAccount: true,
   liveLocationPreference: "home",
   liveAccountPreference: "company",
   introVideoUrl: "",
@@ -39,6 +49,21 @@ const INITIAL_FORM: ApplicationFormState = {
   consent: false,
   website: ""
 };
+
+function createInitialForm(role: EmployeeRole): ApplicationFormState {
+  return role === "host"
+    ? { ...INITIAL_FORM, role: "host" }
+    : {
+        ...INITIAL_FORM,
+        role: "support",
+        canLiveHome: false,
+        canLiveStudio: false,
+        canUsePersonalAccount: false,
+        canUseCompanyAccount: false,
+        liveLocationPreference: "",
+        liveAccountPreference: ""
+      };
+}
 
 function RoleIcon({ role }: { role: EmployeeRole }) {
   if (role === "host") {
@@ -75,11 +100,19 @@ export default function ApplicationForm() {
       ...(role === "host"
         ? {
             liveLocationPreference: current.liveLocationPreference || "home",
-            liveAccountPreference: current.liveAccountPreference || "company"
+            liveAccountPreference: current.liveAccountPreference || "company",
+            canLiveHome: current.canLiveHome || current.liveLocationPreference !== "studio",
+            canLiveStudio: current.canLiveStudio || current.liveLocationPreference === "studio",
+            canUsePersonalAccount: current.canUsePersonalAccount || current.liveAccountPreference === "personal",
+            canUseCompanyAccount: current.canUseCompanyAccount || current.liveAccountPreference !== "personal"
           }
         : {
             liveLocationPreference: "",
             liveAccountPreference: "",
+            canLiveHome: false,
+            canLiveStudio: false,
+            canUsePersonalAccount: false,
+            canUseCompanyAccount: false,
             introVideoUrl: "",
             tiktokUrl: ""
           })
@@ -102,7 +135,7 @@ export default function ApplicationForm() {
       const payload = (await response.json()) as { success?: boolean; message?: string };
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không gửi được hồ sơ.");
       setSuccess(payload.message || "Hồ sơ đã được gửi thành công.");
-      setForm({ ...INITIAL_FORM, role: form.role });
+      setForm(createInitialForm(form.role));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Không gửi được hồ sơ.");
@@ -164,6 +197,7 @@ export default function ApplicationForm() {
         <header><span>01</span><div><h3>Thông tin liên hệ</h3><p>Để đội ngũ có thể liên hệ và trao đổi công việc.</p></div></header>
         <div className="applicationFields">
           <label><span>Họ và tên *</span><input autoComplete="name" maxLength={120} onChange={(event) => updateField("fullName", event.target.value)} placeholder="Nguyễn Minh Anh" required value={form.fullName} /></label>
+          <label><span>Tên gọi khác</span><input maxLength={120} onChange={(event) => updateField("aliasName", event.target.value)} placeholder="Tên thường gọi / nickname khi lên live" value={form.aliasName} /></label>
           <label><span>Số điện thoại *</span><input autoComplete="tel" inputMode="tel" maxLength={30} onChange={(event) => updateField("phone", event.target.value)} placeholder="0901 234 567" required value={form.phone} /></label>
           <label className="wide"><span>Email</span><input autoComplete="email" maxLength={180} onChange={(event) => updateField("email", event.target.value)} placeholder="minhanh@email.com" type="email" value={form.email} /></label>
         </div>
@@ -184,19 +218,33 @@ export default function ApplicationForm() {
           <header><span>03</span><div><h3>Hồ sơ lên hình</h3><p>Dành riêng cho Host để đội ngũ hiểu rõ phong cách của bạn.</p></div></header>
           <div className="applicationFields">
             <label>
-              <span>Nơi live mong muốn *</span>
+              <span>Ưu tiên nơi live *</span>
               <select required value={form.liveLocationPreference} onChange={(event) => updateField("liveLocationPreference", event.target.value as ApplicationFormState["liveLocationPreference"])}>
                 <option value="home">Live tại nhà</option>
                 <option value="studio">Live tại Studio</option>
               </select>
             </label>
             <label>
-              <span>Tài khoản live *</span>
+              <span>Ưu tiên tài khoản live *</span>
               <select required value={form.liveAccountPreference} onChange={(event) => updateField("liveAccountPreference", event.target.value as ApplicationFormState["liveAccountPreference"])}>
                 <option value="personal">Live tài khoản cá nhân</option>
                 <option value="company">Live tài khoản công ty</option>
               </select>
             </label>
+            <div className="applicationChoiceGroup wide">
+              <span>Có thể live ở đâu *</span>
+              <div className="applicationChoiceOptions">
+                <label><input checked={form.canLiveHome} onChange={(event) => updateField("canLiveHome", event.target.checked)} type="checkbox" /><span>Live tại nhà</span></label>
+                <label><input checked={form.canLiveStudio} onChange={(event) => updateField("canLiveStudio", event.target.checked)} type="checkbox" /><span>Live tại Studio</span></label>
+              </div>
+            </div>
+            <div className="applicationChoiceGroup wide">
+              <span>Có thể dùng tài khoản nào *</span>
+              <div className="applicationChoiceOptions">
+                <label><input checked={form.canUsePersonalAccount} onChange={(event) => updateField("canUsePersonalAccount", event.target.checked)} type="checkbox" /><span>Tài khoản cá nhân</span></label>
+                <label><input checked={form.canUseCompanyAccount} onChange={(event) => updateField("canUseCompanyAccount", event.target.checked)} type="checkbox" /><span>Tài khoản công ty</span></label>
+              </div>
+            </div>
             <label className="wide"><span>Link video giới thiệu / video live</span><input maxLength={1000} onChange={(event) => updateField("introVideoUrl", event.target.value)} placeholder="YouTube, Google Drive hoặc video công khai" type="url" value={form.introVideoUrl} /></label>
             <label className="wide"><span>Link TikTok</span><input maxLength={1000} onChange={(event) => updateField("tiktokUrl", event.target.value)} placeholder="https://www.tiktok.com/@username" type="url" value={form.tiktokUrl} /></label>
           </div>

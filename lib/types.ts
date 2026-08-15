@@ -324,6 +324,56 @@ export type AvailabilitySheetSyncLogsPayload = {
   message?: string;
 };
 
+export type RecruitmentSheetSyncDirection = "sheet_to_website" | "website_to_sheet";
+export type RecruitmentSheetSyncOperation = "import_profiles" | "sync_profiles";
+export type RecruitmentSheetSyncConflictKind =
+  | "unknown_employee"
+  | "missing_sheet_row"
+  | "missing_contract_profile"
+  | "sheet_row_created"
+  | "invalid_row"
+  | "website_overwrite"
+  | "sheet_overwrite";
+
+export type RecruitmentSheetSyncRun = {
+  runId: string;
+  direction: RecruitmentSheetSyncDirection;
+  operation: RecruitmentSheetSyncOperation;
+  spreadsheetId: string;
+  actorAccountKey: string;
+  success: boolean;
+  startedAt: string;
+  finishedAt: string;
+  processedRows?: number;
+  updatedProfiles?: number;
+  updatedContracts?: number;
+  updatedSheetRows?: number;
+  appendedSheetRows?: number;
+  skippedRows?: number;
+  conflictCount: number;
+  message?: string;
+  error?: string;
+};
+
+export type RecruitmentSheetSyncConflict = {
+  runId: string;
+  direction: RecruitmentSheetSyncDirection;
+  kind: RecruitmentSheetSyncConflictKind;
+  role?: EmployeeRole;
+  employeeId?: string;
+  tabName?: string;
+  rowNumber?: number;
+  details: string;
+  createdAt: string;
+};
+
+export type RecruitmentSheetSyncLogsPayload = {
+  success: boolean;
+  runs?: RecruitmentSheetSyncRun[];
+  conflicts?: RecruitmentSheetSyncConflict[];
+  message?: string;
+};
+
 export type PayrollRole = EmployeeRole;
 export type PayrollCommissionMode = "none" | "fixed" | "gmv_tier";
 export type PayrollPeriodStatus = "draft" | "locked";

@@ -3152,6 +3152,40 @@ a:hover {
 .applicationFields textarea:focus { border-color: #218579; background: #fffefa; box-shadow: 0 0 0 4px rgba(33, 133, 121, 0.1); }
 .applicationFields label > small { color: #8a928f; font-size: 0.53rem; font-weight: 600; }
 
+.applicationChoiceGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.applicationChoiceOptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.applicationChoiceOptions label {
+  display: flex;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #d4d9d2;
+  border-radius: 12px;
+  color: #183b38;
+  background: #fff;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.applicationChoiceOptions input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #176f66;
+  flex: 0 0 auto;
+}
+
 .applicationConsent {
   display: flex !important;
   padding: 14px;
@@ -3284,6 +3318,7 @@ a:hover {
   .applicationSuccess { padding: 25px 18px; }
   .applicationRolePicker,
   .applicationFields { grid-template-columns: 1fr; }
+  .applicationChoiceOptions { grid-template-columns: 1fr; }
   .applicationFields label.wide { grid-column: auto; }
   .applicationRolePicker button { min-height: 92px; }
   .applicationSubmitRow { align-items: stretch; flex-direction: column; }
@@ -8494,6 +8529,10 @@ a:hover {
   background: #fff7e5;
 }
 
+.recruitmentInlineLink {
+  text-decoration: none;
+}
+
 .employeeAddButton {
   border: 1px solid #d75f43;
   color: #fff;
@@ -8661,6 +8700,72 @@ a:hover {
   background: #f3ead9;
 }
 
+.recruitmentSyncBadge {
+  display: inline-flex;
+  min-height: 27px;
+  padding: 0 9px;
+  border-radius: 999px;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.recruitmentSyncBadge.synced {
+  color: #0f615b;
+  background: #dff5f0;
+}
+
+.recruitmentSyncBadge.failed {
+  color: #8e2f22;
+  background: #fff1ef;
+}
+
+.recruitmentSyncBadge.push {
+  color: #15558a;
+  background: #e7f1ff;
+}
+
+.recruitmentSyncCard.compact {
+  overflow: hidden;
+}
+
+.recruitmentSyncLogLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+}
+
+.recruitmentSyncLogLayout > .employeeTableWrap:first-child {
+  border-right: 1px solid #e8eeee;
+}
+
+.recruitmentLogTable td,
+.recruitmentConflictTable td {
+  vertical-align: top;
+}
+
+.recruitmentBooleanField {
+  display: flex !important;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #d4dfe0;
+  border-radius: 12px;
+  color: #43595c;
+  background: #fff;
+  align-items: center;
+  gap: 10px !important;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.recruitmentBooleanField input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #0f766e;
+  flex: 0 0 auto;
+}
+
 .employeeRowActions {
   display: flex;
   justify-content: flex-end;
@@ -8782,6 +8887,13 @@ a:hover {
 .employeeEmptyState.compact {
   min-height: 108px;
   padding: 20px 16px;
+}
+
+.employeeEmptyState.compact.inline {
+  min-height: 0;
+  padding: 10px 0;
+  text-align: left;
+  justify-items: start;
 }
 
 .employeeEmptyState strong {
@@ -8980,6 +9092,15 @@ a:hover {
     grid-template-columns: minmax(230px, 1fr) repeat(2, minmax(140px, auto));
   }
 
+  .recruitmentSyncLogLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .recruitmentSyncLogLayout > .employeeTableWrap:first-child {
+    border-right: 0;
+    border-bottom: 1px solid #e8eeee;
+  }
+
   .employeeBootstrapButton,
   .employeeAddButton {
     grid-column: span 1;
@@ -9101,6 +9222,10 @@ a:hover {
 
   .employeeEditorBackdrop {
     padding-left: 0;
+  }
+
+  .recruitmentSyncLogLayout .employeeTable tbody {
+    grid-template-columns: 1fr;
   }
 }
 
