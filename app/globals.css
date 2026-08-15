@@ -8439,6 +8439,10 @@ a:hover {
   box-shadow: 0 12px 34px rgba(35, 66, 73, 0.06);
 }
 
+.employeeGuidePanelCompact {
+  margin-top: 14px;
+}
+
 .employeeGuideHeader {
   display: flex;
   align-items: baseline;
@@ -8583,7 +8587,7 @@ a:hover {
   padding: 16px;
   border-bottom: 1px solid #e2e9e9;
   background: linear-gradient(120deg, #fbfdfd, #f1f7f5);
-  grid-template-columns: minmax(240px, 1fr) 150px 165px auto auto;
+  grid-template-columns: minmax(240px, 1fr) 150px 165px;
   align-items: center;
   gap: 9px;
 }
@@ -8625,8 +8629,7 @@ a:hover {
   font-weight: 750;
 }
 
-.employeeBootstrapButton,
-.employeeAddButton {
+.employeeBootstrapButton {
   display: inline-flex;
   min-height: 42px;
   padding: 0 13px;
@@ -8646,19 +8649,24 @@ a:hover {
   background: #fff7e5;
 }
 
+.employeeBootstrapButton.primary {
+  border-color: #0f766e;
+  color: #ffffff;
+  background: linear-gradient(135deg, #15857c, #0f766e);
+  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18);
+}
+
+.employeeBootstrapButton.subtle {
+  border-color: #d7e1e2;
+  color: #476062;
+  background: #ffffff;
+}
+
 .recruitmentInlineLink {
   text-decoration: none;
 }
 
-.employeeAddButton {
-  border: 1px solid #d75f43;
-  color: #fff;
-  background: linear-gradient(135deg, #e56b4d, #c94f36);
-  box-shadow: 0 8px 16px rgba(201, 79, 54, 0.2);
-}
-
-.employeeBootstrapButton:disabled,
-.employeeAddButton:disabled {
+.employeeBootstrapButton:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -8681,6 +8689,71 @@ a:hover {
 .employeeRosterMeta span {
   color: #819093;
   font-size: 0.7rem;
+}
+
+.recruitmentActionBar {
+  display: flex;
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf1f1;
+  background: linear-gradient(180deg, rgba(249, 252, 251, 0.95), rgba(255, 255, 255, 0.98));
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.recruitmentActionBarCopy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.recruitmentActionBarCopy strong {
+  color: #214144;
+  font-size: 0.82rem;
+}
+
+.recruitmentActionBarCopy span {
+  color: #708083;
+  font-size: 0.69rem;
+  line-height: 1.55;
+}
+
+.recruitmentActionBarButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.recruitmentSyncSummary {
+  display: grid;
+  padding: 14px 16px 2px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.recruitmentSyncSummary article {
+  display: grid;
+  min-height: 82px;
+  padding: 13px 14px;
+  border: 1px solid #e3ebeb;
+  border-radius: 16px;
+  background: #fbfdfd;
+  gap: 5px;
+}
+
+.recruitmentSyncSummary span {
+  color: #768588;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.recruitmentSyncSummary strong {
+  color: #1d3d40;
+  font-size: 1.4rem;
+  font-weight: 900;
 }
 
 .employeeTableWrap {
@@ -9213,6 +9286,20 @@ a:hover {
     grid-template-columns: minmax(230px, 1fr) repeat(2, minmax(140px, auto));
   }
 
+  .recruitmentActionBar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recruitmentActionBarButtons {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .recruitmentSyncSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .recruitmentSyncLogLayout {
     grid-template-columns: 1fr;
   }
@@ -9222,8 +9309,7 @@ a:hover {
     border-bottom: 1px solid #e8eeee;
   }
 
-  .employeeBootstrapButton,
-  .employeeAddButton {
+  .employeeBootstrapButton {
     grid-column: span 1;
   }
 }
@@ -9267,6 +9353,10 @@ a:hover {
 
   .employeeSearch {
     grid-column: 1 / -1;
+  }
+
+  .recruitmentActionBarButtons .employeeBootstrapButton {
+    width: auto;
   }
 
   .employeeTable thead {
@@ -9381,19 +9471,21 @@ a:hover {
   }
 
   .employeeToolbar > select,
-  .employeeBootstrapButton,
-  .employeeAddButton {
+  .employeeBootstrapButton {
     width: 100%;
   }
 
-  .employeeBootstrapButton,
-  .employeeAddButton {
+  .employeeBootstrapButton {
     grid-column: 1 / -1;
   }
 
   .employeeRosterMeta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .recruitmentSyncSummary {
+    grid-template-columns: 1fr;
   }
 
   .employeeTable tbody {

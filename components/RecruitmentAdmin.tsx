@@ -404,6 +404,9 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
   const failedSyncCount = records.filter((record) => record.application?.sheetSyncStatus === "failed").length;
   const hostCount = records.filter((record) => (record.application?.role || record.profile?.role) === "host").length;
   const supportCount = records.filter((record) => (record.application?.role || record.profile?.role) === "support").length;
+  const syncedCount = records.filter((record) => record.application?.sheetSyncStatus === "synced").length;
+  const websiteSourceCount = records.filter((record) => Boolean(record.application)).length;
+  const sheetSourceCount = records.filter((record) => !record.application && Boolean(record.profile)).length;
 
   return (
     <main className="employeeAdminApp">
@@ -458,15 +461,31 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
               <option value="synced">Đã sync sheet</option>
               <option value="failed">Sync lỗi</option>
             </select>
-            <button className="employeeBootstrapButton" disabled={dryRunning} onClick={() => void dryRunImportFromSheet()} type="button">{dryRunning ? "Đang dry run" : "Dry run sync"}</button>
-            <button className="employeeBootstrapButton" disabled={importing} onClick={() => void importFromSheet()} type="button">{importing ? "Đang sync sheet" : "Sync từ Sheet về Website"}</button>
-            <button className="employeeBootstrapButton" disabled={syncingSheet} onClick={() => void syncToSheet()} type="button">{syncingSheet ? "Đang đẩy sheet" : "Đẩy lên Sheet nguồn"}</button>
-            <a className="employeeBootstrapButton recruitmentInlineLink" href="/apply">Mở form public</a>
           </div>
 
           <div className="employeeRosterMeta">
             <strong>{filteredRecords.length} hồ sơ</strong>
-            <span>Đã nối `people_applications` + `recruitment_profiles` + `schedule_people` + `employee_contract_profiles`.</span>
+            <span>Đây là nguồn vận hành chính cho ứng tuyển, sync sheet, hồ sơ hợp đồng và tạo roster nhân sự.</span>
+          </div>
+
+          <div className="recruitmentActionBar">
+            <div className="recruitmentActionBarCopy">
+              <strong>Thao tác dữ liệu tuyển dụng</strong>
+              <span>`/apply` hoặc sheet tuyển dụng sẽ tạo/cập nhật nhân sự nền cho website. Không tạo nhân viên tay ở màn Nhân sự.</span>
+            </div>
+            <div className="recruitmentActionBarButtons">
+              <button className="employeeBootstrapButton primary" disabled={importing} onClick={() => void importFromSheet()} type="button">{importing ? "Đang sync sheet" : "Sync từ Sheet về Website"}</button>
+              <button className="employeeBootstrapButton" disabled={syncingSheet} onClick={() => void syncToSheet()} type="button">{syncingSheet ? "Đang đẩy sheet" : "Đẩy Website lên Sheet"}</button>
+              <button className="employeeBootstrapButton subtle" disabled={dryRunning} onClick={() => void dryRunImportFromSheet()} type="button">{dryRunning ? "Đang dry run" : "Dry run"}</button>
+              <a className="employeeBootstrapButton recruitmentInlineLink" href="/apply">Mở form public</a>
+            </div>
+          </div>
+
+          <div className="recruitmentSyncSummary">
+            <article><span>Đã sync sheet</span><strong>{syncedCount}</strong></article>
+            <article><span>Cần kiểm tra</span><strong>{failedSyncCount}</strong></article>
+            <article><span>Tạo từ website</span><strong>{websiteSourceCount}</strong></article>
+            <article><span>Kéo từ sheet</span><strong>{sheetSourceCount}</strong></article>
           </div>
 
           {loading ? <div className="employeeEmptyState">Đang tải hồ sơ tuyển dụng...</div> : null}

@@ -38,7 +38,7 @@ type EmployeeAdminGuide = {
   cta?: string;
 };
 
-type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "plus" | "search" | "trash" | "users";
+type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "search" | "trash" | "users";
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
@@ -72,7 +72,6 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "edit") return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>;
   if (name === "location") return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
   if (name === "logout") return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
-  if (name === "plus") return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
   if (name === "search") return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
   if (name === "trash") return <svg {...common}><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
@@ -163,14 +162,6 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previousOverflow; };
   }, [editorOpen]);
-
-  function openCreate() {
-    setForm({ ...EMPTY_FORM, workLocation: locations.find((location) => location.active)?.code || "" });
-    setEditingExisting(false);
-    setEditorOpen(true);
-    setMessage("");
-    setError("");
-  }
 
   function openEdit(employee: SchedulePerson) {
     setForm(toForm(employee));
@@ -270,20 +261,20 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   });
   const guideItems: EmployeeAdminGuide[] = [
     {
-      title: "Ứng viên mới từ website",
-      description: "Ứng viên gửi ở form public /apply hoặc admin quản lý tại mục Ứng tuyển. Hệ thống sẽ tự tạo mã nhân viên khi hồ sơ hợp lệ.",
+      title: "Nguồn tạo nhân sự",
+      description: "Nhân viên mới phải đi từ form /apply hoặc từ sync 2 tab tuyển dụng trên sheet. Trang này chỉ dùng để kiểm tra roster đã được tạo."
+    },
+    {
+      title: "Khi nào sửa ở đây",
+      description: "Admin chỉ chỉnh các trường vận hành như trạng thái, địa điểm, rating, training hoặc ghi chú khi hồ sơ đã tồn tại.",
       href: "/applications",
       cta: "Mở mục Ứng tuyển"
     },
     {
-      title: "Kéo dữ liệu từ sheet tuyển dụng",
-      description: "Nếu HR đã nhập ở 2 tab Thông tin Mẫu Live / Thông tin Support Live, hãy vào mục Ứng tuyển và dùng nút Kéo từ Sheet nguồn.",
+      title: "Hợp đồng và hồ sơ",
+      description: "Thông tin hợp đồng vẫn đi theo mã nhân viên. Nếu roster đã có mà hợp đồng thiếu, hãy sync tuyển dụng hoặc mở hồ sơ hợp đồng để bổ sung.",
       href: "/applications",
-      cta: "Đi tới sync tuyển dụng"
-    },
-    {
-      title: "Thêm tay trên roster",
-      description: "Chỉ dùng nút Thêm nhân viên khi cần tạo nhanh hồ sơ nội bộ. Trang nhân sự không còn nạp seed mặc định để tránh ghi đè dữ liệu production."
+      cta: "Kiểm tra sync tuyển dụng"
     }
   ];
 
@@ -325,22 +316,6 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
         {error ? <div className="notice errorNotice">{error}</div> : null}
         {message ? <div className="notice successNotice">{message}</div> : null}
 
-        <section className="employeeGuidePanel">
-          <div className="employeeGuideHeader">
-            <strong>Luồng nạp nhân sự</strong>
-            <span>Production chỉ dùng roster MongoDB và luồng ứng tuyển/sync tuyển dụng.</span>
-          </div>
-          <div className="employeeGuideGrid">
-            {guideItems.map((item) => (
-              <article className="employeeGuideCard" key={item.title}>
-                <strong>{item.title}</strong>
-                <p>{item.description}</p>
-                {item.href && item.cta ? <a href={item.href}>{item.cta}</a> : null}
-              </article>
-            ))}
-          </div>
-        </section>
-
         <section className="employeeRosterCard">
           <div className="employeeToolbar">
             <label className="employeeSearch">
@@ -353,12 +328,11 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
               <option value="active">Đang hoạt động</option><option value="incomplete">Thiếu thông tin</option><option value="inactive">Tạm ngưng</option><option value="all">Tất cả trạng thái</option>
             </select>
-            <button className="employeeAddButton" onClick={openCreate} type="button"><Icon name="plus" size={17} />Thêm nhân viên</button>
           </div>
 
-          <div className="employeeRosterMeta"><strong>{filteredEmployees.length} hồ sơ</strong><span>Roster production không còn dùng seed mặc định; số điện thoại cũng không hiển thị ở API roster công khai.</span></div>
+          <div className="employeeRosterMeta"><strong>{filteredEmployees.length} hồ sơ</strong><span>Roster này chỉ nhận dữ liệu từ ứng tuyển hoặc sync tuyển dụng; không còn tạo tay từ admin và không còn seed mặc định.</span></div>
           {loading ? <div className="employeeEmptyState">Đang tải dữ liệu nhân viên...</div> : null}
-          {!loading && filteredEmployees.length === 0 ? <div className="employeeEmptyState"><Icon name="users" size={28} /><strong>Không có hồ sơ phù hợp</strong><span>Thử đổi bộ lọc hoặc thêm nhân viên mới.</span></div> : null}
+          {!loading && filteredEmployees.length === 0 ? <div className="employeeEmptyState"><Icon name="users" size={28} /><strong>Không có hồ sơ phù hợp</strong><span>Thử đổi bộ lọc hoặc kiểm tra lại nguồn ứng tuyển và sync tuyển dụng.</span></div> : null}
 
           {filteredEmployees.length ? (
             <div className="employeeTableWrap">
@@ -381,12 +355,28 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             </div>
           ) : null}
         </section>
+
+        <section className="employeeGuidePanel employeeGuidePanelCompact">
+          <div className="employeeGuideHeader">
+            <strong>Logic roster hiện tại</strong>
+            <span>Đây là màn kiểm tra và vận hành, không phải màn khởi tạo nhân viên.</span>
+          </div>
+          <div className="employeeGuideGrid">
+            {guideItems.map((item) => (
+              <article className="employeeGuideCard" key={item.title}>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                {item.href && item.cta ? <a href={item.href}>{item.cta}</a> : null}
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
 
-      {editorOpen ? (
+      {editorOpen && editingExisting ? (
         <div className="employeeEditorBackdrop" role="presentation">
           <form className="employeeEditor" onSubmit={saveEmployee}>
-            <header><div><span>{editingExisting ? "CẬP NHẬT HỒ SƠ" : "THÊM NHÂN VIÊN"}</span><strong>{form.name || "Hồ sơ mới"}</strong><small>{editingExisting ? `${form.role === "host" ? "Host" : "Support"} · ${form.id}` : "Mã và vai trò sẽ trở thành khóa ổn định"}</small></div><button aria-label="Đóng" onClick={() => setEditorOpen(false)} type="button"><Icon name="close" /></button></header>
+            <header><div><span>CẬP NHẬT HỒ SƠ</span><strong>{form.name || "Hồ sơ nhân viên"}</strong><small>{`${form.role === "host" ? "Host" : "Support"} · ${form.id}`}</small></div><button aria-label="Đóng" onClick={() => setEditorOpen(false)} type="button"><Icon name="close" /></button></header>
             <div className="employeeEditorBody">
               <fieldset><legend>Thông tin cơ bản</legend><div className="employeeFormGrid">
                 <label><span>Vai trò</span><select disabled={editingExisting} value={form.role} onChange={(event) => setForm((current) => ({
@@ -426,7 +416,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
 
               <fieldset><legend>Ghi chú đánh giá</legend><label className="employeeNotesField"><textarea rows={5} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Đánh giá, lưu ý vận hành, yêu cầu đào tạo..." /></label></fieldset>
             </div>
-            <footer><button className="secondary" onClick={() => setEditorOpen(false)} type="button">Hủy</button><button className="primary" disabled={busy === "save"} type="submit">{busy === "save" ? "Đang lưu..." : editingExisting ? "Lưu thay đổi" : "Thêm nhân viên"}</button></footer>
+            <footer><button className="secondary" onClick={() => setEditorOpen(false)} type="button">Hủy</button><button className="primary" disabled={busy === "save"} type="submit">{busy === "save" ? "Đang lưu..." : "Lưu thay đổi"}</button></footer>
           </form>
         </div>
       ) : null}

@@ -198,7 +198,7 @@ export async function getSchedulePeopleFromMongo(): Promise<PeoplePayload> {
     hosts,
     supports,
     message: people.length === 0
-      ? "Danh sách nhân viên chưa có dữ liệu. Hãy tạo từ mục Ứng tuyển hoặc dùng nút Thêm nhân viên trong trang Nhân sự."
+      ? "Danh sách nhân viên chưa có dữ liệu. Hãy tạo từ mục Ứng tuyển hoặc sync từ sheet tuyển dụng."
       : undefined
   };
 }

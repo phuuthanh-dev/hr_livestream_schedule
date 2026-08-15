@@ -3,7 +3,6 @@ import { getDashboardSession } from "@/lib/auth";
 import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
 import { listSupportTrainingSummaries } from "@/lib/supportTraining";
 import {
-  createSchedulePerson,
   hardDeleteSchedulePerson,
   listSchedulePeopleForAdmin,
   updateSchedulePerson,
@@ -79,17 +78,14 @@ export async function POST(request: Request) {
     return NextResponse.json<EmployeeAdminPayload>({ success: false, message: "Chỉ Admin được quản lý nhân viên." }, { status: 403 });
   }
 
-  try {
-    const input = (await request.json()) as SchedulePersonMutation;
-    const employee = await createSchedulePerson(input, session.accountKey);
-    return NextResponse.json<EmployeeAdminPayload>(
-      { success: true, employee, message: `Đã thêm nhân viên ${employee.name}.` },
-      { status: 201 }
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Không thêm được nhân viên.";
-    return NextResponse.json<EmployeeAdminPayload>({ success: false, message }, { status: errorStatus(message) });
-  }
+  await request.text().catch(() => "");
+  return NextResponse.json<EmployeeAdminPayload>(
+    {
+      success: false,
+      message: "Production không cho tạo nhân viên tay từ admin. Hãy dùng form ứng tuyển hoặc sync sheet tuyển dụng."
+    },
+    { status: 405 }
+  );
 }
 
 export async function PUT(request: Request) {
