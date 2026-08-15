@@ -5,7 +5,12 @@ import {
   listEmployeeContractProfiles,
   upsertEmployeeContractProfileFields
 } from "@/lib/employeeContract";
-import { findSchedulePerson } from "@/lib/employeeRoster";
+import {
+  createSchedulePerson,
+  findSchedulePerson,
+  type SchedulePersonMutation,
+  updateSchedulePerson
+} from "@/lib/employeeRoster";
 import { getMongoDatabase } from "@/lib/mongodb";
 import { listPeopleApplications } from "@/lib/peopleApplication";
 import { listRecruitmentProfiles, upsertRecruitmentProfile } from "@/lib/recruitmentProfile";
@@ -28,6 +33,8 @@ type ImportSummary = {
   spreadsheetId: string;
   processedRows: number;
   updatedProfiles: number;
+  updatedEmployees: number;
+  createdEmployees: number;
   updatedContracts: number;
   skippedRows: number;
   message: string;
@@ -69,12 +76,52 @@ function formatBooleanCell(value: boolean) {
   return value ? "Có" : "";
 }
 
+function buildHostWorkLocation(input: {
+  canLiveHome: boolean;
+  canLiveStudio: boolean;
+  fallback?: string;
+}) {
+  if (input.canLiveHome && input.canLiveStudio) return "both";
+  if (input.canLiveStudio) return "studio";
+  if (input.canLiveHome) return "home";
+  return normalizeText(input.fallback);
+}
+
+function buildLiveAccountType(input: {
+  canUsePersonalAccount: boolean;
+  canUseCompanyAccount: boolean;
+  fallback?: string;
+}) {
+  if (input.canUsePersonalAccount && input.canUseCompanyAccount) return "Cá nhân + Công ty";
+  if (input.canUseCompanyAccount) return "Công ty";
+  if (input.canUsePersonalAccount) return "Cá nhân";
+  return normalizeText(input.fallback);
+}
+
 function getColumn(row: string[], indexMap: Map<string, number>, ...names: string[]) {
   for (const name of names) {
     const index = indexMap.get(name);
     if (index !== undefined) return normalizeText(row[index]);
   }
   return "";
+}
+
+function getColumnAlias(row: string[], indexMap: Map<string, number>, aliases: string[]) {
+  return getColumn(row, indexMap, ...aliases);
+}
+
+function getContractSheetFields(row: string[], indexMap: Map<string, number>) {
+  return {
+    gmail: getColumnAlias(row, indexMap, ["gmail", "email"]),
+    dateOfBirth: getColumnAlias(row, indexMap, ["ngày sinh", "ngay sinh", "date of birth", "dob"]),
+    citizenId: getColumnAlias(row, indexMap, ["cccd", "số cccd", "so cccd", "căn cước công dân", "can cuoc cong dan"]),
+    citizenIdIssuedDate: getColumnAlias(row, indexMap, ["ngày cấp", "ngay cap", "cccd ngày cấp", "cccd ngay cap"]),
+    citizenIdIssuedPlace: getColumnAlias(row, indexMap, ["nơi cấp", "noi cap", "cccd nơi cấp", "cccd noi cap"]),
+    permanentAddress: getColumnAlias(row, indexMap, ["địa chỉ thường trú", "dia chi thuong tru", "thường trú", "thuong tru"]),
+    temporaryAddress: getColumnAlias(row, indexMap, ["địa chỉ tạm trú", "dia chi tam tru", "tạm trú", "tam tru"]),
+    bankAccountNumber: getColumnAlias(row, indexMap, ["stk", "số tài khoản", "so tai khoan"]),
+    bankName: getColumnAlias(row, indexMap, ["bank", "ngân hàng", "ngan hang"])
+  };
 }
 
 function buildIndexMap(header: string[]) {
@@ -197,6 +244,107 @@ function setCellByIndex(row: string[], index: number, value: string) {
   row[index] = value;
 }
 
+function buildHostEmployeeMutation(input: {
+  employeeId: string;
+  row: string[];
+  indexMap: Map<string, number>;
+  existing?: Awaited<ReturnType<typeof findSchedulePerson>> | null;
+}): SchedulePersonMutation {
+  const canLiveHome = parseBooleanCell(getColumn(input.row, input.indexMap, "live tại nhà"));
+  const canLiveStudio = parseBooleanCell(getColumn(input.row, input.indexMap, "live tại studio"));
+  const canUsePersonalAccount = parseBooleanCell(getColumn(input.row, input.indexMap, "live tk cá nhân"));
+  const canUseCompanyAccount = parseBooleanCell(getColumn(input.row, input.indexMap, "live tk công ty"));
+  return {
+    id: input.employeeId,
+    role: "host",
+    name: getColumn(input.row, input.indexMap, "tên gọi khác")
+      || getColumn(input.row, input.indexMap, "họ và tên đầy đủ")
+      || input.existing?.name
+      || input.employeeId,
+    phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
+    level: getColumn(input.row, input.indexMap, "đánh giá level") || input.existing?.level || "Thử việc",
+    rating: getColumn(input.row, input.indexMap, "rating") || input.existing?.rating || "",
+    workLocation: buildHostWorkLocation({
+      canLiveHome,
+      canLiveStudio,
+      fallback: input.existing?.workLocation
+    }),
+    cvReference: getColumn(input.row, input.indexMap, "cv") || input.existing?.cvReference || "",
+    experience: getColumn(input.row, input.indexMap, "kinh nghiệm") || input.existing?.experience || "",
+    trainingStatus: parseBooleanCell(getColumn(input.row, input.indexMap, "đã tham gia training"))
+      ? "Đã training"
+      : input.existing?.trainingStatus || "Chưa training",
+    notes: getColumn(input.row, input.indexMap, "note") || input.existing?.notes || "",
+    achievements: getColumn(input.row, input.indexMap, "thành tích") || input.existing?.achievements || "",
+    zaloStatus: parseBooleanCell(getColumn(input.row, input.indexMap, "tham gia zalo"))
+      ? "Đã tham gia"
+      : input.existing?.zaloStatus || "",
+    liveAccountType: buildLiveAccountType({
+      canUsePersonalAccount,
+      canUseCompanyAccount,
+      fallback: input.existing?.liveAccountType
+    }),
+    liveChannelId: getColumn(input.row, input.indexMap, "live_channel_id") || input.existing?.liveChannelId || "",
+    active: input.existing?.active !== false,
+    source: "Google Sheet recruitment sync"
+  };
+}
+
+function buildSupportEmployeeMutation(input: {
+  employeeId: string;
+  row: string[];
+  indexMap: Map<string, number>;
+  existing?: Awaited<ReturnType<typeof findSchedulePerson>> | null;
+}): SchedulePersonMutation {
+  return {
+    id: input.employeeId,
+    role: "support",
+    name: getColumn(input.row, input.indexMap, "tên") || input.existing?.name || input.employeeId,
+    phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
+    level: getColumn(input.row, input.indexMap, "level") || input.existing?.level || "Thử việc",
+    cvReference: getColumn(input.row, input.indexMap, "cv") || input.existing?.cvReference || "",
+    experience: getColumn(input.row, input.indexMap, "kinh nghiệm") || input.existing?.experience || "",
+    trainingStatus: parseBooleanCell(getColumn(input.row, input.indexMap, "đã tham gia training"))
+      ? "Đã training"
+      : input.existing?.trainingStatus || "Chưa training",
+    notes: getColumn(input.row, input.indexMap, "kết quả đánh giá") || input.existing?.notes || "",
+    active: input.existing?.active !== false,
+    source: "Google Sheet recruitment sync"
+  };
+}
+
+async function syncEmployeeFromSheetRow(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  row: string[];
+  indexMap: Map<string, number>;
+  actorAccountKey: string;
+}) {
+  const existing = await findSchedulePerson(input.role, input.employeeId);
+  const mutation = input.role === "host"
+    ? buildHostEmployeeMutation({
+      employeeId: input.employeeId,
+      row: input.row,
+      indexMap: input.indexMap,
+      existing
+    })
+    : buildSupportEmployeeMutation({
+      employeeId: input.employeeId,
+      row: input.row,
+      indexMap: input.indexMap,
+      existing
+    });
+  if (!mutation.name) {
+    throw new Error("Thiếu tên nhân viên để sync roster.");
+  }
+  if (input.role === "host" && !mutation.workLocation) {
+    throw new Error("Thiếu cấu hình Home/Studio cho host.");
+  }
+  return existing
+    ? { person: await updateSchedulePerson(mutation, input.actorAccountKey), created: false }
+    : { person: await createSchedulePerson(mutation, input.actorAccountKey), created: true };
+}
+
 function buildHostSheetRow(input: {
   header: string[];
   currentRow?: string[];
@@ -300,6 +448,8 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
 
     let processedRows = 0;
     let updatedProfiles = 0;
+    let updatedEmployees = 0;
+    let createdEmployees = 0;
     let updatedContracts = 0;
     let skippedRows = 0;
 
@@ -311,17 +461,36 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         const employeeId = getColumn(row, indexMap, "mã nhân viên");
         if (!employeeId) continue;
         processedRows += 1;
-        const person = await findSchedulePerson("host", employeeId);
+        let person = await findSchedulePerson("host", employeeId);
         if (!person) {
-          skippedRows += 1;
           conflicts.push(buildConflict(
             runId,
             "sheet_to_website",
             "unknown_employee",
-            `Không tìm thấy host ${employeeId} trong website khi kéo từ sheet.`,
+            `Host ${employeeId} chưa có trong roster; hệ thống sẽ tạo mới từ sheet.`,
             { role: "host", employeeId, tabName: HOST_TAB_NAME, rowNumber }
           ));
-          continue;
+        }
+        try {
+          const synced = await syncEmployeeFromSheetRow({
+            role: "host",
+            employeeId,
+            row,
+            indexMap,
+            actorAccountKey
+          });
+          person = synced.person;
+          if (synced.created) createdEmployees += 1;
+          else updatedEmployees += 1;
+        } catch (error) {
+          skippedRows += 1;
+          conflicts.push(buildConflict(
+            runId,
+            "sheet_to_website",
+            "invalid_row",
+            `Không sync được roster cho host ${employeeId}: ${error instanceof Error ? error.message : "Dữ liệu không hợp lệ."}`,
+            { role: "host", employeeId, tabName: HOST_TAB_NAME, rowNumber }
+          ));
         }
 
         await upsertRecruitmentProfile({
@@ -330,9 +499,9 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           actorAccountKey,
           values: {
             sheetContractCode: getColumn(row, indexMap, "mã hđ"),
-            fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || getColumn(row, indexMap, "tên gọi khác") || person.name,
+            fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || getColumn(row, indexMap, "tên gọi khác") || person?.name || employeeId,
             aliasName: getColumn(row, indexMap, "tên gọi khác"),
-            phone: getColumn(row, indexMap, "sđt") || person.phone || "",
+            phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
             email: getColumn(row, indexMap, "gmail"),
             cvUrl: getColumn(row, indexMap, "cv"),
             experience: getColumn(row, indexMap, "kinh nghiệm"),
@@ -368,20 +537,44 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         });
         updatedProfiles += 1;
 
-        const gmail = getColumn(row, indexMap, "gmail");
-        if (gmail) {
+        const contractFields = getContractSheetFields(row, indexMap);
+        if (
+          person && (
+            contractFields.gmail ||
+            contractFields.dateOfBirth ||
+            contractFields.citizenId ||
+            contractFields.citizenIdIssuedDate ||
+            contractFields.citizenIdIssuedPlace ||
+            contractFields.permanentAddress ||
+            contractFields.temporaryAddress
+          )
+        ) {
           await upsertEmployeeContractProfileFields({
             person,
             actorAccountKey,
-            gmail
+            gmail: contractFields.gmail,
+            dateOfBirth: contractFields.dateOfBirth,
+            citizenId: contractFields.citizenId,
+            citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
+            citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
+            permanentAddress: contractFields.permanentAddress,
+            temporaryAddress: contractFields.temporaryAddress
           });
           updatedContracts += 1;
+        } else if (!person) {
+          conflicts.push(buildConflict(
+            runId,
+            "sheet_to_website",
+            "missing_contract_profile",
+            `Host ${employeeId} chưa sync được roster nên chưa cập nhật Gmail vào hồ sơ hợp đồng.`,
+            { role: "host", employeeId, tabName: HOST_TAB_NAME, rowNumber }
+          ));
         } else {
           conflicts.push(buildConflict(
             runId,
             "sheet_to_website",
             "missing_contract_profile",
-            `Host ${employeeId} chưa có Gmail để cập nhật hồ sơ hợp đồng.`,
+            `Host ${employeeId} chưa có cột contract hợp lệ trong sheet để cập nhật hồ sơ hợp đồng.`,
             { role: "host", employeeId, tabName: HOST_TAB_NAME, rowNumber }
           ));
         }
@@ -396,17 +589,36 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         const employeeId = getColumn(row, indexMap, "mã nhân viên");
         if (!employeeId) continue;
         processedRows += 1;
-        const person = await findSchedulePerson("support", employeeId);
+        let person = await findSchedulePerson("support", employeeId);
         if (!person) {
-          skippedRows += 1;
           conflicts.push(buildConflict(
             runId,
             "sheet_to_website",
             "unknown_employee",
-            `Không tìm thấy support ${employeeId} trong website khi kéo từ sheet.`,
+            `Support ${employeeId} chưa có trong roster; hệ thống sẽ tạo mới từ sheet.`,
             { role: "support", employeeId, tabName: SUPPORT_TAB_NAME, rowNumber }
           ));
-          continue;
+        }
+        try {
+          const synced = await syncEmployeeFromSheetRow({
+            role: "support",
+            employeeId,
+            row,
+            indexMap,
+            actorAccountKey
+          });
+          person = synced.person;
+          if (synced.created) createdEmployees += 1;
+          else updatedEmployees += 1;
+        } catch (error) {
+          skippedRows += 1;
+          conflicts.push(buildConflict(
+            runId,
+            "sheet_to_website",
+            "invalid_row",
+            `Không sync được roster cho support ${employeeId}: ${error instanceof Error ? error.message : "Dữ liệu không hợp lệ."}`,
+            { role: "support", employeeId, tabName: SUPPORT_TAB_NAME, rowNumber }
+          ));
         }
 
         await upsertRecruitmentProfile({
@@ -415,9 +627,9 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           actorAccountKey,
           values: {
             sheetContractCode: "",
-            fullName: getColumn(row, indexMap, "tên") || person.name,
+            fullName: getColumn(row, indexMap, "tên") || person?.name || employeeId,
             aliasName: "",
-            phone: getColumn(row, indexMap, "sđt") || person.phone || "",
+            phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
             email: "",
             cvUrl: getColumn(row, indexMap, "cv"),
             experience: getColumn(row, indexMap, "kinh nghiệm"),
@@ -449,22 +661,48 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         });
         updatedProfiles += 1;
 
-        const bankAccountNumber = getColumn(row, indexMap, "stk");
-        const bankName = getColumn(row, indexMap, "bank");
-        if (bankAccountNumber || bankName) {
+        const contractFields = getContractSheetFields(row, indexMap);
+        if (
+          person && (
+            contractFields.gmail ||
+            contractFields.dateOfBirth ||
+            contractFields.citizenId ||
+            contractFields.citizenIdIssuedDate ||
+            contractFields.citizenIdIssuedPlace ||
+            contractFields.permanentAddress ||
+            contractFields.temporaryAddress ||
+            contractFields.bankAccountNumber ||
+            contractFields.bankName
+          )
+        ) {
           await upsertEmployeeContractProfileFields({
             person,
             actorAccountKey,
-            bankAccountNumber,
-            bankName
+            gmail: contractFields.gmail,
+            dateOfBirth: contractFields.dateOfBirth,
+            citizenId: contractFields.citizenId,
+            citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
+            citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
+            permanentAddress: contractFields.permanentAddress,
+            temporaryAddress: contractFields.temporaryAddress,
+            bankAccountNumber: contractFields.bankAccountNumber,
+            bankName: contractFields.bankName
           });
           updatedContracts += 1;
+        } else if (!person) {
+          conflicts.push(buildConflict(
+            runId,
+            "sheet_to_website",
+            "missing_contract_profile",
+            `Support ${employeeId} chưa sync được roster nên chưa cập nhật STK/Bank vào hồ sơ hợp đồng.`,
+            { role: "support", employeeId, tabName: SUPPORT_TAB_NAME, rowNumber }
+          ));
         } else {
           conflicts.push(buildConflict(
             runId,
             "sheet_to_website",
             "missing_contract_profile",
-            `Support ${employeeId} chưa có STK/Bank để cập nhật hồ sơ hợp đồng.`,
+            `Support ${employeeId} chưa có cột contract hợp lệ trong sheet để cập nhật hồ sơ hợp đồng.`,
             { role: "support", employeeId, tabName: SUPPORT_TAB_NAME, rowNumber }
           ));
         }
@@ -479,9 +717,11 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
       spreadsheetId,
       processedRows,
       updatedProfiles,
+      updatedEmployees,
+      createdEmployees,
       updatedContracts,
       skippedRows,
-      message: `Đã kéo ${updatedProfiles} hồ sơ tuyển dụng từ 2 tab nguồn vào website.`
+      message: `Đã sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
     };
 
     await persistSyncRun({
@@ -496,6 +736,8 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         finishedAt: new Date().toISOString(),
         processedRows,
         updatedProfiles,
+        updatedEmployees,
+        createdEmployees,
         updatedContracts,
         skippedRows,
         conflictCount: conflicts.length,
@@ -519,6 +761,8 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           finishedAt: new Date().toISOString(),
           processedRows: 0,
           updatedProfiles: 0,
+          updatedEmployees: 0,
+          createdEmployees: 0,
           updatedContracts: 0,
           skippedRows: 0,
           conflictCount: conflicts.length,

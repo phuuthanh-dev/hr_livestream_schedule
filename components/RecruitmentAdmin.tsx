@@ -99,6 +99,8 @@ type RecruitmentSyncRun = {
   finishedAt: string;
   processedRows?: number;
   updatedProfiles?: number;
+  updatedEmployees?: number;
+  createdEmployees?: number;
   updatedContracts?: number;
   updatedSheetRows?: number;
   appendedSheetRows?: number;
@@ -313,9 +315,19 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
       const response = await fetch("/api/recruitment-profiles", {
         method: "POST"
       });
-      const payload = await response.json() as { success?: boolean; message?: string; updatedProfiles?: number; updatedContracts?: number; skippedRows?: number };
+      const payload = await response.json() as {
+        success?: boolean;
+        message?: string;
+        updatedProfiles?: number;
+        updatedEmployees?: number;
+        createdEmployees?: number;
+        updatedContracts?: number;
+        skippedRows?: number;
+      };
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không import được dữ liệu từ sheet nguồn.");
-      setMessage(`${payload.message || "Đã import từ sheet nguồn."} Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`);
+      setMessage(
+        `${payload.message || "Đã sync từ sheet nguồn."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
+      );
       await loadData();
       await loadLogs();
     } catch (importError) {
@@ -416,14 +428,14 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
               <option value="synced">Đã sync sheet</option>
               <option value="failed">Sync lỗi</option>
             </select>
-            <button className="employeeBootstrapButton" disabled={importing} onClick={() => void importFromSheet()} type="button">{importing ? "Đang kéo sheet" : "Kéo từ Sheet nguồn"}</button>
+            <button className="employeeBootstrapButton" disabled={importing} onClick={() => void importFromSheet()} type="button">{importing ? "Đang sync sheet" : "Sync từ Sheet về Website"}</button>
             <button className="employeeBootstrapButton" disabled={syncingSheet} onClick={() => void syncToSheet()} type="button">{syncingSheet ? "Đang đẩy sheet" : "Đẩy lên Sheet nguồn"}</button>
             <a className="employeeBootstrapButton recruitmentInlineLink" href="/apply">Mở form public</a>
           </div>
 
           <div className="employeeRosterMeta">
             <strong>{filteredRecords.length} hồ sơ</strong>
-            <span>Đã nối `people_applications` + `recruitment_profiles` + `employee_contract_profiles`.</span>
+            <span>Đã nối `people_applications` + `recruitment_profiles` + `schedule_people` + `employee_contract_profiles`.</span>
           </div>
 
           {loading ? <div className="employeeEmptyState">Đang tải hồ sơ tuyển dụng...</div> : null}
@@ -566,7 +578,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
                           <span className="employeeStackValue">
                             <strong>
                               {run.direction === "sheet_to_website"
-                                ? `${run.updatedProfiles || 0} profile · ${run.updatedContracts || 0} contract`
+                                ? `${run.updatedProfiles || 0} profile · ${run.updatedEmployees || 0} roster update · ${run.createdEmployees || 0} roster create · ${run.updatedContracts || 0} contract`
                                 : `${run.updatedSheetRows || 0} update · ${run.appendedSheetRows || 0} append`}
                             </strong>
                             <small>{run.conflictCount} conflict · {run.skippedRows || 0} bỏ qua</small>

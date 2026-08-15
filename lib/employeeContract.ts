@@ -78,6 +78,46 @@ function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function normalizeDateInput(value: unknown) {
+  const raw = cleanText(value, 40);
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const slashMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+  if (slashMatch) {
+    const day = slashMatch[1].padStart(2, "0");
+    const month = slashMatch[2].padStart(2, "0");
+    return `${slashMatch[3]}-${month}-${day}`;
+  }
+  return raw;
+}
+
+function isValidPastOrTodayDate(value: string) {
+  if (!value) return true;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return false;
+  }
+  const today = new Date();
+  const todayParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(today);
+  const todayPart = (type: Intl.DateTimeFormatPartTypes) => todayParts.find((part) => part.type === type)?.value || "";
+  const todayKey = `${todayPart("year")}-${todayPart("month")}-${todayPart("day")}`;
+  return value <= todayKey;
+}
+
 async function getContractCollection(): Promise<Collection<EmployeeContractDocument>> {
   const database = await getMongoDatabase();
   const collection = database.collection<EmployeeContractDocument>(CONTRACT_COLLECTION);
@@ -166,6 +206,12 @@ export async function upsertEmployeeContractProfileFields(input: {
   person: SchedulePerson;
   actorAccountKey: string;
   gmail?: string;
+  dateOfBirth?: string;
+  citizenId?: string;
+  citizenIdIssuedDate?: string;
+  citizenIdIssuedPlace?: string;
+  permanentAddress?: string;
+  temporaryAddress?: string;
   bankAccountNumber?: string;
   bankName?: string;
 }) {
@@ -173,10 +219,25 @@ export async function upsertEmployeeContractProfileFields(input: {
   const key = personKey(input.person.role, input.person.id);
   const now = new Date();
   const gmail = cleanText(input.gmail, 180).toLowerCase();
+  const dateOfBirth = normalizeDateInput(input.dateOfBirth);
+  const citizenId = cleanText(input.citizenId, 20).replace(/\D/g, "");
+  const citizenIdIssuedDate = normalizeDateInput(input.citizenIdIssuedDate);
+  const citizenIdIssuedPlace = cleanText(input.citizenIdIssuedPlace, 240);
+  const permanentAddress = cleanText(input.permanentAddress, 1000);
+  const temporaryAddress = cleanText(input.temporaryAddress, 1000);
   const bankAccountNumber = cleanText(input.bankAccountNumber, 30).replace(/\s+/g, "");
   const bankName = cleanText(input.bankName, 120);
   if (gmail && !/^[^\s@]+@gmail\.com$/i.test(gmail)) {
     throw new Error("Gmail phải là địa chỉ @gmail.com hợp lệ.");
+  }
+  if (dateOfBirth && !isValidPastOrTodayDate(dateOfBirth)) {
+    throw new Error("Ngày sinh từ sheet không hợp lệ.");
+  }
+  if (citizenId && !/^\d{12}$/.test(citizenId)) {
+    throw new Error("CCCD từ sheet phải gồm đúng 12 chữ số.");
+  }
+  if (citizenIdIssuedDate && !isValidPastOrTodayDate(citizenIdIssuedDate)) {
+    throw new Error("Ngày cấp CCCD từ sheet không hợp lệ.");
   }
   if (bankAccountNumber && !/^\d{6,30}$/.test(bankAccountNumber)) {
     throw new Error("Số tài khoản ngân hàng không hợp lệ.");
@@ -193,6 +254,12 @@ export async function upsertEmployeeContractProfileFields(input: {
         normalizedEmployeeId: normalizeEmployeeId(input.person.id),
         employeeName: input.person.name,
         ...(gmail ? { gmail } : {}),
+        ...(dateOfBirth ? { dateOfBirth } : {}),
+        ...(citizenId ? { citizenId } : {}),
+        ...(citizenIdIssuedDate ? { citizenIdIssuedDate } : {}),
+        ...(citizenIdIssuedPlace ? { citizenIdIssuedPlace } : {}),
+        ...(permanentAddress ? { permanentAddress } : {}),
+        ...(temporaryAddress ? { temporaryAddress } : {}),
         ...(bankAccountNumber ? { bankAccountNumber } : {}),
         ...(bankName ? { bankName } : {}),
         updatedAt: now,

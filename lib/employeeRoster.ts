@@ -59,6 +59,7 @@ export type SchedulePersonMutation = {
   liveAccountType?: string;
   liveChannelId?: string;
   active?: boolean;
+  source?: string;
 };
 
 let rosterIndexesPromise: Promise<unknown> | null = null;
@@ -307,7 +308,7 @@ export async function createSchedulePerson(input: SchedulePersonMutation, actorA
     role: input.role,
     ...personFields(input),
     active,
-    source: "Admin API",
+    source: normalizeText(input.source) || "Admin API",
     firstSyncedAt: now,
     lastSeenAt: now,
     createdAt: now,
@@ -351,6 +352,7 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
       $set: {
         ...personFields(merged),
         active,
+        source: normalizeText(input.source) || existing.source || "Admin API",
         lastSeenAt: now,
         updatedAt: now,
         updatedBy: actorAccountKey,

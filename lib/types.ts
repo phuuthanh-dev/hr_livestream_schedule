@@ -346,6 +346,8 @@ export type RecruitmentSheetSyncRun = {
   finishedAt: string;
   processedRows?: number;
   updatedProfiles?: number;
+  updatedEmployees?: number;
+  createdEmployees?: number;
   updatedContracts?: number;
   updatedSheetRows?: number;
   appendedSheetRows?: number;
