@@ -129,6 +129,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [loading, setLoading] = useState(true);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [importingSheet, setImportingSheet] = useState(false);
+  const [syncingSheet, setSyncingSheet] = useState(false);
   const [error, setError] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -242,6 +243,36 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
+  async function syncAvailabilityToSheet() {
+    setSyncingSheet(true);
+    setError("");
+    setScheduleMessage("");
+
+    try {
+      const response = await fetch("/api/availability/sync-sheet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStartKey })
+      });
+      const result = await response.json() as {
+        success?: boolean;
+        message?: string;
+        hostRowsUpdated?: number;
+        supportRowsUpdated?: number;
+      };
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Không đẩy được lịch sang Google Sheet.");
+      }
+      setScheduleMessage(
+        `${result.message || "Đã đồng bộ sang Google Sheet."} Host ${result.hostRowsUpdated || 0} dòng · Support ${result.supportRowsUpdated || 0} dòng.`
+      );
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Không đẩy được lịch sang Google Sheet.");
+    } finally {
+      setSyncingSheet(false);
+    }
+  }
+
   return (
     <main className="availabilityApp availabilitySummaryApp">
       <header className="appHeader availabilityHeader availabilitySummaryHeader">
@@ -328,8 +359,17 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <span>{importingSheet ? "Đang import" : "Kéo từ Sheet"}</span>
             </button>
             <button
+              className="availabilitySummaryRefresh"
+              disabled={loading || syncingSheet || importingSheet}
+              onClick={syncAvailabilityToSheet}
+              type="button"
+            >
+              <Icon name="refresh" size={18} />
+              <span>{syncingSheet ? "Đang đẩy" : "Đẩy xuống Sheet"}</span>
+            </button>
+            <button
               className="availabilitySummaryGenerate"
-              disabled={loading || generatingSchedule || importingSheet}
+              disabled={loading || generatingSchedule || importingSheet || syncingSheet}
               onClick={generateWeekSchedule}
               type="button"
             >

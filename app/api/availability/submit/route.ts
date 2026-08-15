@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { syncAvailabilityWeekToCollectSheets } from "@/lib/availabilitySheetImport";
 import { hasEditableAvailabilitySlots, saveAvailabilityWeek, submitAvailabilityWeek } from "@/lib/availabilityStore";
 import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type { AvailabilitySlot, EmployeeRole } from "@/lib/types";
@@ -78,6 +79,13 @@ export async function POST(request: Request) {
       actorAccountKey: session.accountKey,
       allowLockedOverwrite: false
     });
+    const weekStartKey = body.weekStartKey || getScheduleWeekStartKey();
+    let syncWarning = "";
+    try {
+      await syncAvailabilityWeekToCollectSheets(weekStartKey);
+    } catch (error) {
+      syncWarning = error instanceof Error ? ` Tuy nhiên chưa đẩy được sang Google Sheet: ${error.message}` : " Tuy nhiên chưa đẩy được sang Google Sheet.";
+    }
 
     return NextResponse.json({
       ...payload,
@@ -85,7 +93,7 @@ export async function POST(request: Request) {
         (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
         payload.target?.workLocationActive !== false &&
         payload.week?.status !== "locked",
-      message: "Đã gửi lịch rảnh cho admin."
+      message: `Đã gửi lịch rảnh cho admin.${syncWarning}`
     });
   } catch (error) {
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 
-const GOOGLE_SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets.readonly"];
+const GOOGLE_SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"];
 
 function readRequiredEnv(name: string) {
   const value = process.env[name]?.trim();

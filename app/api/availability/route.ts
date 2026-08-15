@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { syncAvailabilityWeekToCollectSheets } from "@/lib/availabilitySheetImport";
 import { getAvailabilityWeekForPerson, hasEditableAvailabilitySlots, saveAvailabilityWeek } from "@/lib/availabilityStore";
 import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type { AvailabilitySlot, EmployeeRole } from "@/lib/types";
@@ -97,6 +98,15 @@ export async function PUT(request: Request) {
       allowLockedOverwrite: session.accountType === "admin",
       allowLocationOverride: session.accountType === "admin"
     });
+    const weekStartKey = body.weekStartKey || getScheduleWeekStartKey();
+    let syncWarning = "";
+    try {
+      if (payload.week?.status === "submitted" || payload.week?.status === "locked") {
+        await syncAvailabilityWeekToCollectSheets(weekStartKey);
+      }
+    } catch (error) {
+      syncWarning = error instanceof Error ? ` Tuy nhiên chưa đẩy được sang Google Sheet: ${error.message}` : " Tuy nhiên chưa đẩy được sang Google Sheet.";
+    }
 
     return NextResponse.json({
       ...payload,
@@ -105,8 +115,8 @@ export async function PUT(request: Request) {
         payload.target?.workLocationActive !== false &&
         (session.accountType === "admin" || payload.week?.status !== "locked"),
       message: session.accountType === "admin"
-        ? "Đã lưu thay đổi lịch rảnh của nhân sự."
-        : "Đã lưu lịch rảnh cho tuần này."
+        ? `Đã lưu thay đổi lịch rảnh của nhân sự.${syncWarning}`
+        : `Đã lưu lịch rảnh cho tuần này.${syncWarning}`
     });
   } catch (error) {
     return NextResponse.json(

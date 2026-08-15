@@ -26,6 +26,15 @@ type SheetAvailabilityImportSummary = {
   message?: string;
 };
 
+export type SheetAvailabilitySyncSummary = {
+  success: boolean;
+  spreadsheetId: string;
+  weekStartKey: string;
+  hostRowsUpdated: number;
+  supportRowsUpdated: number;
+  message?: string;
+};
+
 type ParsedSheetRow = {
   dateKey: string;
   slots: Map<string, string[]>;
@@ -45,6 +54,11 @@ function parseDateCell(value: unknown) {
   if (!match) return "";
   const dateKey = `${match[3]}-${match[2]}-${match[1]}`;
   return isValidScheduleDateKey(dateKey) ? dateKey : "";
+}
+
+function formatSheetDate(dateKey: string) {
+  const [year, month, day] = dateKey.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function parseEmployeeIds(value: unknown) {
@@ -110,6 +124,108 @@ function parseCollectRows(values: string[][]) {
   });
 
   return { parsedRows, invalidRows };
+}
+
+async function readSheetDateRows(tabName: string) {
+  const values = await readCollectSheet(tabName);
+  const rows = new Map<string, number>();
+  values.slice(1).forEach((row, index) => {
+    const dateKey = parseDateCell(row[1]);
+    if (dateKey) {
+      rows.set(dateKey, index + 2);
+    }
+  });
+  return rows;
+}
+
+async function getSubmittedAvailabilityForWeek(weekStartKey: string) {
+  const database = await getMongoDatabase();
+  const weeks = database.collection<{
+    personKey: string;
+    status: string;
+  }>("schedule_availability_weeks");
+  const slots = database.collection<{
+    role: EmployeeRole;
+    employeeId: string;
+    dateKey: string;
+    slot: string;
+    weekStartKey: string;
+    personKey: string;
+  }>("schedule_availability_slots");
+
+  const submittedWeeks = await weeks.find({
+    weekStartKey,
+    status: { $in: ["submitted", "locked"] }
+  }).toArray();
+  const personKeys = submittedWeeks.map((item) => item.personKey);
+  if (personKeys.length === 0) {
+    return [];
+  }
+
+  return slots.find({
+    weekStartKey,
+    personKey: { $in: personKeys }
+  }).toArray();
+}
+
+function buildCollectMatrix(
+  role: EmployeeRole,
+  weekStartKey: string,
+  slotDocuments: Awaited<ReturnType<typeof getSubmittedAvailabilityForWeek>>
+) {
+  const rows = new Map<string, Map<string, string[]>>();
+  slotDocuments
+    .filter((item) => item.role === role)
+    .forEach((item) => {
+      const row = rows.get(item.dateKey) || new Map<string, string[]>();
+      const bucket = row.get(item.slot) || [];
+      if (!bucket.includes(item.employeeId)) {
+        bucket.push(item.employeeId);
+      }
+      row.set(item.slot, bucket);
+      rows.set(item.dateKey, row);
+    });
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(`${weekStartKey}T12:00:00+07:00`);
+    date.setDate(date.getDate() + index);
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const row = rows.get(dateKey) || new Map<string, string[]>();
+    return {
+      dateKey,
+      values: DEFAULT_SCHEDULE_SLOTS.map((slot) =>
+        (row.get(slot) || []).slice().sort((left, right) => left.localeCompare(right, "vi")).join(", ")
+      )
+    };
+  });
+}
+
+async function updateCollectTabWeek(
+  tabName: string,
+  weekStartKey: string,
+  matrix: ReturnType<typeof buildCollectMatrix>
+) {
+  const spreadsheetId = getGoogleSheetsSpreadsheetId();
+  const sheets = createGoogleSheetsClient();
+  const rowMap = await readSheetDateRows(tabName);
+  const data = matrix.map((row) => {
+    const rowNumber = rowMap.get(row.dateKey);
+    if (!rowNumber) {
+      throw new Error(`Không tìm thấy ngày ${formatSheetDate(row.dateKey)} trong tab ${tabName}.`);
+    }
+    return {
+      range: `'${tabName}'!C${rowNumber}:K${rowNumber}`,
+      values: [row.values]
+    };
+  });
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      valueInputOption: "USER_ENTERED",
+      data
+    }
+  });
 }
 
 export async function importAvailabilityFromCollectSheets(actorAccountKey: string): Promise<SheetAvailabilityImportSummary> {
@@ -238,5 +354,26 @@ export async function importAvailabilityFromCollectSheets(actorAccountKey: strin
     skippedUnknownEmployees: Array.from(missingEmployees).sort(),
     skippedInvalidRows: [...hostParsed.invalidRows, ...supportParsed.invalidRows],
     message: `Đã import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo.`
+  };
+}
+
+export async function syncAvailabilityWeekToCollectSheets(weekStartKey: string): Promise<SheetAvailabilitySyncSummary> {
+  const spreadsheetId = getGoogleSheetsSpreadsheetId();
+  const slotDocuments = await getSubmittedAvailabilityForWeek(weekStartKey);
+  const hostMatrix = buildCollectMatrix("host", weekStartKey, slotDocuments);
+  const supportMatrix = buildCollectMatrix("support", weekStartKey, slotDocuments);
+
+  await Promise.all([
+    updateCollectTabWeek(HOST_TAB_NAME, weekStartKey, hostMatrix),
+    updateCollectTabWeek(SUPPORT_TAB_NAME, weekStartKey, supportMatrix)
+  ]);
+
+  return {
+    success: true,
+    spreadsheetId,
+    weekStartKey,
+    hostRowsUpdated: hostMatrix.length,
+    supportRowsUpdated: supportMatrix.length,
+    message: `Đã đồng bộ tuần ${formatSheetDate(weekStartKey)} lên 2 tab collect.`
   };
 }
