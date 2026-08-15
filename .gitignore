@@ -20,3 +20,4 @@ appscript/
 local_programs/*/.state/
 local_programs/*/.tmp/
 local_programs/*/.env.local
+tmp/

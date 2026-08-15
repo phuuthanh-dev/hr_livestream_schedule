@@ -8935,25 +8935,50 @@ a:hover {
 }
 
 .recruitmentBooleanField {
-  display: flex !important;
-  min-height: 46px;
-  padding: 0 14px;
+  display: grid !important;
+  min-height: 72px;
+  padding: 14px 16px;
   border: 1px solid #d4dfe0;
   border-radius: 12px;
   color: #43595c;
   background: #fff;
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
-  gap: 10px !important;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: 12px !important;
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .recruitmentBooleanField input {
-  width: 17px;
-  height: 17px;
+  min-width: 18px;
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
   margin: 0;
   accent-color: #0f766e;
   flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.recruitmentBooleanField span {
+  display: block;
+  min-width: 0;
+  color: #2e4649;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.recruitmentBooleanField:has(input:checked) {
+  border-color: #7ec8bc;
+  background: linear-gradient(180deg, #f3fffb 0%, #ecfbf7 100%);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+}
+
+.recruitmentBooleanField:hover {
+  border-color: #a9c8c9;
+  background: #fcfefe;
 }
 
 .employeeRowActions {
