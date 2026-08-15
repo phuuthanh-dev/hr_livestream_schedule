@@ -220,7 +220,9 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
 
     try {
       const response = await fetch("/api/availability/import-sheet", {
-        method: "POST"
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStartKey })
       });
       const result = await response.json() as {
         success?: boolean;

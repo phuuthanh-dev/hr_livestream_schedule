@@ -1,8 +1,8 @@
 import { getGoogleSheetsSpreadsheetId, createGoogleSheetsClient } from "@/lib/googleSheets";
-import { findSchedulePerson } from "@/lib/employeeRoster";
-import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
+import { listSchedulePeopleForAdmin } from "@/lib/employeeRoster";
+import { getMongoDatabase } from "@/lib/mongodb";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
-import { getScheduleWeekStartKey, isValidScheduleDateKey } from "@/lib/scheduleDate";
+import { addDaysToScheduleDateKey, getScheduleWeekStartKey, isValidScheduleDateKey } from "@/lib/scheduleDate";
 import type { AvailabilityLocationPreference, EmployeeRole } from "@/lib/types";
 
 const HOST_TAB_NAME = "Collect lịch live chính";
@@ -228,7 +228,10 @@ async function updateCollectTabWeek(
   });
 }
 
-export async function importAvailabilityFromCollectSheets(actorAccountKey: string): Promise<SheetAvailabilityImportSummary> {
+export async function importAvailabilityFromCollectSheets(
+  actorAccountKey: string,
+  requestedWeekStartKey?: string
+): Promise<SheetAvailabilityImportSummary> {
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
   const [hostValues, supportValues] = await Promise.all([
     readCollectSheet(HOST_TAB_NAME),
@@ -236,6 +239,12 @@ export async function importAvailabilityFromCollectSheets(actorAccountKey: strin
   ]);
   const hostParsed = parseCollectRows(hostValues);
   const supportParsed = parseCollectRows(supportValues);
+  const targetWeekStartKey = requestedWeekStartKey ? getScheduleWeekStartKey(requestedWeekStartKey) : "";
+  const targetWeekEndKey = targetWeekStartKey ? addDaysToScheduleDateKey(targetWeekStartKey, 6) : "";
+  const roster = await listSchedulePeopleForAdmin();
+  const rosterByKey = new Map(
+    roster.map((person) => [`${person.role}:${person.id.toUpperCase()}`, person] as const)
+  );
 
   const missingEmployees = new Set<string>();
   const availabilityByPersonWeek = new Map<string, {
@@ -248,9 +257,12 @@ export async function importAvailabilityFromCollectSheets(actorAccountKey: strin
   async function addSheetRows(role: EmployeeRole, rows: ParsedSheetRow[]) {
     for (const row of rows) {
       const weekStartKey = getScheduleWeekStartKey(row.dateKey);
+      if (targetWeekStartKey && (weekStartKey < targetWeekStartKey || weekStartKey > targetWeekEndKey)) {
+        continue;
+      }
       for (const [slot, employeeIds] of row.slots.entries()) {
         for (const employeeId of employeeIds) {
-          const person = await findSchedulePerson(role, employeeId);
+          const person = rosterByKey.get(`${role}:${employeeId}`);
           if (!person) {
             missingEmployees.add(`${role}:${employeeId}`);
             continue;
@@ -288,62 +300,53 @@ export async function importAvailabilityFromCollectSheets(actorAccountKey: strin
   const database = await getMongoDatabase();
   const weeks = database.collection("schedule_availability_weeks");
   const slots = database.collection("schedule_availability_slots");
-  const client = await getMongoClient();
   const now = new Date();
 
   let importedSlots = 0;
 
-  await client.withSession(async (mongoSession) => {
-    await mongoSession.withTransaction(async () => {
-      for (const entry of availabilityByPersonWeek.values()) {
-        const personKey = buildPersonKey(entry.role, entry.employeeId);
-        const normalizedEmployeeId = entry.employeeId.toLowerCase();
-        importedSlots += entry.slots.length;
+  for (const entry of availabilityByPersonWeek.values()) {
+    const personKey = buildPersonKey(entry.role, entry.employeeId);
+    const normalizedEmployeeId = entry.employeeId.toLowerCase();
+    importedSlots += entry.slots.length;
 
-        await weeks.updateOne(
-          { personKey, weekStartKey: entry.weekStartKey },
-          {
-            $set: {
-              role: entry.role,
-              employeeId: entry.employeeId,
-              normalizedEmployeeId,
-              status: "submitted",
-              submittedAt: now,
-              lockedAt: null,
-              lockedReason: "",
-              updatedAt: now,
-              updatedBy: actorAccountKey
-            }
-          },
-          { upsert: true, session: mongoSession }
-        );
-
-        await slots.deleteMany(
-          { personKey, weekStartKey: entry.weekStartKey },
-          { session: mongoSession }
-        );
-
-        if (entry.slots.length > 0) {
-          await slots.insertMany(
-            entry.slots.map((slot) => ({
-              personKey,
-              role: entry.role,
-              employeeId: entry.employeeId,
-              normalizedEmployeeId,
-              weekStartKey: entry.weekStartKey,
-              dateKey: slot.dateKey,
-              slot: slot.slot,
-              available: true,
-              locationPreference: slot.locationPreference,
-              updatedAt: now,
-              updatedBy: actorAccountKey
-            })),
-            { session: mongoSession }
-          );
+    await weeks.updateOne(
+      { personKey, weekStartKey: entry.weekStartKey },
+      {
+        $set: {
+          role: entry.role,
+          employeeId: entry.employeeId,
+          normalizedEmployeeId,
+          status: "submitted",
+          submittedAt: now,
+          lockedAt: null,
+          lockedReason: "",
+          updatedAt: now,
+          updatedBy: actorAccountKey
         }
-      }
-    });
-  });
+      },
+      { upsert: true }
+    );
+
+    await slots.deleteMany({ personKey, weekStartKey: entry.weekStartKey });
+
+    if (entry.slots.length > 0) {
+      await slots.insertMany(
+        entry.slots.map((slot) => ({
+          personKey,
+          role: entry.role,
+          employeeId: entry.employeeId,
+          normalizedEmployeeId,
+          weekStartKey: entry.weekStartKey,
+          dateKey: slot.dateKey,
+          slot: slot.slot,
+          available: true,
+          locationPreference: slot.locationPreference,
+          updatedAt: now,
+          updatedBy: actorAccountKey
+        }))
+      );
+    }
+  }
 
   return {
     success: true,

@@ -4,7 +4,7 @@ import { importAvailabilityFromCollectSheets } from "@/lib/availabilitySheetImpo
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getDashboardSession();
   if (!session) {
     return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -14,7 +14,8 @@ export async function POST() {
   }
 
   try {
-    const payload = await importAvailabilityFromCollectSheets(session.accountKey);
+    const body = await request.json().catch(() => ({})) as { weekStartKey?: string };
+    const payload = await importAvailabilityFromCollectSheets(session.accountKey, body.weekStartKey);
     return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json(
