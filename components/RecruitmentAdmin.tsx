@@ -93,7 +93,7 @@ type RecruitmentPayload = {
 type RecruitmentSyncRun = {
   runId: string;
   direction: "sheet_to_website" | "website_to_sheet";
-  operation: "import_profiles" | "sync_profiles";
+  operation: "import_profiles" | "import_profiles_dry_run" | "sync_profiles";
   success: boolean;
   startedAt: string;
   finishedAt: string;
@@ -213,6 +213,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [importing, setImporting] = useState(false);
+  const [dryRunning, setDryRunning] = useState(false);
   const [syncingSheet, setSyncingSheet] = useState(false);
   const [logsLoading, setLogsLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -337,6 +338,35 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
     }
   }
 
+  async function dryRunImportFromSheet() {
+    setDryRunning(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/recruitment-profiles?dryRun=1", {
+        method: "POST"
+      });
+      const payload = await response.json() as {
+        success?: boolean;
+        message?: string;
+        updatedProfiles?: number;
+        updatedEmployees?: number;
+        createdEmployees?: number;
+        updatedContracts?: number;
+        skippedRows?: number;
+      };
+      if (!response.ok || !payload.success) throw new Error(payload.message || "Không dry run được dữ liệu từ sheet nguồn.");
+      setMessage(
+        `${payload.message || "Dry run sync thành công."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
+      );
+      await loadLogs();
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "Không dry run được dữ liệu từ sheet nguồn.");
+    } finally {
+      setDryRunning(false);
+    }
+  }
+
   async function syncToSheet() {
     setSyncingSheet(true);
     setError("");
@@ -428,6 +458,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
               <option value="synced">Đã sync sheet</option>
               <option value="failed">Sync lỗi</option>
             </select>
+            <button className="employeeBootstrapButton" disabled={dryRunning} onClick={() => void dryRunImportFromSheet()} type="button">{dryRunning ? "Đang dry run" : "Dry run sync"}</button>
             <button className="employeeBootstrapButton" disabled={importing} onClick={() => void importFromSheet()} type="button">{importing ? "Đang sync sheet" : "Sync từ Sheet về Website"}</button>
             <button className="employeeBootstrapButton" disabled={syncingSheet} onClick={() => void syncToSheet()} type="button">{syncingSheet ? "Đang đẩy sheet" : "Đẩy lên Sheet nguồn"}</button>
             <a className="employeeBootstrapButton recruitmentInlineLink" href="/apply">Mở form public</a>
@@ -561,7 +592,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
                         <td data-label="Thời điểm">
                           <span className="employeeStackValue">
                             <strong>{formatTimestamp(run.finishedAt)}</strong>
-                            <small>{run.operation === "import_profiles" ? "Pull sheet -> web" : "Push web -> sheet"}</small>
+                            <small>{run.operation === "import_profiles_dry_run" ? "Dry run sheet -> web" : run.operation === "import_profiles" ? "Pull sheet -> web" : "Push web -> sheet"}</small>
                           </span>
                         </td>
                         <td data-label="Hướng">

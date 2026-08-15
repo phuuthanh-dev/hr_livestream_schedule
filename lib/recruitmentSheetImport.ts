@@ -31,6 +31,7 @@ const SYNC_CONFLICTS_COLLECTION = "recruitment_sheet_sync_conflicts";
 type ImportSummary = {
   success: boolean;
   spreadsheetId: string;
+  dryRun?: boolean;
   processedRows: number;
   updatedProfiles: number;
   updatedEmployees: number;
@@ -122,6 +123,20 @@ function getContractSheetFields(row: string[], indexMap: Map<string, number>) {
     bankAccountNumber: getColumnAlias(row, indexMap, ["stk", "số tài khoản", "so tai khoan"]),
     bankName: getColumnAlias(row, indexMap, ["bank", "ngân hàng", "ngan hang"])
   };
+}
+
+function hasAnyContractField(input: ReturnType<typeof getContractSheetFields>) {
+  return Boolean(
+    input.gmail
+    || input.dateOfBirth
+    || input.citizenId
+    || input.citizenIdIssuedDate
+    || input.citizenIdIssuedPlace
+    || input.permanentAddress
+    || input.temporaryAddress
+    || input.bankAccountNumber
+    || input.bankName
+  );
 }
 
 function buildIndexMap(header: string[]) {
@@ -436,9 +451,17 @@ async function appendSheetRows(tabName: string, spreadsheetId: string, rows: str
 }
 
 export async function importRecruitmentProfilesFromSheets(actorAccountKey: string): Promise<ImportSummary> {
+  return importRecruitmentProfilesFromSheetsWithMode(actorAccountKey, { dryRun: false });
+}
+
+export async function importRecruitmentProfilesFromSheetsWithMode(
+  actorAccountKey: string,
+  options: { dryRun?: boolean } = {}
+): Promise<ImportSummary> {
   const runId = randomUUID();
   const startedAt = new Date();
   const conflicts: RecruitmentSheetSyncConflict[] = [];
+  const dryRun = options.dryRun === true;
 
   try {
     const [{ spreadsheetId, values: hostValues }, { values: supportValues }] = await Promise.all([
@@ -472,16 +495,24 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           ));
         }
         try {
-          const synced = await syncEmployeeFromSheetRow({
-            role: "host",
-            employeeId,
-            row,
-            indexMap,
-            actorAccountKey
-          });
-          person = synced.person;
-          if (synced.created) createdEmployees += 1;
-          else updatedEmployees += 1;
+          if (dryRun) {
+            const rosterMutation = buildHostEmployeeMutation({ employeeId, row, indexMap, existing: person });
+            if (!rosterMutation.name) throw new Error("Thiếu tên nhân viên để sync roster.");
+            if (!rosterMutation.workLocation) throw new Error("Thiếu cấu hình Home/Studio cho host.");
+            if (person) updatedEmployees += 1;
+            else createdEmployees += 1;
+          } else {
+            const synced = await syncEmployeeFromSheetRow({
+              role: "host",
+              employeeId,
+              row,
+              indexMap,
+              actorAccountKey
+            });
+            person = synced.person;
+            if (synced.created) createdEmployees += 1;
+            else updatedEmployees += 1;
+          }
         } catch (error) {
           skippedRows += 1;
           conflicts.push(buildConflict(
@@ -493,73 +524,67 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           ));
         }
 
-        await upsertRecruitmentProfile({
-          role: "host",
-          employeeId,
-          actorAccountKey,
-          values: {
-            sheetContractCode: getColumn(row, indexMap, "mã hđ"),
-            fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || getColumn(row, indexMap, "tên gọi khác") || person?.name || employeeId,
-            aliasName: getColumn(row, indexMap, "tên gọi khác"),
-            phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
-            email: getColumn(row, indexMap, "gmail"),
-            cvUrl: getColumn(row, indexMap, "cv"),
-            experience: getColumn(row, indexMap, "kinh nghiệm"),
-            achievements: getColumn(row, indexMap, "thành tích"),
-            expectedSalary: getColumn(row, indexMap, "lương mong muốn"),
-            introVideoUrl: getColumn(row, indexMap, "link"),
-            tiktokUrl: getColumn(row, indexMap, "link tiktok"),
-            followerCount: getColumn(row, indexMap, "lượt follow"),
-            zaloJoined: parseBooleanCell(getColumn(row, indexMap, "tham gia zalo")),
-            level: getColumn(row, indexMap, "đánh giá level"),
-            rating: getColumn(row, indexMap, "rating"),
-            trainingJoined: parseBooleanCell(getColumn(row, indexMap, "đã tham gia training")),
-            liveChannelId: getColumn(row, indexMap, "live_channel_id"),
-            canLiveHome: parseBooleanCell(getColumn(row, indexMap, "live tại nhà")),
-            canLiveStudio: parseBooleanCell(getColumn(row, indexMap, "live tại studio")),
-            canUsePersonalAccount: parseBooleanCell(getColumn(row, indexMap, "live tk cá nhân")),
-            canUseCompanyAccount: parseBooleanCell(getColumn(row, indexMap, "live tk công ty")),
-            liveLocationPreference: parseBooleanCell(getColumn(row, indexMap, "live tại studio"))
-              ? "studio"
-              : parseBooleanCell(getColumn(row, indexMap, "live tại nhà"))
-                ? "home"
-                : "",
-            liveAccountPreference: parseBooleanCell(getColumn(row, indexMap, "live tk công ty"))
-              ? "company"
-              : parseBooleanCell(getColumn(row, indexMap, "live tk cá nhân"))
-                ? "personal"
-                : "",
-            salaryOffered: getColumn(row, indexMap, "lương thỏa thuận"),
-            salaryOfferFeedback: getColumn(row, indexMap, "phản hồi về lương thỏa thuận"),
-            notes: getColumn(row, indexMap, "note"),
-            sourceTab: HOST_TAB_NAME
-          }
-        });
+        if (!dryRun) {
+          await upsertRecruitmentProfile({
+            role: "host",
+            employeeId,
+            actorAccountKey,
+            values: {
+              sheetContractCode: getColumn(row, indexMap, "mã hđ"),
+              fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || getColumn(row, indexMap, "tên gọi khác") || person?.name || employeeId,
+              aliasName: getColumn(row, indexMap, "tên gọi khác"),
+              phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
+              email: getColumn(row, indexMap, "gmail"),
+              cvUrl: getColumn(row, indexMap, "cv"),
+              experience: getColumn(row, indexMap, "kinh nghiệm"),
+              achievements: getColumn(row, indexMap, "thành tích"),
+              expectedSalary: getColumn(row, indexMap, "lương mong muốn"),
+              introVideoUrl: getColumn(row, indexMap, "link"),
+              tiktokUrl: getColumn(row, indexMap, "link tiktok"),
+              followerCount: getColumn(row, indexMap, "lượt follow"),
+              zaloJoined: parseBooleanCell(getColumn(row, indexMap, "tham gia zalo")),
+              level: getColumn(row, indexMap, "đánh giá level"),
+              rating: getColumn(row, indexMap, "rating"),
+              trainingJoined: parseBooleanCell(getColumn(row, indexMap, "đã tham gia training")),
+              liveChannelId: getColumn(row, indexMap, "live_channel_id"),
+              canLiveHome: parseBooleanCell(getColumn(row, indexMap, "live tại nhà")),
+              canLiveStudio: parseBooleanCell(getColumn(row, indexMap, "live tại studio")),
+              canUsePersonalAccount: parseBooleanCell(getColumn(row, indexMap, "live tk cá nhân")),
+              canUseCompanyAccount: parseBooleanCell(getColumn(row, indexMap, "live tk công ty")),
+              liveLocationPreference: parseBooleanCell(getColumn(row, indexMap, "live tại studio"))
+                ? "studio"
+                : parseBooleanCell(getColumn(row, indexMap, "live tại nhà"))
+                  ? "home"
+                  : "",
+              liveAccountPreference: parseBooleanCell(getColumn(row, indexMap, "live tk công ty"))
+                ? "company"
+                : parseBooleanCell(getColumn(row, indexMap, "live tk cá nhân"))
+                  ? "personal"
+                  : "",
+              salaryOffered: getColumn(row, indexMap, "lương thỏa thuận"),
+              salaryOfferFeedback: getColumn(row, indexMap, "phản hồi về lương thỏa thuận"),
+              notes: getColumn(row, indexMap, "note"),
+              sourceTab: HOST_TAB_NAME
+            }
+          });
+        }
         updatedProfiles += 1;
 
         const contractFields = getContractSheetFields(row, indexMap);
-        if (
-          person && (
-            contractFields.gmail ||
-            contractFields.dateOfBirth ||
-            contractFields.citizenId ||
-            contractFields.citizenIdIssuedDate ||
-            contractFields.citizenIdIssuedPlace ||
-            contractFields.permanentAddress ||
-            contractFields.temporaryAddress
-          )
-        ) {
-          await upsertEmployeeContractProfileFields({
-            person,
-            actorAccountKey,
-            gmail: contractFields.gmail,
-            dateOfBirth: contractFields.dateOfBirth,
-            citizenId: contractFields.citizenId,
-            citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
-            citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
-            permanentAddress: contractFields.permanentAddress,
-            temporaryAddress: contractFields.temporaryAddress
-          });
+        if (person && hasAnyContractField(contractFields)) {
+          if (!dryRun) {
+            await upsertEmployeeContractProfileFields({
+              person,
+              actorAccountKey,
+              gmail: contractFields.gmail,
+              dateOfBirth: contractFields.dateOfBirth,
+              citizenId: contractFields.citizenId,
+              citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
+              citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
+              permanentAddress: contractFields.permanentAddress,
+              temporaryAddress: contractFields.temporaryAddress
+            });
+          }
           updatedContracts += 1;
         } else if (!person) {
           conflicts.push(buildConflict(
@@ -600,16 +625,23 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           ));
         }
         try {
-          const synced = await syncEmployeeFromSheetRow({
-            role: "support",
-            employeeId,
-            row,
-            indexMap,
-            actorAccountKey
-          });
-          person = synced.person;
-          if (synced.created) createdEmployees += 1;
-          else updatedEmployees += 1;
+          if (dryRun) {
+            const rosterMutation = buildSupportEmployeeMutation({ employeeId, row, indexMap, existing: person });
+            if (!rosterMutation.name) throw new Error("Thiếu tên nhân viên để sync roster.");
+            if (person) updatedEmployees += 1;
+            else createdEmployees += 1;
+          } else {
+            const synced = await syncEmployeeFromSheetRow({
+              role: "support",
+              employeeId,
+              row,
+              indexMap,
+              actorAccountKey
+            });
+            person = synced.person;
+            if (synced.created) createdEmployees += 1;
+            else updatedEmployees += 1;
+          }
         } catch (error) {
           skippedRows += 1;
           conflicts.push(buildConflict(
@@ -621,73 +653,65 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           ));
         }
 
-        await upsertRecruitmentProfile({
-          role: "support",
-          employeeId,
-          actorAccountKey,
-          values: {
-            sheetContractCode: "",
-            fullName: getColumn(row, indexMap, "tên") || person?.name || employeeId,
-            aliasName: "",
-            phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
-            email: "",
-            cvUrl: getColumn(row, indexMap, "cv"),
-            experience: getColumn(row, indexMap, "kinh nghiệm"),
-            achievements: "",
-            expectedSalary: getColumn(row, indexMap, "lương mong muốn theo giờ"),
-            introVideoUrl: "",
-            tiktokUrl: "",
-            zaloJoined: false,
-            level: getColumn(row, indexMap, "level"),
-            rating: "",
-            trainingJoined: parseBooleanCell(getColumn(row, indexMap, "đã tham gia training")),
-            liveChannelId: "",
-            canLiveHome: false,
-            canLiveStudio: false,
-            canUsePersonalAccount: false,
-            canUseCompanyAccount: false,
-            liveLocationPreference: "",
-            liveAccountPreference: "",
-            evaluationSummary: getColumn(row, indexMap, "kết quả đánh giá"),
-            supportGemOffer: getColumn(row, indexMap, "cash offer (by gem)"),
-            cashOfferReality: getColumn(row, indexMap, "cash offer (reality) lần i"),
-            dealStatus: getColumn(row, indexMap, "deal cast lần i"),
-            cashOfferRealityRoundTwo: getColumnByIndex(row, 13),
-            dealStatusRoundTwo: getColumnByIndex(row, 14),
-            supportMainOfferNote: getColumn(row, indexMap, "support chính mức offer"),
-            notes: "",
-            sourceTab: SUPPORT_TAB_NAME
-          }
-        });
+        if (!dryRun) {
+          await upsertRecruitmentProfile({
+            role: "support",
+            employeeId,
+            actorAccountKey,
+            values: {
+              sheetContractCode: "",
+              fullName: getColumn(row, indexMap, "tên") || person?.name || employeeId,
+              aliasName: "",
+              phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
+              email: "",
+              cvUrl: getColumn(row, indexMap, "cv"),
+              experience: getColumn(row, indexMap, "kinh nghiệm"),
+              achievements: "",
+              expectedSalary: getColumn(row, indexMap, "lương mong muốn theo giờ"),
+              introVideoUrl: "",
+              tiktokUrl: "",
+              zaloJoined: false,
+              level: getColumn(row, indexMap, "level"),
+              rating: "",
+              trainingJoined: parseBooleanCell(getColumn(row, indexMap, "đã tham gia training")),
+              liveChannelId: "",
+              canLiveHome: false,
+              canLiveStudio: false,
+              canUsePersonalAccount: false,
+              canUseCompanyAccount: false,
+              liveLocationPreference: "",
+              liveAccountPreference: "",
+              evaluationSummary: getColumn(row, indexMap, "kết quả đánh giá"),
+              supportGemOffer: getColumn(row, indexMap, "cash offer (by gem)"),
+              cashOfferReality: getColumn(row, indexMap, "cash offer (reality) lần i"),
+              dealStatus: getColumn(row, indexMap, "deal cast lần i"),
+              cashOfferRealityRoundTwo: getColumnByIndex(row, 13),
+              dealStatusRoundTwo: getColumnByIndex(row, 14),
+              supportMainOfferNote: getColumn(row, indexMap, "support chính mức offer"),
+              notes: "",
+              sourceTab: SUPPORT_TAB_NAME
+            }
+          });
+        }
         updatedProfiles += 1;
 
         const contractFields = getContractSheetFields(row, indexMap);
-        if (
-          person && (
-            contractFields.gmail ||
-            contractFields.dateOfBirth ||
-            contractFields.citizenId ||
-            contractFields.citizenIdIssuedDate ||
-            contractFields.citizenIdIssuedPlace ||
-            contractFields.permanentAddress ||
-            contractFields.temporaryAddress ||
-            contractFields.bankAccountNumber ||
-            contractFields.bankName
-          )
-        ) {
-          await upsertEmployeeContractProfileFields({
-            person,
-            actorAccountKey,
-            gmail: contractFields.gmail,
-            dateOfBirth: contractFields.dateOfBirth,
-            citizenId: contractFields.citizenId,
-            citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
-            citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
-            permanentAddress: contractFields.permanentAddress,
-            temporaryAddress: contractFields.temporaryAddress,
-            bankAccountNumber: contractFields.bankAccountNumber,
-            bankName: contractFields.bankName
-          });
+        if (person && hasAnyContractField(contractFields)) {
+          if (!dryRun) {
+            await upsertEmployeeContractProfileFields({
+              person,
+              actorAccountKey,
+              gmail: contractFields.gmail,
+              dateOfBirth: contractFields.dateOfBirth,
+              citizenId: contractFields.citizenId,
+              citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
+              citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
+              permanentAddress: contractFields.permanentAddress,
+              temporaryAddress: contractFields.temporaryAddress,
+              bankAccountNumber: contractFields.bankAccountNumber,
+              bankName: contractFields.bankName
+            });
+          }
           updatedContracts += 1;
         } else if (!person) {
           conflicts.push(buildConflict(
@@ -715,20 +739,23 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
     const result = {
       success: true,
       spreadsheetId,
+      dryRun,
       processedRows,
       updatedProfiles,
       updatedEmployees,
       createdEmployees,
       updatedContracts,
       skippedRows,
-      message: `Đã sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
+      message: dryRun
+        ? `Dry run: sẽ sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
+        : `Đã sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
     };
 
     await persistSyncRun({
       run: {
         runId,
         direction: "sheet_to_website",
-        operation: "import_profiles",
+        operation: dryRun ? "import_profiles_dry_run" : "import_profiles",
         spreadsheetId,
         actorAccountKey,
         success: true,
@@ -753,7 +780,7 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
         run: {
           runId,
           direction: "sheet_to_website",
-          operation: "import_profiles",
+          operation: dryRun ? "import_profiles_dry_run" : "import_profiles",
           spreadsheetId,
           actorAccountKey,
           success: false,

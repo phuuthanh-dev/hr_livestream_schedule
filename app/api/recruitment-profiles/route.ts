@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
 import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
-import { importRecruitmentProfilesFromSheets } from "@/lib/recruitmentSheetImport";
+import { importRecruitmentProfilesFromSheets, importRecruitmentProfilesFromSheetsWithMode } from "@/lib/recruitmentSheetImport";
 import { listPeopleApplications } from "@/lib/peopleApplication";
 import { listRecruitmentProfiles, saveRecruitmentProfile } from "@/lib/recruitmentProfile";
 import type { EmployeeRole } from "@/lib/types";
@@ -106,14 +106,18 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await requireAdmin();
   if (!session) {
     return NextResponse.json({ success: false, message: "Chỉ Admin được import từ sheet nguồn." }, { status: 403 });
   }
 
   try {
-    const payload = await importRecruitmentProfilesFromSheets(session.accountKey);
+    const url = new URL(request.url);
+    const dryRun = url.searchParams.get("dryRun") === "1";
+    const payload = dryRun
+      ? await importRecruitmentProfilesFromSheetsWithMode(session.accountKey, { dryRun: true })
+      : await importRecruitmentProfilesFromSheets(session.accountKey);
     return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json(

@@ -325,7 +325,7 @@ export type AvailabilitySheetSyncLogsPayload = {
 };
 
 export type RecruitmentSheetSyncDirection = "sheet_to_website" | "website_to_sheet";
-export type RecruitmentSheetSyncOperation = "import_profiles" | "sync_profiles";
+export type RecruitmentSheetSyncOperation = "import_profiles" | "import_profiles_dry_run" | "sync_profiles";
 export type RecruitmentSheetSyncConflictKind =
   | "unknown_employee"
   | "missing_sheet_row"
