@@ -41,6 +41,7 @@ type RecruitmentProfile = {
   role: EmployeeRole;
   employeeId: string;
   applicationId?: string;
+  sheetContractCode?: string;
   fullName: string;
   aliasName: string;
   phone: string;
@@ -51,6 +52,7 @@ type RecruitmentProfile = {
   expectedSalary: string;
   introVideoUrl: string;
   tiktokUrl: string;
+  followerCount?: string;
   canLiveHome: boolean;
   canLiveStudio: boolean;
   canUsePersonalAccount: boolean;
@@ -60,6 +62,12 @@ type RecruitmentProfile = {
   salaryOffered?: string;
   salaryOfferFeedback?: string;
   evaluationSummary?: string;
+  supportGemOffer?: string;
+  cashOfferReality?: string;
+  dealStatus?: string;
+  cashOfferRealityRoundTwo?: string;
+  dealStatusRoundTwo?: string;
+  supportMainOfferNote?: string;
   notes: string;
   updatedAt: string;
 };

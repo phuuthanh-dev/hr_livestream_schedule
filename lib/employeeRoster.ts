@@ -1,13 +1,11 @@
-import { randomUUID } from "crypto";
 import type { Collection } from "mongodb";
-import { EMPLOYEE_MIGRATION_SEED, EMPLOYEE_MIGRATION_SOURCE } from "@/lib/employeeSeed";
 import { nextEmployeeIdForRole } from "@/lib/applicationAutomation";
 import { deleteContractImage } from "@/lib/contractCloudinary";
 import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
 import { getMongoDatabase } from "@/lib/mongodb";
-import type { EmployeeRole, HostWorkLocation, PeoplePayload, PeopleSyncPayload, SchedulePerson } from "@/lib/types";
+import type { EmployeeRole, HostWorkLocation, PeoplePayload, SchedulePerson } from "@/lib/types";
 import { syncEmployeeAccountProfile } from "@/lib/userAccounts";
 
 type SchedulePersonDocument = {
@@ -198,7 +196,9 @@ export async function getSchedulePeopleFromMongo(): Promise<PeoplePayload> {
     total: people.length,
     hosts,
     supports,
-    message: people.length === 0 ? "Danh sách nhân viên chưa có dữ liệu. Admin hãy mở mục Nhân viên để khởi tạo." : undefined
+    message: people.length === 0
+      ? "Danh sách nhân viên chưa có dữ liệu. Hãy tạo từ mục Ứng tuyển hoặc dùng nút Thêm nhân viên trong trang Nhân sự."
+      : undefined
   };
 }
 
@@ -368,58 +368,3 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
   return person;
 }
 
-export async function bootstrapSchedulePeople(): Promise<PeopleSyncPayload> {
-  const collection = await getRosterCollection();
-  const now = new Date();
-  const syncBatchId = randomUUID();
-  const operations = EMPLOYEE_MIGRATION_SEED.map((person) => {
-    const input: SchedulePersonMutation = { ...person, active: true };
-    return {
-      updateOne: {
-        filter: { personKey: buildPersonKey(person.role, person.id) },
-        update: {
-          $set: {
-            employeeId: person.id,
-            normalizedEmployeeId: normalizeEmployeeId(person.id),
-            role: person.role,
-            ...personFields(input),
-            active: true,
-            source: EMPLOYEE_MIGRATION_SOURCE,
-            syncBatchId,
-            lastSeenAt: now,
-            updatedAt: now,
-            updatedBy: "migration",
-            deactivatedAt: null
-          },
-          $unset: {
-            castStatus: "" as const
-          },
-          $setOnInsert: {
-            personKey: buildPersonKey(person.role, person.id),
-            firstSyncedAt: now,
-            createdAt: now,
-            createdBy: "migration"
-          }
-        },
-        upsert: true
-      }
-    };
-  });
-  const result = await collection.bulkWrite(operations, { ordered: false });
-  await Promise.all(EMPLOYEE_MIGRATION_SEED.map((person) => syncEmployeeAccountProfile({
-    person: { ...person, active: true },
-    actorAccountKey: "migration"
-  })));
-  const roster = await getSchedulePeopleFromMongo();
-
-  return {
-    ...roster,
-    syncedAt: now.toISOString(),
-    generatedAt: now.toISOString(),
-    inserted: result.upsertedCount,
-    updated: result.matchedCount,
-    deactivated: 0,
-    total: roster.total || 0,
-    message: `Đã nạp ${EMPLOYEE_MIGRATION_SEED.length} hồ sơ nguồn; giữ nguyên nhân sự khác trong MongoDB.`
-  };
-}

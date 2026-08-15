@@ -8430,6 +8430,83 @@ a:hover {
   margin-top: 14px;
 }
 
+.employeeGuidePanel {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #d9e3e3;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 247, 0.96));
+  box-shadow: 0 12px 34px rgba(35, 66, 73, 0.06);
+}
+
+.employeeGuideHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.employeeGuideHeader strong {
+  color: #233f42;
+  font-size: 0.92rem;
+}
+
+.employeeGuideHeader span {
+  color: #758487;
+  font-size: 0.7rem;
+}
+
+.employeeGuideGrid {
+  display: grid;
+  margin-top: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.employeeGuideCard {
+  display: grid;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid #deeaeb;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  align-content: start;
+  gap: 8px;
+}
+
+.employeeGuideCard strong {
+  color: #214144;
+  font-size: 0.8rem;
+}
+
+.employeeGuideCard p {
+  margin: 0;
+  color: #667779;
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+.employeeGuideCard a {
+  display: inline-flex;
+  min-height: 34px;
+  margin-top: auto;
+  padding: 0 11px;
+  border: 1px solid #b9d9d4;
+  border-radius: 999px;
+  color: #0f615b;
+  background: #edf9f6;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.employeeGuideCard a:hover {
+  border-color: #89c9c0;
+  background: #dff5f0;
+}
+
 .employeeRosterCard {
   overflow: hidden;
   margin-top: 16px;
@@ -9128,6 +9205,10 @@ a:hover {
     gap: 26px;
   }
 
+  .employeeGuideGrid {
+    grid-template-columns: 1fr;
+  }
+
   .employeeToolbar {
     grid-template-columns: minmax(230px, 1fr) repeat(2, minmax(140px, auto));
   }
@@ -9169,6 +9250,11 @@ a:hover {
     min-height: auto;
     padding: 28px 22px;
     border-radius: 24px;
+  }
+
+  .employeeGuideHeader {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .employeeHeroCopy h1 {

@@ -9,6 +9,7 @@ export type RecruitmentProfile = {
   role: EmployeeRole;
   employeeId: string;
   applicationId?: string;
+  sheetContractCode?: string;
   fullName: string;
   aliasName: string;
   phone: string;
@@ -19,6 +20,7 @@ export type RecruitmentProfile = {
   expectedSalary: string;
   introVideoUrl: string;
   tiktokUrl: string;
+  followerCount?: string;
   zaloJoined: boolean;
   level: string;
   rating: string;
@@ -36,6 +38,8 @@ export type RecruitmentProfile = {
   supportGemOffer?: string;
   cashOfferReality?: string;
   dealStatus?: string;
+  cashOfferRealityRoundTwo?: string;
+  dealStatusRoundTwo?: string;
   supportMainOfferNote?: string;
   notes: string;
   sourceTab: string;
@@ -57,6 +61,14 @@ function cleanText(value: unknown, maxLength = 2000) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
 }
 
+function resolveTextUpdate(value: unknown, existingValue: string, maxLength = 2000) {
+  return value === undefined ? existingValue : cleanText(value, maxLength);
+}
+
+function resolveBooleanUpdate(value: unknown, existingValue: boolean) {
+  return value === undefined ? existingValue : Boolean(value);
+}
+
 function personKey(role: EmployeeRole, employeeId: string) {
   return `${role}:${employeeId.trim().toLowerCase()}`;
 }
@@ -66,6 +78,7 @@ function toProfile(document: RecruitmentProfileDocument): RecruitmentProfile {
     role: document.role,
     employeeId: document.employeeId,
     applicationId: document.applicationId || undefined,
+    sheetContractCode: document.sheetContractCode || undefined,
     fullName: document.fullName,
     aliasName: document.aliasName,
     phone: document.phone,
@@ -76,6 +89,7 @@ function toProfile(document: RecruitmentProfileDocument): RecruitmentProfile {
     expectedSalary: document.expectedSalary,
     introVideoUrl: document.introVideoUrl,
     tiktokUrl: document.tiktokUrl,
+    followerCount: document.followerCount || undefined,
     zaloJoined: Boolean(document.zaloJoined),
     level: document.level || "",
     rating: document.rating || "",
@@ -93,6 +107,8 @@ function toProfile(document: RecruitmentProfileDocument): RecruitmentProfile {
     supportGemOffer: document.supportGemOffer || undefined,
     cashOfferReality: document.cashOfferReality || undefined,
     dealStatus: document.dealStatus || undefined,
+    cashOfferRealityRoundTwo: document.cashOfferRealityRoundTwo || undefined,
+    dealStatusRoundTwo: document.dealStatusRoundTwo || undefined,
     supportMainOfferNote: document.supportMainOfferNote || undefined,
     notes: document.notes,
     sourceTab: document.sourceTab,
@@ -132,6 +148,7 @@ export async function upsertRecruitmentProfileFromApplication(input: {
         role: input.application.role,
         employeeId: input.employeeId,
         applicationId: input.application.applicationId,
+        sheetContractCode: "",
         fullName: input.application.fullName,
         aliasName: input.application.aliasName,
         phone: input.application.phone,
@@ -142,6 +159,7 @@ export async function upsertRecruitmentProfileFromApplication(input: {
         expectedSalary: input.application.expectedSalary,
         introVideoUrl: input.application.introVideoUrl,
         tiktokUrl: input.application.tiktokUrl,
+        followerCount: "",
         zaloJoined: false,
         level: "",
         rating: "",
@@ -159,6 +177,8 @@ export async function upsertRecruitmentProfileFromApplication(input: {
         supportGemOffer: "",
         cashOfferReality: "",
         dealStatus: "",
+        cashOfferRealityRoundTwo: "",
+        dealStatusRoundTwo: "",
         supportMainOfferNote: "",
         notes: input.application.notes,
         sourceTab: input.application.role === "host" ? "Thông tin Mẫu Live" : "Thông tin Support Live",
@@ -193,6 +213,7 @@ export async function upsertRecruitmentProfile(input: {
         role: input.role,
         employeeId: input.employeeId,
         applicationId: cleanText(input.values.applicationId, 80),
+        sheetContractCode: cleanText(input.values.sheetContractCode, 120),
         fullName: cleanText(input.values.fullName, 120) || existing?.fullName || "",
         aliasName: cleanText(input.values.aliasName, 120),
         phone: cleanText(input.values.phone, 30) || existing?.phone || "",
@@ -203,6 +224,7 @@ export async function upsertRecruitmentProfile(input: {
         expectedSalary: cleanText(input.values.expectedSalary, 120),
         introVideoUrl: cleanText(input.values.introVideoUrl, 1000),
         tiktokUrl: cleanText(input.values.tiktokUrl, 1000),
+        followerCount: cleanText(input.values.followerCount, 120),
         zaloJoined: Boolean(input.values.zaloJoined),
         level: cleanText(input.values.level, 120),
         rating: cleanText(input.values.rating, 120),
@@ -220,6 +242,8 @@ export async function upsertRecruitmentProfile(input: {
         supportGemOffer: cleanText(input.values.supportGemOffer, 200),
         cashOfferReality: cleanText(input.values.cashOfferReality, 200),
         dealStatus: cleanText(input.values.dealStatus, 200),
+        cashOfferRealityRoundTwo: cleanText(input.values.cashOfferRealityRoundTwo, 200),
+        dealStatusRoundTwo: cleanText(input.values.dealStatusRoundTwo, 200),
         supportMainOfferNote: cleanText(input.values.supportMainOfferNote, 1000),
         notes: cleanText(input.values.notes, 3000),
         sourceTab: cleanText(input.values.sourceTab, 120) || existing?.sourceTab || "",
@@ -260,35 +284,51 @@ export async function saveRecruitmentProfile(input: {
     { personKey: key },
     {
       $set: {
-        fullName: cleanText(values.fullName, 120) || existing.fullName,
-        aliasName: cleanText(values.aliasName, 120),
-        phone: cleanText(values.phone, 30) || existing.phone,
-        email: cleanText(values.email, 180).toLowerCase(),
-        cvUrl: cleanText(values.cvUrl, 1000),
-        experience: cleanText(values.experience, 3000),
-        achievements: cleanText(values.achievements, 2000),
-        expectedSalary: cleanText(values.expectedSalary, 120),
-        introVideoUrl: cleanText(values.introVideoUrl, 1000),
-        tiktokUrl: cleanText(values.tiktokUrl, 1000),
-        zaloJoined: Boolean(values.zaloJoined),
-        level: cleanText(values.level, 120),
-        rating: cleanText(values.rating, 120),
-        trainingJoined: Boolean(values.trainingJoined),
-        liveChannelId: cleanText(values.liveChannelId, 200),
-        canLiveHome: Boolean(values.canLiveHome),
-        canLiveStudio: Boolean(values.canLiveStudio),
-        canUsePersonalAccount: Boolean(values.canUsePersonalAccount),
-        canUseCompanyAccount: Boolean(values.canUseCompanyAccount),
-        liveLocationPreference: values.liveLocationPreference === "studio" ? "studio" : values.liveLocationPreference === "home" ? "home" : "",
-        liveAccountPreference: values.liveAccountPreference === "personal" ? "personal" : values.liveAccountPreference === "company" ? "company" : "",
-        salaryOffered: cleanText(values.salaryOffered, 200),
-        salaryOfferFeedback: cleanText(values.salaryOfferFeedback, 500),
-        evaluationSummary: cleanText(values.evaluationSummary, 3000),
-        supportGemOffer: cleanText(values.supportGemOffer, 200),
-        cashOfferReality: cleanText(values.cashOfferReality, 200),
-        dealStatus: cleanText(values.dealStatus, 200),
-        supportMainOfferNote: cleanText(values.supportMainOfferNote, 1000),
-        notes: cleanText(values.notes, 3000),
+        fullName: resolveTextUpdate(values.fullName, existing.fullName, 120) || existing.fullName,
+        aliasName: resolveTextUpdate(values.aliasName, existing.aliasName, 120),
+        phone: resolveTextUpdate(values.phone, existing.phone, 30) || existing.phone,
+        email: resolveTextUpdate(values.email, existing.email, 180).toLowerCase(),
+        sheetContractCode: resolveTextUpdate(values.sheetContractCode, existing.sheetContractCode || "", 120),
+        cvUrl: resolveTextUpdate(values.cvUrl, existing.cvUrl, 1000),
+        experience: resolveTextUpdate(values.experience, existing.experience, 3000),
+        achievements: resolveTextUpdate(values.achievements, existing.achievements, 2000),
+        expectedSalary: resolveTextUpdate(values.expectedSalary, existing.expectedSalary, 120),
+        introVideoUrl: resolveTextUpdate(values.introVideoUrl, existing.introVideoUrl, 1000),
+        tiktokUrl: resolveTextUpdate(values.tiktokUrl, existing.tiktokUrl, 1000),
+        followerCount: resolveTextUpdate(values.followerCount, existing.followerCount || "", 120),
+        zaloJoined: resolveBooleanUpdate(values.zaloJoined, existing.zaloJoined),
+        level: resolveTextUpdate(values.level, existing.level, 120),
+        rating: resolveTextUpdate(values.rating, existing.rating, 120),
+        trainingJoined: resolveBooleanUpdate(values.trainingJoined, existing.trainingJoined),
+        liveChannelId: resolveTextUpdate(values.liveChannelId, existing.liveChannelId, 200),
+        canLiveHome: resolveBooleanUpdate(values.canLiveHome, existing.canLiveHome),
+        canLiveStudio: resolveBooleanUpdate(values.canLiveStudio, existing.canLiveStudio),
+        canUsePersonalAccount: resolveBooleanUpdate(values.canUsePersonalAccount, existing.canUsePersonalAccount),
+        canUseCompanyAccount: resolveBooleanUpdate(values.canUseCompanyAccount, existing.canUseCompanyAccount),
+        liveLocationPreference: values.liveLocationPreference === undefined
+          ? existing.liveLocationPreference
+          : values.liveLocationPreference === "studio"
+            ? "studio"
+            : values.liveLocationPreference === "home"
+              ? "home"
+              : "",
+        liveAccountPreference: values.liveAccountPreference === undefined
+          ? existing.liveAccountPreference
+          : values.liveAccountPreference === "personal"
+            ? "personal"
+            : values.liveAccountPreference === "company"
+              ? "company"
+              : "",
+        salaryOffered: resolveTextUpdate(values.salaryOffered, existing.salaryOffered || "", 200),
+        salaryOfferFeedback: resolveTextUpdate(values.salaryOfferFeedback, existing.salaryOfferFeedback || "", 500),
+        evaluationSummary: resolveTextUpdate(values.evaluationSummary, existing.evaluationSummary || "", 3000),
+        supportGemOffer: resolveTextUpdate(values.supportGemOffer, existing.supportGemOffer || "", 200),
+        cashOfferReality: resolveTextUpdate(values.cashOfferReality, existing.cashOfferReality || "", 200),
+        dealStatus: resolveTextUpdate(values.dealStatus, existing.dealStatus || "", 200),
+        cashOfferRealityRoundTwo: resolveTextUpdate(values.cashOfferRealityRoundTwo, existing.cashOfferRealityRoundTwo || "", 200),
+        dealStatusRoundTwo: resolveTextUpdate(values.dealStatusRoundTwo, existing.dealStatusRoundTwo || "", 200),
+        supportMainOfferNote: resolveTextUpdate(values.supportMainOfferNote, existing.supportMainOfferNote || "", 1000),
+        notes: resolveTextUpdate(values.notes, existing.notes, 3000),
         updatedAt: now,
         updatedBy: input.actorAccountKey
       }

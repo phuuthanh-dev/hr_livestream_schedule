@@ -81,6 +81,10 @@ function buildIndexMap(header: string[]) {
   return new Map(header.map((cell, index) => [normalizeHeader(cell), index] as const));
 }
 
+function getColumnByIndex(row: string[], index: number) {
+  return normalizeText(row[index]);
+}
+
 async function readSheet(tabName: string): Promise<SheetReadResult> {
   const sheets = createGoogleSheetsClient();
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
@@ -187,6 +191,12 @@ function setCell(row: string[], indexMap: Map<string, number>, columnName: strin
   row[index] = value;
 }
 
+function setCellByIndex(row: string[], index: number, value: string) {
+  if (index < 0) return;
+  while (row.length <= index) row.push("");
+  row[index] = value;
+}
+
 function buildHostSheetRow(input: {
   header: string[];
   currentRow?: string[];
@@ -195,6 +205,7 @@ function buildHostSheetRow(input: {
 }) {
   const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
   const indexMap = buildIndexMap(input.header);
+  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || "");
   setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
   setCell(row, indexMap, "họ và tên đầy đủ", input.profile.fullName);
   setCell(row, indexMap, "tên gọi khác", input.profile.aliasName);
@@ -211,6 +222,7 @@ function buildHostSheetRow(input: {
   setCell(row, indexMap, "live tk cá nhân", formatBooleanCell(input.profile.canUsePersonalAccount));
   setCell(row, indexMap, "live tk công ty", formatBooleanCell(input.profile.canUseCompanyAccount));
   setCell(row, indexMap, "link tiktok", input.profile.tiktokUrl);
+  setCell(row, indexMap, "lượt follow", input.profile.followerCount || "");
   setCell(row, indexMap, "rating", input.profile.rating);
   setCell(row, indexMap, "live tại nhà", formatBooleanCell(input.profile.canLiveHome));
   setCell(row, indexMap, "live tại studio", formatBooleanCell(input.profile.canLiveStudio));
@@ -241,6 +253,8 @@ function buildSupportSheetRow(input: {
   setCell(row, indexMap, "cash offer (by gem)", input.profile.supportGemOffer || "");
   setCell(row, indexMap, "cash offer (reality) lần i", input.profile.cashOfferReality || "");
   setCell(row, indexMap, "deal cast lần i", input.profile.dealStatus || "");
+  setCellByIndex(row, 13, input.profile.cashOfferRealityRoundTwo || "");
+  setCellByIndex(row, 14, input.profile.dealStatusRoundTwo || "");
   setCell(row, indexMap, "support chính mức offer", input.profile.supportMainOfferNote || "");
   setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
   setCell(row, indexMap, "bank", input.contract?.bankName || "");
@@ -315,7 +329,8 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           employeeId,
           actorAccountKey,
           values: {
-            fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || person.name,
+            sheetContractCode: getColumn(row, indexMap, "mã hđ"),
+            fullName: getColumn(row, indexMap, "họ và tên đầy đủ") || getColumn(row, indexMap, "tên gọi khác") || person.name,
             aliasName: getColumn(row, indexMap, "tên gọi khác"),
             phone: getColumn(row, indexMap, "sđt") || person.phone || "",
             email: getColumn(row, indexMap, "gmail"),
@@ -325,6 +340,7 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
             expectedSalary: getColumn(row, indexMap, "lương mong muốn"),
             introVideoUrl: getColumn(row, indexMap, "link"),
             tiktokUrl: getColumn(row, indexMap, "link tiktok"),
+            followerCount: getColumn(row, indexMap, "lượt follow"),
             zaloJoined: parseBooleanCell(getColumn(row, indexMap, "tham gia zalo")),
             level: getColumn(row, indexMap, "đánh giá level"),
             rating: getColumn(row, indexMap, "rating"),
@@ -398,6 +414,7 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
           employeeId,
           actorAccountKey,
           values: {
+            sheetContractCode: "",
             fullName: getColumn(row, indexMap, "tên") || person.name,
             aliasName: "",
             phone: getColumn(row, indexMap, "sđt") || person.phone || "",
@@ -423,6 +440,8 @@ export async function importRecruitmentProfilesFromSheets(actorAccountKey: strin
             supportGemOffer: getColumn(row, indexMap, "cash offer (by gem)"),
             cashOfferReality: getColumn(row, indexMap, "cash offer (reality) lần i"),
             dealStatus: getColumn(row, indexMap, "deal cast lần i"),
+            cashOfferRealityRoundTwo: getColumnByIndex(row, 13),
+            dealStatusRoundTwo: getColumnByIndex(row, 14),
             supportMainOfferNote: getColumn(row, indexMap, "support chính mức offer"),
             notes: "",
             sourceTab: SUPPORT_TAB_NAME

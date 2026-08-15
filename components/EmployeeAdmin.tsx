@@ -31,7 +31,14 @@ type EmployeeForm = {
   active: boolean;
 };
 
-type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "plus" | "refresh" | "search" | "trash" | "users";
+type EmployeeAdminGuide = {
+  title: string;
+  description: string;
+  href?: string;
+  cta?: string;
+};
+
+type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "plus" | "search" | "trash" | "users";
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
@@ -66,7 +73,6 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "location") return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
   if (name === "logout") return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
   if (name === "plus") return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
-  if (name === "refresh") return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
   if (name === "search") return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
   if (name === "trash") return <svg {...common}><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
@@ -240,24 +246,6 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     }
   }
 
-  async function bootstrapEmployees() {
-    if (!window.confirm("Nạp lại danh sách nhân viên mặc định từ hệ thống? Dữ liệu trùng mã sẽ được cập nhật, nhân sự khác không bị xóa.")) return;
-    setBusy("bootstrap");
-    setError("");
-    setMessage("");
-    try {
-      const response = await fetch("/api/employees/bootstrap", { method: "POST" });
-      const payload = (await response.json()) as EmployeeAdminPayload;
-      if (!response.ok || !payload.success) throw new Error(payload.message || "Không nạp được dữ liệu mặc định.");
-      setMessage(`${payload.message || "Đã nạp dữ liệu mặc định."} ${payload.inserted || 0} mới · ${payload.updated || 0} cập nhật.`);
-      await loadData();
-    } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Không nạp được dữ liệu mặc định.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
@@ -280,6 +268,24 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     level: form.level,
     cashOffer: form.cashOffer
   });
+  const guideItems: EmployeeAdminGuide[] = [
+    {
+      title: "Ứng viên mới từ website",
+      description: "Ứng viên gửi ở form public /apply hoặc admin quản lý tại mục Ứng tuyển. Hệ thống sẽ tự tạo mã nhân viên khi hồ sơ hợp lệ.",
+      href: "/applications",
+      cta: "Mở mục Ứng tuyển"
+    },
+    {
+      title: "Kéo dữ liệu từ sheet tuyển dụng",
+      description: "Nếu HR đã nhập ở 2 tab Thông tin Mẫu Live / Thông tin Support Live, hãy vào mục Ứng tuyển và dùng nút Kéo từ Sheet nguồn.",
+      href: "/applications",
+      cta: "Đi tới sync tuyển dụng"
+    },
+    {
+      title: "Thêm tay trên roster",
+      description: "Chỉ dùng nút Thêm nhân viên khi cần tạo nhanh hồ sơ nội bộ. Trang nhân sự không còn nạp seed mặc định để tránh ghi đè dữ liệu production."
+    }
+  ];
 
   return (
     <main className="employeeAdminApp">
@@ -319,6 +325,22 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
         {error ? <div className="notice errorNotice">{error}</div> : null}
         {message ? <div className="notice successNotice">{message}</div> : null}
 
+        <section className="employeeGuidePanel">
+          <div className="employeeGuideHeader">
+            <strong>Luồng nạp nhân sự</strong>
+            <span>Production chỉ dùng roster MongoDB và luồng ứng tuyển/sync tuyển dụng.</span>
+          </div>
+          <div className="employeeGuideGrid">
+            {guideItems.map((item) => (
+              <article className="employeeGuideCard" key={item.title}>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                {item.href && item.cta ? <a href={item.href}>{item.cta}</a> : null}
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="employeeRosterCard">
           <div className="employeeToolbar">
             <label className="employeeSearch">
@@ -331,11 +353,10 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
               <option value="active">Đang hoạt động</option><option value="incomplete">Thiếu thông tin</option><option value="inactive">Tạm ngưng</option><option value="all">Tất cả trạng thái</option>
             </select>
-            <button className="employeeBootstrapButton" disabled={busy === "bootstrap"} onClick={() => void bootstrapEmployees()} type="button"><Icon name="refresh" size={17} />{busy === "bootstrap" ? "Đang nạp" : "Nạp dữ liệu mặc định"}</button>
             <button className="employeeAddButton" onClick={openCreate} type="button"><Icon name="plus" size={17} />Thêm nhân viên</button>
           </div>
 
-          <div className="employeeRosterMeta"><strong>{filteredEmployees.length} hồ sơ</strong><span>Không hiển thị số điện thoại trên API roster công khai.</span></div>
+          <div className="employeeRosterMeta"><strong>{filteredEmployees.length} hồ sơ</strong><span>Roster production không còn dùng seed mặc định; số điện thoại cũng không hiển thị ở API roster công khai.</span></div>
           {loading ? <div className="employeeEmptyState">Đang tải dữ liệu nhân viên...</div> : null}
           {!loading && filteredEmployees.length === 0 ? <div className="employeeEmptyState"><Icon name="users" size={28} /><strong>Không có hồ sơ phù hợp</strong><span>Thử đổi bộ lọc hoặc thêm nhân viên mới.</span></div> : null}
 
@@ -382,7 +403,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                 }))}><option value="host">Host</option><option value="support">Support Live</option></select></label>
                 <label><span>Mã nhân viên</span><input disabled={editingExisting} required value={form.id} onChange={(event) => setForm((current) => ({ ...current, id: event.target.value.toUpperCase() }))} placeholder={form.role === "host" ? "HRLT21" : "HRSL13"} /></label>
                 <label className="wide"><span>Họ và tên</span><input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} /></label>
-                <label><span>Số điện thoại</span><input inputMode="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} /></label>
+                <label><span>Số điện thoại</span><input inputMode="tel" type="tel" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="0901 234 567" /></label>
                 <label><span>Trạng thái</span><select value={form.active ? "active" : "inactive"} onChange={(event) => setForm((current) => ({ ...current, active: event.target.value === "active" }))}><option value="active">Hoạt động</option><option value="inactive">Tạm ngưng</option></select></label>
               </div></fieldset>
 
@@ -391,16 +412,16 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                 <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => syncCompensationFields(current, { level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
                 {form.role === "host" ? <label><span>Địa điểm</span><select required value={form.workLocation} onChange={(event) => setForm((current) => ({ ...current, workLocation: event.target.value }))}>{locations.map((location) => <option disabled={!location.active} key={location.code} value={location.code}>{location.name}{location.active ? "" : " · Tạm ngưng"}</option>)}</select></label> : null}
                 <label><span>Cash offer</span><input readOnly value={formCompensation.cashOffer || ""} placeholder="Tự động lấy từ rating/grade" /></label>
-                <label><span>Kinh nghiệm</span><input value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} /></label>
+                <label><span>Kinh nghiệm</span><textarea rows={3} value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} placeholder="Mô tả ngắn kinh nghiệm chính" /></label>
                 <label><span>Training</span><input value={form.trainingStatus} onChange={(event) => setForm((current) => ({ ...current, trainingStatus: event.target.value }))} /></label>
-                <label className="wide"><span>CV / Portfolio</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} /></label>
+                <label className="wide"><span>CV / Portfolio / Ghi chú nguồn</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} placeholder="Link CV, link hồ sơ hoặc ghi chú nguồn" /></label>
               </div></fieldset>
 
               {form.role === "host" ? <fieldset><legend>Thông tin riêng của Host</legend><div className="employeeFormGrid">
-                <label><span>Tham gia Zalo</span><input value={form.zaloStatus} onChange={(event) => setForm((current) => ({ ...current, zaloStatus: event.target.value }))} /></label>
-                <label><span>Loại tài khoản live</span><input value={form.liveAccountType} onChange={(event) => setForm((current) => ({ ...current, liveAccountType: event.target.value }))} /></label>
+                <label><span>Tham gia Zalo</span><select value={form.zaloStatus} onChange={(event) => setForm((current) => ({ ...current, zaloStatus: event.target.value }))}><option value="">Chưa chọn</option><option value="Có">Có</option><option value="Không">Không</option></select></label>
+                <label><span>Loại tài khoản live</span><select value={form.liveAccountType} onChange={(event) => setForm((current) => ({ ...current, liveAccountType: event.target.value }))}><option value="">Chưa chọn</option><option value="Công ty">Công ty</option><option value="Cá nhân">Cá nhân</option><option value="Cá nhân + Công ty">Cá nhân + Công ty</option></select></label>
                 <label className="wide"><span>Live Channel ID</span><input value={form.liveChannelId} onChange={(event) => setForm((current) => ({ ...current, liveChannelId: event.target.value }))} /></label>
-                <label className="wide"><span>Thành tích</span><input value={form.achievements} onChange={(event) => setForm((current) => ({ ...current, achievements: event.target.value }))} /></label>
+                <label className="wide"><span>Thành tích</span><textarea rows={3} value={form.achievements} onChange={(event) => setForm((current) => ({ ...current, achievements: event.target.value }))} placeholder="GMV, thành tích live, điểm mạnh..." /></label>
               </div></fieldset> : null}
 
               <fieldset><legend>Ghi chú đánh giá</legend><label className="employeeNotesField"><textarea rows={5} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Đánh giá, lưu ý vận hành, yêu cầu đào tạo..." /></label></fieldset>
