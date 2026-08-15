@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({})) as { weekStartKey?: string };
     const weekStartKey = getScheduleWeekStartKey(body.weekStartKey || getScheduleWeekStartKey());
-    const payload = await syncAvailabilityWeekToCollectSheets(weekStartKey);
+    const payload = await syncAvailabilityWeekToCollectSheets(weekStartKey, session.accountKey);
     return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json(

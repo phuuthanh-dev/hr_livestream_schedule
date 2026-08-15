@@ -102,7 +102,7 @@ export async function PUT(request: Request) {
     let syncWarning = "";
     try {
       if (payload.week?.status === "submitted" || payload.week?.status === "locked") {
-        await syncAvailabilityWeekToCollectSheets(weekStartKey);
+        await syncAvailabilityWeekToCollectSheets(weekStartKey, session.accountKey);
       }
     } catch (error) {
       syncWarning = error instanceof Error ? ` Tuy nhiên chưa đẩy được sang Google Sheet: ${error.message}` : " Tuy nhiên chưa đẩy được sang Google Sheet.";

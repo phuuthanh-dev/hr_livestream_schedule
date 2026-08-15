@@ -16,6 +16,8 @@ import type {
   AvailabilityAdminRoleFilter,
   AvailabilityAdminSlotSummary,
   AvailabilityAdminStatusFilter,
+  AvailabilitySheetSyncConflict,
+  AvailabilitySheetSyncRun,
   AvailabilitySubmissionState,
   SchedulePayload
 } from "@/lib/types";
@@ -130,6 +132,8 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
   const [importingSheet, setImportingSheet] = useState(false);
   const [syncingSheet, setSyncingSheet] = useState(false);
+  const [syncRuns, setSyncRuns] = useState<AvailabilitySheetSyncRun[]>([]);
+  const [syncConflicts, setSyncConflicts] = useState<AvailabilitySheetSyncConflict[]>([]);
   const [error, setError] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -168,6 +172,33 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
 
     return () => controller.abort();
   }, [reloadKey, roleFilter, statusFilter, weekStartKey]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/availability/sync-logs?weekStartKey=${weekStartKey}`, {
+      cache: "no-store",
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const payload = await response.json() as {
+          success?: boolean;
+          runs?: AvailabilitySheetSyncRun[];
+          conflicts?: AvailabilitySheetSyncConflict[];
+          message?: string;
+        };
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || "Không tải được log sync.");
+        }
+        setSyncRuns(payload.runs || []);
+        setSyncConflicts(payload.conflicts || []);
+      })
+      .catch((loadError) => {
+        if (loadError instanceof DOMException && loadError.name === "AbortError") return;
+        setSyncRuns([]);
+        setSyncConflicts([]);
+      });
+    return () => controller.abort();
+  }, [reloadKey, weekStartKey]);
 
   const summary = payload?.summary;
   const people = payload?.people || [];
@@ -229,6 +260,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
         message?: string;
         importedSlots?: number;
         importedPeople?: number;
+        skippedProtectedWeeks?: number;
         skippedUnknownEmployees?: string[];
       };
       if (!response.ok || !result.success) {
@@ -268,6 +300,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       setScheduleMessage(
         `${result.message || "Đã đồng bộ sang Google Sheet."} Host ${result.hostRowsUpdated || 0} dòng · Support ${result.supportRowsUpdated || 0} dòng.`
       );
+      setReloadKey((current) => current + 1);
     } catch (syncError) {
       setError(syncError instanceof Error ? syncError.message : "Không đẩy được lịch sang Google Sheet.");
     } finally {
@@ -427,6 +460,52 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <i style={{ width: `${submissionRate}%` }} />
             </div>
             <p>{summary?.submittedPeople || 0}/{summary?.totalPeople || 0} nhân sự đã gửi lịch rảnh cho tuần {formatWeekRange(weekStartKey)}.</p>
+          </section>
+
+          <section className="employeeRosterCard">
+            <div className="employeeRosterMeta">
+              <strong>Sync log tuần {formatWeekRange(weekStartKey)}</strong>
+              <span>{syncRuns.length} lần chạy · {syncConflicts.length} conflict gần nhất</span>
+            </div>
+            {syncRuns.length === 0 ? <div className="employeeEmptyState">Chưa có log sync nào cho tuần này.</div> : null}
+            {syncRuns.length > 0 ? (
+              <div className="availabilitySyncLogList">
+                {syncRuns.slice(0, 6).map((run) => (
+                  <article className="managedAccount" key={run.runId}>
+                    <div className="managedAccountIdentity">
+                      <span className="managedAccountAvatar">{run.direction === "sheet_to_website" ? "IN" : "OUT"}</span>
+                      <div>
+                        <strong>{run.operation === "import_week" ? "Pull sheet -> web" : "Push web -> sheet"}</strong>
+                        <span>{formatTimestamp(run.finishedAt)} · {run.success ? "Thành công" : "Lỗi"}</span>
+                      </div>
+                      <em>{run.conflictCount} conflict</em>
+                    </div>
+                    <div className="availabilitySyncLogMeta">
+                      <span>{run.message || run.error || "Không có ghi chú."}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {syncConflicts.length > 0 ? (
+              <div className="managedAccountList">
+                {syncConflicts.slice(0, 12).map((conflict) => (
+                  <article className="managedAccount locked" key={`${conflict.runId}-${conflict.createdAt}-${conflict.kind}-${conflict.details}`}>
+                    <div className="managedAccountIdentity">
+                      <span className="managedAccountAvatar">!</span>
+                      <div>
+                        <strong>{conflict.kind}</strong>
+                        <span>{conflict.dateKey ? `${formatShortDate(conflict.dateKey)} · ` : ""}{conflict.slot || conflict.employeeId || conflict.tabName || "N/A"}</span>
+                      </div>
+                      <em>{conflict.direction === "sheet_to_website" ? "Pull" : "Push"}</em>
+                    </div>
+                    <div className="availabilitySyncLogMeta">
+                      <span>{conflict.details}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="availabilitySummaryPanel availabilityHeatmapPanel">

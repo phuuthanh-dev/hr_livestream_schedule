@@ -271,6 +271,59 @@ export type AvailabilityAdminDashboardPayload = {
   message?: string;
 };
 
+export type AvailabilitySheetSyncDirection = "sheet_to_website" | "website_to_sheet";
+export type AvailabilitySheetSyncOperation = "import_week" | "sync_week";
+export type AvailabilitySheetSyncConflictKind =
+  | "unknown_employee"
+  | "invalid_row"
+  | "import_blocked"
+  | "website_overwrite"
+  | "sheet_overwrite"
+  | "missing_sheet_row";
+
+export type AvailabilitySheetSyncRun = {
+  runId: string;
+  direction: AvailabilitySheetSyncDirection;
+  operation: AvailabilitySheetSyncOperation;
+  weekStartKey?: string;
+  spreadsheetId: string;
+  actorAccountKey: string;
+  success: boolean;
+  startedAt: string;
+  finishedAt: string;
+  importedWeeks?: number;
+  importedPeople?: number;
+  importedSlots?: number;
+  hostRowsUpdated?: number;
+  supportRowsUpdated?: number;
+  conflictCount: number;
+  message?: string;
+  error?: string;
+};
+
+export type AvailabilitySheetSyncConflict = {
+  runId: string;
+  direction: AvailabilitySheetSyncDirection;
+  kind: AvailabilitySheetSyncConflictKind;
+  weekStartKey?: string;
+  role?: EmployeeRole;
+  employeeId?: string;
+  dateKey?: string;
+  slot?: string;
+  tabName?: string;
+  rowNumber?: number;
+  details: string;
+  createdAt: string;
+};
+
+export type AvailabilitySheetSyncLogsPayload = {
+  success: boolean;
+  weekStartKey?: string;
+  runs?: AvailabilitySheetSyncRun[];
+  conflicts?: AvailabilitySheetSyncConflict[];
+  message?: string;
+};
+
 export type PayrollRole = EmployeeRole;
 export type PayrollCommissionMode = "none" | "fixed" | "gmv_tier";
 export type PayrollPeriodStatus = "draft" | "locked";

@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     const weekStartKey = body.weekStartKey || getScheduleWeekStartKey();
     let syncWarning = "";
     try {
-      await syncAvailabilityWeekToCollectSheets(weekStartKey);
+      await syncAvailabilityWeekToCollectSheets(weekStartKey, session.accountKey);
     } catch (error) {
       syncWarning = error instanceof Error ? ` Tuy nhiên chưa đẩy được sang Google Sheet: ${error.message}` : " Tuy nhiên chưa đẩy được sang Google Sheet.";
     }
