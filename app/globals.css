@@ -3091,9 +3091,30 @@ a:hover {
   place-items: center;
 }
 
-.applicationFormSection header h3 { margin: 0; font-family: "Fraunces", serif; font-size: 1.13rem; letter-spacing: -0.02em; }
-.applicationFormSection header p { margin: 3px 0 0; color: #79827f; font-size: 0.59rem; line-height: 1.5; }
-.hostPortfolioSection { margin: 0 -18px; padding-right: 18px; padding-left: 18px; background: linear-gradient(90deg, rgba(255, 231, 220, 0.48), transparent); }
+.applicationFormSection header h3 {
+  margin: 0;
+  color: #1e3d3b;
+  font-family: inherit;
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.applicationFormSection header p {
+  margin: 4px 0 0;
+  color: #79827f;
+  font-size: 0.68rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.hostPortfolioSection {
+  margin: 0 -18px;
+  padding-right: 18px;
+  padding-left: 18px;
+  background: linear-gradient(90deg, rgba(255, 231, 220, 0.48), transparent);
+}
+
 .hostPortfolioSection > header > span { background: var(--talent-coral); }
 .finalSection { border-bottom: 0; }
 
@@ -3108,11 +3129,20 @@ a:hover {
   min-width: 0;
   color: #465653;
   gap: 7px;
-  font-size: 0.62rem;
-  font-weight: 800;
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
 .applicationFields label.wide { grid-column: 1 / -1; }
+
+.applicationFields label > span,
+.applicationChoiceGroup > span {
+  color: #425652;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .applicationFields input:not([type="checkbox"]),
 .applicationFields select,
 .applicationFields textarea {
@@ -3123,7 +3153,7 @@ a:hover {
   color: #183b38;
   background: #fff;
   font: inherit;
-  font-size: 0.71rem;
+  font-size: 0.8rem;
   font-weight: 600;
   line-height: 1.55;
   outline: none;
@@ -3150,17 +3180,22 @@ a:hover {
 .applicationFields input:focus,
 .applicationFields select:focus,
 .applicationFields textarea:focus { border-color: #218579; background: #fffefa; box-shadow: 0 0 0 4px rgba(33, 133, 121, 0.1); }
-.applicationFields label > small { color: #8a928f; font-size: 0.53rem; font-weight: 600; }
+.applicationFields label > small {
+  color: #8a928f;
+  font-size: 0.58rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
 
 .applicationChoiceGroup {
   display: grid;
-  gap: 8px;
+  gap: 9px;
 }
 
 .applicationChoiceOptions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .applicationChoiceOptions label {
@@ -3173,8 +3208,9 @@ a:hover {
   background: #fff;
   align-items: center;
   gap: 10px;
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.2;
   cursor: pointer;
 }
 
@@ -3184,6 +3220,10 @@ a:hover {
   margin: 0;
   accent-color: #176f66;
   flex: 0 0 auto;
+}
+
+.hostPortfolioSection .applicationFields {
+  gap: 18px 16px;
 }
 
 .applicationConsent {

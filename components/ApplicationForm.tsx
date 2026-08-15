@@ -65,6 +65,18 @@ function createInitialForm(role: EmployeeRole): ApplicationFormState {
       };
 }
 
+function deriveLocationPreference(canLiveHome: boolean, canLiveStudio: boolean) {
+  if (canLiveHome) return "home" as const;
+  if (canLiveStudio) return "studio" as const;
+  return "" as const;
+}
+
+function deriveAccountPreference(canUsePersonalAccount: boolean, canUseCompanyAccount: boolean) {
+  if (canUseCompanyAccount) return "company" as const;
+  if (canUsePersonalAccount) return "personal" as const;
+  return "" as const;
+}
+
 function RoleIcon({ role }: { role: EmployeeRole }) {
   if (role === "host") {
     return (
@@ -93,18 +105,46 @@ export default function ApplicationForm() {
     setError("");
   }
 
+  function updateHostLocation(key: "canLiveHome" | "canLiveStudio", value: boolean) {
+    setForm((current) => {
+      const next = {
+        ...current,
+        [key]: value
+      };
+      return {
+        ...next,
+        liveLocationPreference: deriveLocationPreference(next.canLiveHome, next.canLiveStudio)
+      };
+    });
+    setError("");
+  }
+
+  function updateHostAccount(key: "canUsePersonalAccount" | "canUseCompanyAccount", value: boolean) {
+    setForm((current) => {
+      const next = {
+        ...current,
+        [key]: value
+      };
+      return {
+        ...next,
+        liveAccountPreference: deriveAccountPreference(next.canUsePersonalAccount, next.canUseCompanyAccount)
+      };
+    });
+    setError("");
+  }
+
   function chooseRole(role: EmployeeRole) {
     setForm((current) => ({
       ...current,
       role,
       ...(role === "host"
         ? {
-            liveLocationPreference: current.liveLocationPreference || "home",
-            liveAccountPreference: current.liveAccountPreference || "company",
-            canLiveHome: current.canLiveHome || current.liveLocationPreference !== "studio",
-            canLiveStudio: current.canLiveStudio || current.liveLocationPreference === "studio",
-            canUsePersonalAccount: current.canUsePersonalAccount || current.liveAccountPreference === "personal",
-            canUseCompanyAccount: current.canUseCompanyAccount || current.liveAccountPreference !== "personal"
+            canLiveHome: current.canLiveHome,
+            canLiveStudio: current.canLiveStudio,
+            canUsePersonalAccount: current.canUsePersonalAccount,
+            canUseCompanyAccount: current.canUseCompanyAccount,
+            liveLocationPreference: deriveLocationPreference(current.canLiveHome, current.canLiveStudio) || "home",
+            liveAccountPreference: deriveAccountPreference(current.canUsePersonalAccount, current.canUseCompanyAccount) || "company"
           }
         : {
             liveLocationPreference: "",
@@ -217,32 +257,18 @@ export default function ApplicationForm() {
         <section className="applicationFormSection hostPortfolioSection">
           <header><span>03</span><div><h3>Hồ sơ lên hình</h3><p>Dành riêng cho Host để đội ngũ hiểu rõ phong cách của bạn.</p></div></header>
           <div className="applicationFields">
-            <label>
-              <span>Ưu tiên nơi live *</span>
-              <select required value={form.liveLocationPreference} onChange={(event) => updateField("liveLocationPreference", event.target.value as ApplicationFormState["liveLocationPreference"])}>
-                <option value="home">Live tại nhà</option>
-                <option value="studio">Live tại Studio</option>
-              </select>
-            </label>
-            <label>
-              <span>Ưu tiên tài khoản live *</span>
-              <select required value={form.liveAccountPreference} onChange={(event) => updateField("liveAccountPreference", event.target.value as ApplicationFormState["liveAccountPreference"])}>
-                <option value="personal">Live tài khoản cá nhân</option>
-                <option value="company">Live tài khoản công ty</option>
-              </select>
-            </label>
             <div className="applicationChoiceGroup wide">
-              <span>Có thể live ở đâu *</span>
+              <span>Nơi bạn có thể live *</span>
               <div className="applicationChoiceOptions">
-                <label><input checked={form.canLiveHome} onChange={(event) => updateField("canLiveHome", event.target.checked)} type="checkbox" /><span>Live tại nhà</span></label>
-                <label><input checked={form.canLiveStudio} onChange={(event) => updateField("canLiveStudio", event.target.checked)} type="checkbox" /><span>Live tại Studio</span></label>
+                <label><input checked={form.canLiveHome} onChange={(event) => updateHostLocation("canLiveHome", event.target.checked)} type="checkbox" /><span>Live tại nhà</span></label>
+                <label><input checked={form.canLiveStudio} onChange={(event) => updateHostLocation("canLiveStudio", event.target.checked)} type="checkbox" /><span>Live tại Studio</span></label>
               </div>
             </div>
             <div className="applicationChoiceGroup wide">
-              <span>Có thể dùng tài khoản nào *</span>
+              <span>Loại tài khoản bạn có thể dùng *</span>
               <div className="applicationChoiceOptions">
-                <label><input checked={form.canUsePersonalAccount} onChange={(event) => updateField("canUsePersonalAccount", event.target.checked)} type="checkbox" /><span>Tài khoản cá nhân</span></label>
-                <label><input checked={form.canUseCompanyAccount} onChange={(event) => updateField("canUseCompanyAccount", event.target.checked)} type="checkbox" /><span>Tài khoản công ty</span></label>
+                <label><input checked={form.canUsePersonalAccount} onChange={(event) => updateHostAccount("canUsePersonalAccount", event.target.checked)} type="checkbox" /><span>Tài khoản cá nhân</span></label>
+                <label><input checked={form.canUseCompanyAccount} onChange={(event) => updateHostAccount("canUseCompanyAccount", event.target.checked)} type="checkbox" /><span>Tài khoản công ty</span></label>
               </div>
             </div>
             <label className="wide"><span>Link video giới thiệu / video live</span><input maxLength={1000} onChange={(event) => updateField("introVideoUrl", event.target.value)} placeholder="YouTube, Google Drive hoặc video công khai" type="url" value={form.introVideoUrl} /></label>
