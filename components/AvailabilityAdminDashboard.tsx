@@ -128,6 +128,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [payload, setPayload] = useState<AvailabilityAdminDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
+  const [importingSheet, setImportingSheet] = useState(false);
   const [error, setError] = useState("");
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -211,6 +212,36 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
+  async function importAvailabilityFromSheet() {
+    setImportingSheet(true);
+    setError("");
+    setScheduleMessage("");
+
+    try {
+      const response = await fetch("/api/availability/import-sheet", {
+        method: "POST"
+      });
+      const result = await response.json() as {
+        success?: boolean;
+        message?: string;
+        importedSlots?: number;
+        importedPeople?: number;
+        skippedUnknownEmployees?: string[];
+      };
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Không import được lịch từ Google Sheet.");
+      }
+      setScheduleMessage(
+        `${result.message || "Đã import lịch từ Google Sheet."} ${result.importedPeople || 0} nhân sự · ${result.importedSlots || 0} slot.`
+      );
+      setReloadKey((current) => current + 1);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "Không import được lịch từ Google Sheet.");
+    } finally {
+      setImportingSheet(false);
+    }
+  }
+
   return (
     <main className="availabilityApp availabilitySummaryApp">
       <header className="appHeader availabilityHeader availabilitySummaryHeader">
@@ -288,8 +319,17 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <span>{loading ? "Đang tải" : "Làm mới"}</span>
             </button>
             <button
+              className="availabilitySummaryRefresh"
+              disabled={loading || importingSheet}
+              onClick={importAvailabilityFromSheet}
+              type="button"
+            >
+              <Icon name="users" size={18} />
+              <span>{importingSheet ? "Đang import" : "Kéo từ Sheet"}</span>
+            </button>
+            <button
               className="availabilitySummaryGenerate"
-              disabled={loading || generatingSchedule}
+              disabled={loading || generatingSchedule || importingSheet}
               onClick={generateWeekSchedule}
               type="button"
             >
