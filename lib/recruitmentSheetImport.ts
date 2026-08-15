@@ -152,7 +152,7 @@ async function readSheet(tabName: string): Promise<SheetReadResult> {
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${tabName}'!A:Z`
+    range: `'${tabName}'!A:AZ`
   });
   return {
     spreadsheetId,
@@ -393,6 +393,14 @@ function buildHostSheetRow(input: {
   setCell(row, indexMap, "note", input.profile.notes);
   setCell(row, indexMap, "live_channel_id", input.profile.liveChannelId);
   setCell(row, indexMap, "gmail", input.contract?.gmail || input.profile.email || "");
+  setCell(row, indexMap, "ngày sinh", input.contract?.dateOfBirth || "");
+  setCell(row, indexMap, "cccd", input.contract?.citizenId || "");
+  setCell(row, indexMap, "ngày cấp", input.contract?.citizenIdIssuedDate || "");
+  setCell(row, indexMap, "nơi cấp", input.contract?.citizenIdIssuedPlace || "");
+  setCell(row, indexMap, "thường trú", input.contract?.permanentAddress || "");
+  setCell(row, indexMap, "tạm trú", input.contract?.temporaryAddress || "");
+  setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
+  setCell(row, indexMap, "bank", input.contract?.bankName || "");
   return row;
 }
 
@@ -441,7 +449,7 @@ async function appendSheetRows(tabName: string, spreadsheetId: string, rows: str
   const sheets = createGoogleSheetsClient();
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `'${tabName}'!A:Z`,
+    range: `'${tabName}'!A:AZ`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: {
@@ -582,7 +590,9 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
               citizenIdIssuedDate: contractFields.citizenIdIssuedDate,
               citizenIdIssuedPlace: contractFields.citizenIdIssuedPlace,
               permanentAddress: contractFields.permanentAddress,
-              temporaryAddress: contractFields.temporaryAddress
+              temporaryAddress: contractFields.temporaryAddress,
+              bankAccountNumber: contractFields.bankAccountNumber,
+              bankName: contractFields.bankName
             });
           }
           updatedContracts += 1;
@@ -891,7 +901,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             conflicts
           });
           updatePayloads.push({
-            range: `'${tabName}'!A${existingRow.rowNumber}:Z${existingRow.rowNumber}`,
+            range: `'${tabName}'!A${existingRow.rowNumber}:AZ${existingRow.rowNumber}`,
             values: [nextRow]
           });
           updatedSheetRows += 1;
@@ -936,7 +946,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             conflicts
           });
           updatePayloads.push({
-            range: `'${tabName}'!A${existingRow.rowNumber}:Z${existingRow.rowNumber}`,
+            range: `'${tabName}'!A${existingRow.rowNumber}:AZ${existingRow.rowNumber}`,
             values: [nextRow]
           });
           updatedSheetRows += 1;
