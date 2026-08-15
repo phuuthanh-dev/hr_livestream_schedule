@@ -60,6 +60,23 @@ type SheetRowMatch = {
   values: string[];
 };
 
+type SheetRowLookup = {
+  rows: Map<string, SheetRowMatch>;
+  duplicates: Map<string, SheetRowMatch[]>;
+};
+
+const SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES = [
+  "cash offer (reality) lần ii",
+  "cash offer (reality) lần 2",
+  "cash offer (reality) lần ll"
+];
+
+const SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES = [
+  "deal cast lần ii",
+  "deal cast lần 2",
+  "deal cast lần ll"
+];
+
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
 }
@@ -111,6 +128,16 @@ function getColumnAlias(row: string[], indexMap: Map<string, number>, aliases: s
   return getColumn(row, indexMap, ...aliases);
 }
 
+function setCellAlias(row: string[], indexMap: Map<string, number>, aliases: string[], value: string) {
+  for (const alias of aliases) {
+    const index = indexMap.get(alias);
+    if (index === undefined) continue;
+    while (row.length <= index) row.push("");
+    row[index] = value;
+    return;
+  }
+}
+
 function getContractSheetFields(row: string[], indexMap: Map<string, number>) {
   return {
     gmail: getColumnAlias(row, indexMap, ["gmail", "email"]),
@@ -141,10 +168,6 @@ function hasAnyContractField(input: ReturnType<typeof getContractSheetFields>) {
 
 function buildIndexMap(header: string[]) {
   return new Map(header.map((cell, index) => [normalizeHeader(cell), index] as const));
-}
-
-function getColumnByIndex(row: string[], index: number) {
-  return normalizeText(row[index]);
 }
 
 async function readSheet(tabName: string): Promise<SheetReadResult> {
@@ -199,17 +222,24 @@ async function persistSyncRun(input: {
   }
 }
 
-function rowMatchByEmployeeId(values: string[][], indexMap: Map<string, number>) {
+function rowMatchByEmployeeId(values: string[][], indexMap: Map<string, number>): SheetRowLookup {
   const rows = new Map<string, SheetRowMatch>();
+  const duplicates = new Map<string, SheetRowMatch[]>();
   values.slice(1).forEach((row, index) => {
     const employeeId = getColumn(row, indexMap, "mã nhân viên").toUpperCase();
     if (!employeeId) return;
-    rows.set(employeeId, {
+    const match = {
       rowNumber: index + 2,
       values: [...row]
-    });
+    };
+    const existing = rows.get(employeeId);
+    if (existing) {
+      duplicates.set(employeeId, [...(duplicates.get(employeeId) || [existing]), match]);
+      return;
+    }
+    rows.set(employeeId, match);
   });
-  return rows;
+  return { rows, duplicates };
 }
 
 function compareAndTrackOverwrite(input: {
@@ -424,8 +454,8 @@ function buildSupportSheetRow(input: {
   setCell(row, indexMap, "cash offer (by gem)", input.profile.supportGemOffer || "");
   setCell(row, indexMap, "cash offer (reality) lần i", input.profile.cashOfferReality || "");
   setCell(row, indexMap, "deal cast lần i", input.profile.dealStatus || "");
-  setCellByIndex(row, 13, input.profile.cashOfferRealityRoundTwo || "");
-  setCellByIndex(row, 14, input.profile.dealStatusRoundTwo || "");
+  setCellAlias(row, indexMap, SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES, input.profile.cashOfferRealityRoundTwo || "");
+  setCellAlias(row, indexMap, SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES, input.profile.dealStatusRoundTwo || "");
   setCell(row, indexMap, "support chính mức offer", input.profile.supportMainOfferNote || "");
   setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
   setCell(row, indexMap, "bank", input.contract?.bankName || "");
@@ -695,8 +725,8 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
               supportGemOffer: getColumn(row, indexMap, "cash offer (by gem)"),
               cashOfferReality: getColumn(row, indexMap, "cash offer (reality) lần i"),
               dealStatus: getColumn(row, indexMap, "deal cast lần i"),
-              cashOfferRealityRoundTwo: getColumnByIndex(row, 13),
-              dealStatusRoundTwo: getColumnByIndex(row, 14),
+              cashOfferRealityRoundTwo: getColumnAlias(row, indexMap, SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES),
+              dealStatusRoundTwo: getColumnAlias(row, indexMap, SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES),
               supportMainOfferNote: getColumn(row, indexMap, "support chính mức offer"),
               notes: "",
               sourceTab: SUPPORT_TAB_NAME
@@ -839,8 +869,32 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
     const supportHeader = supportValues[0] || [];
     const hostIndexMap = buildIndexMap(hostHeader);
     const supportIndexMap = buildIndexMap(supportHeader);
-    const hostRows = rowMatchByEmployeeId(hostValues, hostIndexMap);
-    const supportRows = rowMatchByEmployeeId(supportValues, supportIndexMap);
+    const hostLookup = rowMatchByEmployeeId(hostValues, hostIndexMap);
+    const supportLookup = rowMatchByEmployeeId(supportValues, supportIndexMap);
+    const hostRows = hostLookup.rows;
+    const supportRows = supportLookup.rows;
+    const duplicateHostIds = new Set(hostLookup.duplicates.keys());
+    const duplicateSupportIds = new Set(supportLookup.duplicates.keys());
+
+    hostLookup.duplicates.forEach((matches, employeeId) => {
+      conflicts.push(buildConflict(
+        runId,
+        "website_to_sheet",
+        "invalid_row",
+        `Tab ${HOST_TAB_NAME} đang có trùng mã nhân viên ${employeeId} ở các dòng ${matches.map((item) => item.rowNumber).join(", ")}. Bỏ qua push từ website cho hồ sơ này để tránh ghi đè sai dòng.`,
+        { role: "host", employeeId, tabName: HOST_TAB_NAME, rowNumber: matches[0]?.rowNumber }
+      ));
+    });
+
+    supportLookup.duplicates.forEach((matches, employeeId) => {
+      conflicts.push(buildConflict(
+        runId,
+        "website_to_sheet",
+        "invalid_row",
+        `Tab ${SUPPORT_TAB_NAME} đang có trùng mã nhân viên ${employeeId} ở các dòng ${matches.map((item) => item.rowNumber).join(", ")}. Bỏ qua push từ website cho hồ sơ này để tránh ghi đè sai dòng.`,
+        { role: "support", employeeId, tabName: SUPPORT_TAB_NAME, rowNumber: matches[0]?.rowNumber }
+      ));
+    });
 
     const updatePayloads: Array<{ range: string; values: string[][] }> = [];
     const appendHostRows: string[][] = [];
@@ -857,7 +911,13 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
       const rowMap = profile.role === "host" ? hostRows : supportRows;
       const header = profile.role === "host" ? hostHeader : supportHeader;
       const indexMap = profile.role === "host" ? hostIndexMap : supportIndexMap;
+      const duplicateIds = profile.role === "host" ? duplicateHostIds : duplicateSupportIds;
       const existingRow = rowMap.get(profile.employeeId.toUpperCase());
+
+      if (duplicateIds.has(profile.employeeId.toUpperCase())) {
+        skippedRows += 1;
+        return;
+      }
 
       if (!contract) {
         conflicts.push(buildConflict(
@@ -890,7 +950,15 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
               "link tiktok",
               "live tại nhà",
               "live tại studio",
-              "gmail"
+              "gmail",
+              "ngày sinh",
+              "cccd",
+              "ngày cấp",
+              "nơi cấp",
+              "thường trú",
+              "tạm trú",
+              "stk",
+              "bank"
             ],
             runId,
             role: profile.role,
@@ -933,6 +1001,8 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
               "cash offer (by gem)",
               "cash offer (reality) lần i",
               "deal cast lần i",
+              ...SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES,
+              ...SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES,
               "support chính mức offer",
               "stk",
               "bank"
@@ -963,9 +1033,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
         }
       }
 
-      if (!application && !contract && !profile.phone) {
-        skippedRows += 1;
-      }
+      void application;
     });
 
     await applySheetUpdates(spreadsheetId, updatePayloads);
