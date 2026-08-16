@@ -52,8 +52,11 @@ function hasPositiveStatus(value: unknown, acceptedValues: string[]) {
 }
 
 function isQualified(person: SchedulePerson) {
-  return person.active !== false
-    && hasPositiveStatus(person.trainingStatus, POSITIVE_TRAINING_VALUES);
+  return person.active !== false;
+}
+
+function trainingPriority(value: unknown) {
+  return hasPositiveStatus(value, POSITIVE_TRAINING_VALUES) ? 1 : 0;
 }
 
 function parseCashOffer(value: unknown) {
@@ -305,6 +308,8 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
       .sort((left, right) => {
         const rankDifference = hostRank(right.person.level) - hostRank(left.person.level);
         if (rankDifference) return rankDifference;
+        const trainingDifference = trainingPriority(right.person.trainingStatus) - trainingPriority(left.person.trainingStatus);
+        if (trainingDifference) return trainingDifference;
         const countDifference = getCount(hostWeekCounts, personKey("host", left.person.id))
           - getCount(hostWeekCounts, personKey("host", right.person.id));
         if (countDifference) return countDifference;
@@ -382,6 +387,8 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
               && !occupiedSupports.has(`${key}__${dateKey}__${item.row.slot}`));
           })
           .sort((left, right) => {
+            const trainingDifference = trainingPriority(right.trainingStatus) - trainingPriority(left.trainingStatus);
+            if (trainingDifference) return trainingDifference;
             const cashDifference = parseCashOffer(left.cashOffer) - parseCashOffer(right.cashOffer);
             if (cashDifference) return cashDifference;
             if (hostHasHighRank) {

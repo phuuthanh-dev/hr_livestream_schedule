@@ -151,6 +151,36 @@ test("Studio sessions assign Support only when a complete four-hour block is ava
   assert.ok(rows.every((row) => row.status === "published"));
 });
 
+test("training status is a priority, not a hard filter, for host and support", () => {
+  const trainedHost = person("HRLT01", "host", { trainingStatus: "Đã training", level: "B" });
+  const untrainedHost = person("HRLT02", "host", { trainingStatus: "Chưa", level: "B", name: "Host chưa train" });
+  const trainedSupport = person("HRSL01", "support", { trainingStatus: "Đã Training", cashOffer: "40.000" });
+  const untrainedSupport = person("HRSL02", "support", { trainingStatus: "Chưa Training", cashOffer: "30.000", name: "Support chưa train" });
+
+  const trainedRows = run(
+    [trainedHost, untrainedHost, trainedSupport, untrainedSupport],
+    slots.slice(0, 2).flatMap((slot) => [
+      available("host", trainedHost.id, "2026-08-13", slot, "studio"),
+      available("host", untrainedHost.id, "2026-08-13", slot, "studio"),
+      available("support", trainedSupport.id, "2026-08-13", slot),
+      available("support", untrainedSupport.id, "2026-08-13", slot)
+    ])
+  );
+  assert.ok(trainedRows.every((row) => row.hostId === trainedHost.id));
+  assert.ok(trainedRows.every((row) => row.supportId === trainedSupport.id));
+
+  const fallbackRows = run(
+    [untrainedHost, untrainedSupport],
+    slots.slice(0, 2).flatMap((slot) => [
+      available("host", untrainedHost.id, "2026-08-13", slot, "studio"),
+      available("support", untrainedSupport.id, "2026-08-13", slot)
+    ])
+  );
+  assert.ok(fallbackRows.every((row) => row.hostId === untrainedHost.id));
+  assert.ok(fallbackRows.every((row) => row.supportId === untrainedSupport.id));
+  assert.ok(fallbackRows.every((row) => row.status === "published"));
+});
+
 test("weekend six-hour block only uses a _6H Support", () => {
   const hosts = [
     person("HRLT01", "host"),
