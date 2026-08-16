@@ -99,6 +99,15 @@ function buildPersonKey(role: EmployeeRole, employeeId: string) {
   return `${role}:${employeeId.trim().toLowerCase()}`;
 }
 
+function parsePersonKey(personKey: string): { role?: EmployeeRole; employeeId: string } {
+  const [rawRole, ...rest] = personKey.split(":");
+  const employeeId = rest.join(":").trim();
+  if (rawRole === "host" || rawRole === "support") {
+    return { role: rawRole, employeeId };
+  }
+  return { employeeId: personKey };
+}
+
 function locationPreferenceFromWorkLocation(workLocation?: string): AvailabilityLocationPreference | undefined {
   const normalized = normalizeText(workLocation).toLowerCase();
   if (normalized === "home") return "home";
@@ -540,20 +549,21 @@ export async function importAvailabilityFromCollectSheets(
 
     if (options.force === true && targetWeekStartKey) {
       const existingWeeks = await weeks
-        .find({ weekStartKey: targetWeekStartKey }, { projection: { personKey: 1, employeeId: 1, role: 1 } })
+        .find({ weekStartKey: targetWeekStartKey }, { projection: { personKey: 1 } })
         .toArray();
       const staleWeeks = existingWeeks.filter((entry) => !importedPersonWeekKeys.has(`${entry.personKey}:${targetWeekStartKey}`));
 
       for (const stale of staleWeeks) {
+        const parsedStale = parsePersonKey(stale.personKey);
         conflicts.push(buildConflict(
           runId,
           "sheet_to_website",
           "force_import",
-          `Force import tuần ${targetWeekStartKey}: xóa dữ liệu website của ${stale.employeeId || stale.personKey} vì nhân sự này không còn trên sheet.`,
+          `Force import tuần ${targetWeekStartKey}: xóa dữ liệu website của ${parsedStale.employeeId || stale.personKey} vì nhân sự này không còn trên sheet.`,
           {
             weekStartKey: targetWeekStartKey,
-            role: stale.role,
-            employeeId: stale.employeeId
+            role: parsedStale.role,
+            employeeId: parsedStale.employeeId
           }
         ));
       }
