@@ -115,6 +115,25 @@ function formatTimestamp(value?: string) {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
 
+function getDriveSyncMeta(employee: SchedulePerson) {
+  const driveSync = employee.contractProfile?.driveSync;
+  if (!driveSync) {
+    return { tone: "empty", label: "Chưa sync Drive", detail: "Chưa có lần sync nào" } as const;
+  }
+  if (driveSync.status === "success") {
+    return {
+      tone: "complete",
+      label: "Đã sync Drive",
+      detail: driveSync.syncedAt ? `Lần cuối ${formatTimestamp(driveSync.syncedAt)}` : "Sync thành công"
+    } as const;
+  }
+  return {
+    tone: "partial",
+    label: "Drive lỗi",
+    detail: driveSync.error || "Sync Google Drive thất bại"
+  } as const;
+}
+
 export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   const [employees, setEmployees] = useState<SchedulePerson[]>([]);
   const [locations, setLocations] = useState<ScheduleLocation[]>([]);
@@ -243,6 +262,28 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
     window.location.href = "/login";
   }
 
+  async function syncDrive(employee: SchedulePerson) {
+    setBusy(`drive:${employee.role}:${employee.id}`);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/contract-profile/sync-drive", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: employee.role, employeeId: employee.id })
+      });
+      const payload = await response.json() as { success?: boolean; message?: string };
+      if (!response.ok || !payload.success) throw new Error(payload.message || "Không sync lại được Google Drive.");
+      setMessage(payload.message || `Đã sync lại hồ sơ Drive cho ${employee.name}.`);
+      await loadData();
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Không sync lại được Google Drive.");
+      await loadData().catch(() => undefined);
+    } finally {
+      setBusy("");
+    }
+  }
+
   const activeEmployees = employees.filter((employee) => employee.active !== false);
   const completedContractCount = activeEmployees.filter((employee) => employee.contractProfile?.completed).length;
   const locationNameByCode = new Map(locations.map((location) => [location.code, location.name]));
@@ -344,10 +385,10 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
                     <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? `Rating ${employee.rating || "Chưa chấm"} · ${locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm"}` : `Rating ${employee.trainingProfile?.rating || employee.rating || "Chưa chấm"} · Offer ${employee.trainingProfile?.cashOffer || employee.cashOffer || "Chưa có"}`}</small></span></td>
                     <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong><small>{employee.role === "support" && employee.trainingProfile ? `${employee.trainingProfile.scorePercent}% checklist` : ""}</small></span></td>
-                    <td data-label="Hợp đồng"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span></td>
+                    <td data-label="Hợp đồng"><span className="employeeStackValue"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span><small className={`employeeDriveSyncNote ${getDriveSyncMeta(employee).tone}`}>{getDriveSyncMeta(employee).label} · {getDriveSyncMeta(employee).detail}</small></span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a>{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
+                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a>{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button className="sync" disabled={busy === `drive:${employee.role}:${employee.id}`} onClick={() => void syncDrive(employee)} type="button">{busy === `drive:${employee.role}:${employee.id}` ? "Đang sync..." : "Sync Drive"}</button><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>

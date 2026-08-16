@@ -46,6 +46,12 @@ export type SchedulePerson = {
     hasFront: boolean;
     hasBack: boolean;
     updatedAt?: string;
+    driveSync?: {
+      status: "success" | "error";
+      syncedAt?: string;
+      folderId?: string;
+      error?: string;
+    };
   };
   trainingProfile?: {
     rating: string;

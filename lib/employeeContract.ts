@@ -73,6 +73,7 @@ export type EmployeeContractSummary = {
   hasFront: boolean;
   hasBack: boolean;
   updatedAt?: string;
+  driveSync?: EmployeeContractDriveSyncStatus;
 };
 
 export type EmployeeContractProfileRecord = EmployeeContractProfile & {
@@ -350,13 +351,21 @@ export async function saveEmployeeContractFile(input: {
 export async function listEmployeeContractSummaries() {
   const collection = await getContractCollection();
   const documents = await collection.find({}, {
-    projection: { personKey: 1, completed: 1, citizenIdFront: 1, citizenIdBack: 1, updatedAt: 1 }
+    projection: { personKey: 1, completed: 1, citizenIdFront: 1, citizenIdBack: 1, updatedAt: 1, driveSync: 1 }
   }).toArray();
   return new Map(documents.map((document) => [document.personKey, {
     completed: document.completed,
     hasFront: Boolean(document.citizenIdFront?.publicId),
     hasBack: Boolean(document.citizenIdBack?.publicId),
-    updatedAt: document.updatedAt?.toISOString()
+    updatedAt: document.updatedAt?.toISOString(),
+    driveSync: document.driveSync
+      ? {
+          status: document.driveSync.status,
+          syncedAt: document.driveSync.syncedAt?.toISOString(),
+          folderId: document.driveSync.folderId || undefined,
+          error: document.driveSync.error || undefined
+        }
+      : undefined
   } satisfies EmployeeContractSummary]));
 }
 

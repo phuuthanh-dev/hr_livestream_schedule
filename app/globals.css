@@ -5812,6 +5812,19 @@ a:hover {
 .employeeContractBadge.partial { color: #8a5600; background: #fff0ca; }
 .employeeContractBadge.empty { color: #7a6864; background: #eee9e6; }
 
+.employeeDriveSyncNote {
+  display: block;
+  margin-top: 5px;
+  max-width: 240px;
+  font-size: 0.58rem;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.employeeDriveSyncNote.complete { color: #0f615b; }
+.employeeDriveSyncNote.partial { color: #8a5600; }
+.employeeDriveSyncNote.empty { color: #7a6864; }
+
 .employeeRowActions a {
   display: inline-flex;
   min-height: 31px;
@@ -9052,6 +9065,12 @@ a:hover {
   border-color: #b9ddd7;
   color: #0f615b;
   background: #edf9f6;
+}
+
+.employeeRowActions button.sync {
+  border-color: #bfd8f6;
+  color: #22518e;
+  background: #eff6ff;
 }
 
 .employeeRowActions button.danger {
