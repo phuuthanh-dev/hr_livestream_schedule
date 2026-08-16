@@ -379,6 +379,8 @@ function rebalanceHosts(
     if (isCriticalHostDemand(item.row.slot, lane)) return;
     const currentHost = item.host;
     if (!currentHost) return;
+    const hostCandidates = item.hostCandidates || [];
+    if (hostCandidates.length < 2) return;
 
     const currentKey = personKey("host", currentHost.id);
     const currentWeekCount = getCount(hostWeekCounts, currentKey);
@@ -386,7 +388,7 @@ function rebalanceHosts(
     const currentDayCount = getCount(hostDayCounts, currentDayKey);
     const currentRank = hostRank(currentHost.level);
 
-    const replacement = item.hostCandidates
+    const replacement = hostCandidates
       .filter((candidate) => candidate.person.id !== currentHost.id)
       .map((candidate) => {
         const candidateKey = personKey("host", candidate.person.id);
