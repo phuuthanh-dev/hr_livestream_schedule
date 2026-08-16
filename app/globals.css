@@ -5868,6 +5868,28 @@ a:hover {
 .employeeDriveSyncNote.partial { color: #8a5600; }
 .employeeDriveSyncNote.empty { color: #7a6864; }
 
+.employeeActionInline {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.employeePrimaryAction {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #b9ddd7;
+  border-radius: 10px;
+  color: #0f615b;
+  background: #edf9f6;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .employeeRowActions a {
   display: inline-flex;
   width: 100%;
@@ -9670,6 +9692,15 @@ a:hover {
   .employeeActionMenu {
     width: 100%;
     justify-content: stretch;
+  }
+
+  .employeeActionInline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .employeePrimaryAction {
+    width: 100%;
   }
 
   .employeeActionMenu summary {
