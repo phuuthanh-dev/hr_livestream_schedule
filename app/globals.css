@@ -2461,6 +2461,21 @@ a:hover {
     margin-left: 0;
   }
 
+  .appHeaderMiddle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: block;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .appHeaderMiddle::-webkit-scrollbar {
+    display: none;
+  }
+
   .calendarSidebar {
     display: block;
   }
@@ -4926,6 +4941,7 @@ a:hover {
     background: rgba(255, 255, 255, 0.97);
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
+    align-items: start;
   }
 
   .brandBlock {
@@ -4950,6 +4966,9 @@ a:hover {
     grid-column: 2;
     grid-row: 1;
     gap: 1px;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .headerActions > .iconButton {
@@ -5014,6 +5033,7 @@ a:hover {
     min-height: 38px;
     padding: 0 12px;
     flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .iconButtonGroup .iconButton {
@@ -5036,6 +5056,37 @@ a:hover {
 
   .currentRange span {
     display: none;
+  }
+
+  .employeeHeaderNavigation {
+    display: inline-flex;
+    width: max-content;
+    min-width: max-content;
+    padding-right: 10px;
+  }
+
+  .contractHeader .headerActions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .contractHeader .contractHeaderIdentity {
+    min-width: 0;
+    grid-column: 1 / -1;
+    text-align: left;
+    justify-self: start;
+  }
+
+  .contractHeader .contractHeaderIdentity strong,
+  .contractHeader .contractHeaderIdentity span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .calendarSidebar {
@@ -5933,16 +5984,31 @@ a:hover {
   .contractHeader { grid-template-columns: 1fr auto; }
   .contractHeader > .todayButton { grid-row: 2; }
   .contractHeaderIdentity { grid-row: 2; }
-  .contractWorkspace { padding: 10px; }
+  .contractWorkspace {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px;
+    gap: 12px;
+  }
   .contractIntro,
   .contractSurface { border-radius: 22px; }
   .contractIntro { padding: 28px 22px; }
   .contractIntro h1 { font-size: 2.7rem; }
   .contractSurface { padding: 12px; }
-  .contractSection { padding: 17px 14px; }
+  .contractSection {
+    min-width: 0;
+    padding: 17px 14px;
+  }
   .contractFieldGrid,
   .contractUploadGrid { grid-template-columns: 1fr; }
   .contractFieldGrid label.wide { grid-column: auto; }
+  .contractFieldGrid label,
+  .contractSurface,
+  .contractFieldGrid input,
+  .contractFieldGrid textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
   .contractFormFooter { align-items: stretch; flex-direction: column; }
   .contractFormFooter button { width: 100%; }
 }
@@ -9712,6 +9778,7 @@ a:hover {
   }
 
   .employeeActionMenu {
+    display: block;
     width: 100%;
     justify-content: stretch;
   }
