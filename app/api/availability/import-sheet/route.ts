@@ -14,8 +14,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = await request.json().catch(() => ({})) as { weekStartKey?: string };
-    const payload = await importAvailabilityFromCollectSheets(session.accountKey, body.weekStartKey);
+    const body = await request.json().catch(() => ({})) as { weekStartKey?: string; force?: boolean };
+    const payload = await importAvailabilityFromCollectSheets(session.accountKey, body.weekStartKey, {
+      force: body.force === true
+    });
     return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json(

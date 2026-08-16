@@ -277,6 +277,7 @@ export type AvailabilitySheetSyncConflictKind =
   | "unknown_employee"
   | "invalid_row"
   | "import_blocked"
+  | "force_import"
   | "website_overwrite"
   | "sheet_overwrite"
   | "missing_sheet_row";

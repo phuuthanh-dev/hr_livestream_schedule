@@ -48,6 +48,10 @@ export type SheetAvailabilitySyncSummary = {
   message?: string;
 };
 
+type AvailabilityImportOptions = {
+  force?: boolean;
+};
+
 type ParsedSheetRow = {
   dateKey: string;
   slots: Map<string, string[]>;
@@ -333,7 +337,8 @@ async function updateCollectTabWeek(
 
 export async function importAvailabilityFromCollectSheets(
   actorAccountKey: string,
-  requestedWeekStartKey?: string
+  requestedWeekStartKey?: string,
+  options: AvailabilityImportOptions = {}
 ): Promise<SheetAvailabilityImportSummary> {
   const runId = randomUUID();
   const startedAt = new Date();
@@ -432,6 +437,52 @@ export async function importAvailabilityFromCollectSheets(
     let importedSlots = 0;
     let importedPeople = 0;
 
+    async function writeImportedWeek(entry: {
+      role: EmployeeRole;
+      employeeId: string;
+      weekStartKey: string;
+      slots: ImportedAvailabilitySlot[];
+    }, personKey: string, normalizedEmployeeId: string) {
+      await Promise.all([
+        weeks.updateOne(
+          { personKey, weekStartKey: entry.weekStartKey },
+          {
+            $set: {
+              role: entry.role,
+              employeeId: entry.employeeId,
+              normalizedEmployeeId,
+              status: "submitted",
+              submittedAt: now,
+              lockedAt: null,
+              lockedReason: "",
+              updatedAt: now,
+              updatedBy: actorAccountKey
+            }
+          },
+          { upsert: true }
+        ),
+        slots.deleteMany({ personKey, weekStartKey: entry.weekStartKey })
+      ]);
+
+      if (entry.slots.length > 0) {
+        await slots.insertMany(
+          entry.slots.map((slot) => ({
+            personKey,
+            role: entry.role,
+            employeeId: entry.employeeId,
+            normalizedEmployeeId,
+            weekStartKey: entry.weekStartKey,
+            dateKey: slot.dateKey,
+            slot: slot.slot,
+            available: true,
+            locationPreference: slot.locationPreference,
+            updatedAt: now,
+            updatedBy: actorAccountKey
+          }))
+        );
+      }
+    }
+
     for (const entry of availabilityByPersonWeek.values()) {
       const personKey = buildPersonKey(entry.role, entry.employeeId);
       const normalizedEmployeeId = entry.employeeId.toLowerCase();
@@ -445,6 +496,20 @@ export async function importAvailabilityFromCollectSheets(
 
       if (hasWebsiteData) {
         if (existingSignature !== importedSignature) {
+          if (options.force === true) {
+            conflicts.push(buildConflict(
+              runId,
+              "sheet_to_website",
+              "force_import",
+              `Force import tuần ${entry.weekStartKey} của ${entry.employeeId}: sheet ghi đè dữ liệu website.`,
+              { weekStartKey: entry.weekStartKey, role: entry.role, employeeId: entry.employeeId }
+            ));
+            await writeImportedWeek(entry, personKey, normalizedEmployeeId);
+            importedSlots += entry.slots.length;
+            importedPeople += 1;
+            continue;
+          }
+
           protectedWeeks.add(`${personKey}:${entry.weekStartKey}`);
           conflicts.push(buildConflict(
             runId,
@@ -468,42 +533,7 @@ export async function importAvailabilityFromCollectSheets(
 
       importedSlots += entry.slots.length;
       importedPeople += 1;
-
-      await weeks.updateOne(
-        { personKey, weekStartKey: entry.weekStartKey },
-        {
-          $set: {
-            role: entry.role,
-            employeeId: entry.employeeId,
-            normalizedEmployeeId,
-            status: "submitted",
-            submittedAt: now,
-            lockedAt: null,
-            lockedReason: "",
-            updatedAt: now,
-            updatedBy: actorAccountKey
-          }
-        },
-        { upsert: true }
-      );
-
-      if (entry.slots.length > 0) {
-        await slots.insertMany(
-          entry.slots.map((slot) => ({
-            personKey,
-            role: entry.role,
-            employeeId: entry.employeeId,
-            normalizedEmployeeId,
-            weekStartKey: entry.weekStartKey,
-            dateKey: slot.dateKey,
-            slot: slot.slot,
-            available: true,
-            locationPreference: slot.locationPreference,
-            updatedAt: now,
-            updatedBy: actorAccountKey
-          }))
-        );
-      }
+      await writeImportedWeek(entry, personKey, normalizedEmployeeId);
     }
 
     const result = {
@@ -519,9 +549,11 @@ export async function importAvailabilityFromCollectSheets(
       skippedProtectedWeeks: protectedWeeks.size,
       skippedUnknownEmployees: Array.from(missingEmployees).sort(),
       skippedInvalidRows: [...hostParsed.invalidRows, ...supportParsed.invalidRows],
-      message: protectedWeeks.size > 0
-        ? `Đã import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo. Bỏ qua ${protectedWeeks.size} tuần đã có dữ liệu trên website.`
-        : `Đã import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo.`
+      message: options.force === true
+        ? `Đã force import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo.`
+        : protectedWeeks.size > 0
+          ? `Đã import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo. Bỏ qua ${protectedWeeks.size} tuần đã có dữ liệu trên website.`
+          : `Đã import ${importedSlots} slot lịch rảnh từ 2 tab collect vào Mongo.`
     };
     await persistSyncRun({
       run: {

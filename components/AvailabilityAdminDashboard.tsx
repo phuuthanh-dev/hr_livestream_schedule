@@ -253,7 +253,11 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
-  async function importAvailabilityFromSheet() {
+  async function importAvailabilityFromSheet(force = false) {
+    if (force) {
+      const confirmed = window.confirm(`Force pull tuần ${formatWeekRange(weekStartKey)} từ Sheet về Website? Dữ liệu lịch rảnh trên website của tuần này sẽ bị sheet ghi đè.`);
+      if (!confirmed) return;
+    }
     setImportingSheet(true);
     setError("");
     setScheduleMessage("");
@@ -262,7 +266,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       const response = await fetch("/api/availability/import-sheet", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ weekStartKey })
+        body: JSON.stringify({ weekStartKey, force })
       });
       const result = await response.json() as {
         success?: boolean;
@@ -396,6 +400,15 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
             >
               <Icon name="users" size={18} />
               <span>{importingSheet ? "Đang import" : "Kéo từ Sheet"}</span>
+            </button>
+            <button
+              className="availabilitySummaryRefresh"
+              disabled={loading || importingSheet || syncingSheet}
+              onClick={() => void importAvailabilityFromSheet(true)}
+              type="button"
+            >
+              <Icon name="warning" size={18} />
+              <span>{importingSheet ? "Đang force pull" : "Force pull Sheet"}</span>
             </button>
             <button
               className="availabilitySummaryRefresh"
