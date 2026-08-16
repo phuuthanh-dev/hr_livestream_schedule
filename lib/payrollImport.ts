@@ -24,6 +24,11 @@ export type ParsedTikTokReport = {
 
 type Cell = Row[number];
 
+type ReportDateRange = {
+  from: string;
+  to: string;
+};
+
 function cleanText(value: Cell) {
   return value == null ? "" : String(value).trim().replace(/^\uFEFF/, "");
 }
@@ -53,19 +58,58 @@ function parseCount(value: Cell) {
 
 function parseBangkokDate(value: Cell) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-  const text = cleanText(value);
+  return null;
+}
+
+function parseDateKeyFromCompact(value: string) {
+  if (!/^\d{8}$/.test(value)) return "";
+  const year = value.slice(0, 4);
+  const month = value.slice(4, 6);
+  const day = value.slice(6, 8);
+  return `${year}-${month}-${day}`;
+}
+
+function parseReportDateRange(fileName: string): ReportDateRange | null {
+  const match = fileName.match(/(\d{8})-(\d{8})/);
+  if (!match) return null;
+  const from = parseDateKeyFromCompact(match[1]);
+  const to = parseDateKeyFromCompact(match[2]);
+  if (!from || !to) return null;
+  return { from, to };
+}
+
+function buildUtcDate(year: number, month: number, day: number, hour: number, minute: number, second: number) {
+  const date = new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateWithinRange(date: Date, range: ReportDateRange) {
+  const dateKey = formatScheduleDateKey(date, "Asia/Bangkok");
+  return dateKey >= range.from && dateKey <= range.to;
+}
+
+function parseBangkokDateText(text: string, range?: ReportDateRange | null) {
   const match = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
   if (!match) return null;
-  const [, day, month, year, hour = "0", minute = "0", second = "0"] = match;
-  const date = new Date(Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour) - 7,
-    Number(minute),
-    Number(second)
-  ));
-  return Number.isNaN(date.getTime()) ? null : date;
+  const [, first, second, year, hour = "0", minute = "0", secondValue = "0"] = match;
+  const firstNumber = Number(first);
+  const secondNumber = Number(second);
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
+  const secondNumberValue = Number(secondValue);
+  const ddMm = buildUtcDate(Number(year), secondNumber, firstNumber, hourNumber, minuteNumber, secondNumberValue);
+  const mmDd = buildUtcDate(Number(year), firstNumber, secondNumber, hourNumber, minuteNumber, secondNumberValue);
+
+  if (range) {
+    const ddMmMatches = ddMm ? dateWithinRange(ddMm, range) : false;
+    const mmDdMatches = mmDd ? dateWithinRange(mmDd, range) : false;
+    if (ddMmMatches && !mmDdMatches) return ddMm;
+    if (mmDdMatches && !ddMmMatches) return mmDd;
+  }
+
+  if (firstNumber > 12 && ddMm) return ddMm;
+  if (secondNumber > 12 && mmDd) return mmDd;
+  return ddMm || mmDd;
 }
 
 function findColumn(headers: string[], candidates: string[]) {
@@ -113,6 +157,7 @@ async function readRows(buffer: Buffer, fileName: string): Promise<Row[]> {
 
 export async function parseTikTokReport(buffer: Buffer, fileName: string): Promise<ParsedTikTokReport> {
   const rows = await readRows(buffer, fileName);
+  const reportDateRange = parseReportDateRange(fileName);
   const headerIndex = rows.slice(0, 10).findIndex((row) => {
     const headers = row.map(normalizeHeader);
     return headers.some((header) => header.includes("id buoi live"))
@@ -143,8 +188,8 @@ export async function parseTikTokReport(buffer: Buffer, fileName: string): Promi
     const rowNumber = headerIndex + offset + 2;
     const liveId = cleanText(row[columns.liveId]);
     const accountId = cleanText(row[columns.account]);
-    const startAt = parseBangkokDate(row[columns.start]);
-    const endAt = parseBangkokDate(row[columns.end]);
+    const startAt = parseBangkokDate(row[columns.start]) || parseBangkokDateText(cleanText(row[columns.start]), reportDateRange);
+    const endAt = parseBangkokDate(row[columns.end]) || parseBangkokDateText(cleanText(row[columns.end]), reportDateRange);
     if (!liveId || !accountId || !startAt || !endAt || endAt <= startAt) {
       if (row.some((value) => cleanText(value))) invalidRows += 1;
       return;

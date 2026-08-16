@@ -145,3 +145,13 @@ test("CSV TikTok report is normalized with Vietnamese currency", async () => {
   assert.equal(parsed.rows[0].returnedGmv, 1_000_000);
   assert.equal(parsed.rows[0].dateKey, "2026-08-13");
 });
+
+test("TikTok XLSX-style filename range resolves ambiguous MM/DD dates correctly", async () => {
+  const csv = [
+    "Tiêu đề buổi LIVE,ID buổi LIVE,Thời gian bắt đầu LIVE,Thời gian kết thúc LIVE,Tên nhà sáng tạo,GMV nhờ buổi LIVE của nhà sáng tạo,Hoàn tiền,Đơn hàng nhờ buổi LIVE",
+    'Ca test,123,08/07/2026 18:07,08/07/2026 18:33,creator_one,"165.000₫","0₫",1'
+  ].join("\n");
+  const parsed = await parseTikTokReport(Buffer.from(csv, "utf8"), "Transaction_Analysis_Live_List_20260807-20260807.csv");
+  assert.equal(parsed.rows.length, 1);
+  assert.equal(parsed.rows[0].dateKey, "2026-08-07");
+});
