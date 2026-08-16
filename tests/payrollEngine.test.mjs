@@ -16,6 +16,7 @@ const settings = {
 
 const people = [
   { id: "H01", name: "Host One", role: "host", level: "C", active: true },
+  { id: "H02", name: "Host Two", role: "host", level: "C", active: true },
   { id: "S01", name: "Support One", role: "support", level: "Cấp 1", active: true }
 ];
 
@@ -120,6 +121,47 @@ test("a six-minute overrun does not add the following two-hour schedule slot", (
   const result = calculate([first, second], [fragment({ startAt: new Date("2026-08-13T03:04:00.000Z"), endAt: new Date("2026-08-13T05:06:00.000Z") })]);
   assert.equal(result.entries.find((entry) => entry.role === "host").scheduledHours, 2);
   assert.ok(result.exceptions.some((item) => item.type === "missing_report" && item.sessionId === "SESSION_2"));
+});
+
+test("back-to-back fragments with different hosts split instead of raising ambiguous assignment", () => {
+  const first = session({
+    sessionId: "SESSION_1",
+    slot: "18:00 - 20:00",
+    slotSortKey: "1080",
+    hostId: "H01",
+    hostName: "Host One"
+  });
+  const second = session({
+    sessionId: "SESSION_2",
+    slot: "20:00 - 22:00",
+    slotSortKey: "1200",
+    hostId: "H02",
+    hostName: "Host Two"
+  });
+  const result = calculate([first, second], [
+    fragment({
+      fragmentKey: "a",
+      tiktokLiveId: "A",
+      startAt: new Date("2026-08-13T11:17:00.000Z"),
+      endAt: new Date("2026-08-13T13:00:00.000Z"),
+      grossGmv: 1_000_000,
+      returnedGmv: 0
+    }),
+    fragment({
+      fragmentKey: "b",
+      tiktokLiveId: "B",
+      startAt: new Date("2026-08-13T13:05:00.000Z"),
+      endAt: new Date("2026-08-13T15:00:00.000Z"),
+      grossGmv: 2_000_000,
+      returnedGmv: 0
+    })
+  ]);
+  const hostEntries = result.entries.filter((entry) => entry.role === "host").sort((left, right) => left.sessionIds[0].localeCompare(right.sessionIds[0]));
+  assert.equal(hostEntries.length, 2);
+  assert.deepEqual(hostEntries.map((entry) => entry.employeeId), ["H01", "H02"]);
+  assert.deepEqual(hostEntries.map((entry) => entry.scheduledHours), [2, 2]);
+  assert.deepEqual(hostEntries.map((entry) => entry.tiktokLiveIds), [["A"], ["B"]]);
+  assert.equal(result.exceptions.filter((item) => item.type === "ambiguous_assignment").length, 0);
 });
 
 test("confirmed shifts without a report are exceptions and receive no automatic payroll", () => {

@@ -20,6 +20,7 @@ type LogicalLive = {
   grossGmv: number;
   returnedGmv: number;
   tiktokLiveIds: string[];
+  fragments: TikTokReportFragment[];
 };
 
 export type PayrollCalculationInput = {
@@ -78,6 +79,29 @@ function overlapMilliseconds(
   return Math.max(0, Math.min(left.endAt.getTime(), right.endAt.getTime()) - Math.max(left.startAt.getTime(), right.startAt.getTime()));
 }
 
+function buildLogicalLive(fragments: TikTokReportFragment[]): LogicalLive {
+  const sorted = fragments.slice().sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
+  const first = sorted[0];
+  return sorted.slice(1).reduce<LogicalLive>((live, fragment) => {
+    live.endAt = new Date(Math.max(live.endAt.getTime(), fragment.endAt.getTime()));
+    live.grossGmv += fragment.grossGmv;
+    live.returnedGmv += fragment.returnedGmv;
+    if (!live.tiktokLiveIds.includes(fragment.tiktokLiveId)) live.tiktokLiveIds.push(fragment.tiktokLiveId);
+    live.fragments.push(fragment);
+    return live;
+  }, {
+    key: hashKey([first.dateKey, normalizeAccount(first.accountId), first.tiktokLiveId, first.startAt.toISOString()]),
+    dateKey: first.dateKey,
+    accountId: first.accountId,
+    startAt: first.startAt,
+    endAt: first.endAt,
+    grossGmv: first.grossGmv,
+    returnedGmv: first.returnedGmv,
+    tiktokLiveIds: [first.tiktokLiveId],
+    fragments: [first]
+  });
+}
+
 function joinFragments(fragments: TikTokReportFragment[], gapMinutes: number): LogicalLive[] {
   const buckets = new Map<string, TikTokReportFragment[]>();
   fragments.forEach((fragment) => {
@@ -90,31 +114,50 @@ function joinFragments(fragments: TikTokReportFragment[], gapMinutes: number): L
   const lives: LogicalLive[] = [];
   buckets.forEach((bucket) => {
     const sorted = bucket.slice().sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
-    let current: LogicalLive | null = null;
+    let currentFragments: TikTokReportFragment[] = [];
     sorted.forEach((fragment) => {
-      const withinGap = current
-        && fragment.startAt.getTime() - current.endAt.getTime() <= gapMinutes * 60_000;
-      if (!current || !withinGap) {
-        current = {
-          key: hashKey([fragment.dateKey, normalizeAccount(fragment.accountId), fragment.tiktokLiveId, fragment.startAt.toISOString()]),
-          dateKey: fragment.dateKey,
-          accountId: fragment.accountId,
-          startAt: fragment.startAt,
-          endAt: fragment.endAt,
-          grossGmv: fragment.grossGmv,
-          returnedGmv: fragment.returnedGmv,
-          tiktokLiveIds: [fragment.tiktokLiveId]
-        };
-        lives.push(current);
+      const previous = currentFragments[currentFragments.length - 1];
+      const withinGap = previous
+        && fragment.startAt.getTime() - previous.endAt.getTime() <= gapMinutes * 60_000;
+      if (!withinGap) {
+        if (currentFragments.length > 0) lives.push(buildLogicalLive(currentFragments));
+        currentFragments = [fragment];
         return;
       }
-      current.endAt = new Date(Math.max(current.endAt.getTime(), fragment.endAt.getTime()));
-      current.grossGmv += fragment.grossGmv;
-      current.returnedGmv += fragment.returnedGmv;
-      if (!current.tiktokLiveIds.includes(fragment.tiktokLiveId)) current.tiktokLiveIds.push(fragment.tiktokLiveId);
+      currentFragments.push(fragment);
     });
+    if (currentFragments.length > 0) lives.push(buildLogicalLive(currentFragments));
   });
   return lives.sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
+}
+
+function matchSessionsToLives(
+  sessions: ScheduleSession[],
+  lives: LogicalLive[],
+  sessionRanges: Map<string, ReturnType<typeof parseSlotRange>>
+) {
+  const sessionsByLive = new Map<string, ScheduleSession[]>();
+  const matchedSessionIds = new Set<string>();
+  sessions.forEach((session) => {
+    const range = sessionRanges.get(session.sessionId);
+    if (!range) return;
+    const candidates = lives
+      .filter((live) => live.dateKey === session.dateKey && normalizeAccount(live.accountId) === normalizeAccount(session.channel))
+      .map((live) => ({
+        live,
+        overlap: overlapMilliseconds(range, live),
+        minimumOverlap: Math.min(30 * 60_000, (live.endAt.getTime() - live.startAt.getTime()) / 2)
+      }))
+      .filter((candidate) => candidate.overlap >= candidate.minimumOverlap)
+      .sort((left, right) => right.overlap - left.overlap);
+    const best = candidates[0];
+    if (!best) return;
+    const bucket = sessionsByLive.get(best.live.key) || [];
+    bucket.push(session);
+    sessionsByLive.set(best.live.key, bucket);
+    matchedSessionIds.add(session.sessionId);
+  });
+  return { sessionsByLive, matchedSessionIds };
 }
 
 function canonicalGrade(role: PayrollRole, value: string) {
@@ -163,27 +206,11 @@ export function calculatePayroll(input: PayrollCalculationInput) {
   });
 
   const liveByKey = new Map(lives.map((live) => [live.key, live]));
-  const sessionsByLive = new Map<string, ScheduleSession[]>();
-  const matchedSessionIds = new Set<string>();
-  usableSessions.filter((session) => session.channel.trim()).forEach((session) => {
-    const range = sessionRanges.get(session.sessionId);
-    if (!range) return;
-    const candidates = lives
-      .filter((live) => live.dateKey === session.dateKey && normalizeAccount(live.accountId) === normalizeAccount(session.channel))
-      .map((live) => ({
-        live,
-        overlap: overlapMilliseconds(range, live),
-        minimumOverlap: Math.min(30 * 60_000, (live.endAt.getTime() - live.startAt.getTime()) / 2)
-      }))
-      .filter((candidate) => candidate.overlap >= candidate.minimumOverlap)
-      .sort((left, right) => right.overlap - left.overlap);
-    const best = candidates[0];
-    if (!best) return;
-    const bucket = sessionsByLive.get(best.live.key) || [];
-    bucket.push(session);
-    sessionsByLive.set(best.live.key, bucket);
-    matchedSessionIds.add(session.sessionId);
-  });
+  const { sessionsByLive, matchedSessionIds } = matchSessionsToLives(
+    usableSessions.filter((session) => session.channel.trim()),
+    lives,
+    sessionRanges
+  );
 
   lives.forEach((live) => {
     if (sessionsByLive.has(live.key)) return;
@@ -221,6 +248,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
   sessionsByLive.forEach((sessions, liveKey) => {
     const live = liveByKey.get(liveKey);
     if (!live) return;
+    if (processSplitLive(live, sessions)) return;
     const eligibleGmv = Math.max(0, live.grossGmv - live.returnedGmv);
     const confirmedHostSessions = sessions.filter((session) => {
       if (session.isHostConfirmed) return true;
@@ -268,6 +296,69 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     });
     supportGroups.forEach((supportSessions) => buildEntry("support", supportSessions, live, eligibleGmv));
   });
+
+  function processSplitLive(live: LogicalLive, sessions: ScheduleSession[]) {
+    const confirmedHostSessions = sessions.filter((session) => session.isHostConfirmed);
+    const hostIds = new Set(confirmedHostSessions.map((session) => session.hostId.toLowerCase()));
+    if (hostIds.size <= 1 || live.fragments.length <= 1) return false;
+    const fragmentLives = live.fragments.map((fragment) => buildLogicalLive([fragment]));
+    const { sessionsByLive: sessionsByFragment, matchedSessionIds: matchedFragmentSessionIds } = matchSessionsToLives(
+      sessions,
+      fragmentLives,
+      sessionRanges
+    );
+    if (sessionsByFragment.size <= 1) return false;
+    const canSplit = Array.from(sessionsByFragment.values()).every((fragmentSessions) => {
+      const fragmentHostIds = new Set(
+        fragmentSessions
+          .filter((session) => session.isHostConfirmed)
+          .map((session) => session.hostId.toLowerCase())
+      );
+      return fragmentHostIds.size <= 1;
+    }) && confirmedHostSessions.every((session) => matchedFragmentSessionIds.has(session.sessionId));
+    if (!canSplit) return false;
+    fragmentLives.forEach((fragmentLive) => {
+      const fragmentSessions = sessionsByFragment.get(fragmentLive.key);
+      if (!fragmentSessions?.length) return;
+      const eligibleGmv = Math.max(0, fragmentLive.grossGmv - fragmentLive.returnedGmv);
+      const fragmentConfirmedHostSessions = fragmentSessions.filter((session) => {
+        if (session.isHostConfirmed) return true;
+        exceptions.push({
+          exceptionKey: hashKey(["unconfirmed_shift", session.sessionId, "host"]),
+          type: "unconfirmed_shift",
+          dateKey: session.dateKey,
+          sessionId: session.sessionId,
+          employeeId: session.hostId,
+          message: `Host ${session.hostName || session.hostId} chưa xác nhận ca ${session.slot}; ca chưa được tính lương.`
+        });
+        return false;
+      });
+      if (fragmentConfirmedHostSessions.length > 0) {
+        buildEntry("host", fragmentConfirmedHostSessions, fragmentLive, eligibleGmv);
+      }
+
+      const supportGroups = new Map<string, ScheduleSession[]>();
+      fragmentSessions.filter((session) => getScheduleSessionLane(session) === "studio" && session.supportId).forEach((session) => {
+        if (!session.isSupportConfirmed) {
+          exceptions.push({
+            exceptionKey: hashKey(["unconfirmed_shift", session.sessionId, "support"]),
+            type: "unconfirmed_shift",
+            dateKey: session.dateKey,
+            sessionId: session.sessionId,
+            employeeId: session.supportId,
+            message: `Support ${session.supportName || session.supportId} chưa xác nhận ca ${session.slot}; ca chưa được tính lương.`
+          });
+          return;
+        }
+        const key = session.supportId.toLowerCase();
+        const bucket = supportGroups.get(key) || [];
+        bucket.push(session);
+        supportGroups.set(key, bucket);
+      });
+      supportGroups.forEach((supportSessions) => buildEntry("support", supportSessions, fragmentLive, eligibleGmv));
+    });
+    return true;
+  }
 
   function buildEntry(
     role: PayrollRole,
