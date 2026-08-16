@@ -5752,6 +5752,25 @@ a:hover {
 .contractFieldGrid input:focus,
 .contractFieldGrid textarea:focus { border-color: var(--contract-teal); box-shadow: 0 0 0 4px rgba(20, 120, 111, 0.1); }
 
+.contractSection.isLocked {
+  border-color: #d8dfdf;
+  background: linear-gradient(180deg, #f8faf9 0%, #f3f6f5 100%);
+}
+
+.contractForm.isLocked .contractFieldGrid label > span,
+.contractForm.isLocked .contractSection header p {
+  color: #7f8f92;
+}
+
+.contractForm.isLocked .contractFieldGrid input:disabled,
+.contractForm.isLocked .contractFieldGrid textarea:disabled {
+  border-color: #d6dfde;
+  color: #5a696c;
+  background: #eef3f2;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .contractUploadCard {
   display: grid;
   min-height: 176px;
@@ -5770,9 +5789,27 @@ a:hover {
 
 .contractUploadCard:hover { border-color: var(--contract-teal); background: #f0f8f5; transform: translateY(-1px); }
 .contractUploadCard.uploaded { border-style: solid; border-color: #a7d6c9; background: #f0faf6; }
+.contractUploadCard.locked {
+  border-style: solid;
+  border-color: #d6dfde;
+  color: #7d8b8e;
+  background: #eef3f2;
+  cursor: not-allowed;
+}
+.contractUploadCard.locked:hover {
+  border-color: #d6dfde;
+  background: #eef3f2;
+  transform: none;
+}
 .contractUploadCard svg { width: 32px; height: 32px; fill: none; stroke: var(--contract-teal); stroke-width: 1.7; }
 .contractUploadCard strong { color: #2c494d; font-size: 0.78rem; }
 .contractUploadCard span { max-width: 230px; overflow: hidden; font-size: 0.65rem; text-overflow: ellipsis; white-space: nowrap; }
+.contractUploadCard.locked svg,
+.contractUploadCard.locked strong,
+.contractUploadCard.locked a {
+  color: #607174;
+  stroke: #607174;
+}
 .contractUploadPreview { width: 100%; max-width: 220px; aspect-ratio: 16 / 10; border: 1px solid #c6dcda; border-radius: 16px; object-fit: cover; }
 .contractUploadCard input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .contractUploadCard a { margin-top: 3px; color: #0f766e; font-size: 0.68rem; text-decoration: underline; }
@@ -5795,6 +5832,12 @@ a:hover {
   box-shadow: 0 10px 22px rgba(203, 82, 56, 0.22);
   font-size: 0.76rem;
   font-weight: 850;
+}
+
+.contractFormFooter button:disabled {
+  color: #6d7d7f;
+  background: linear-gradient(135deg, #dce5e3, #cdd7d5);
+  box-shadow: none;
 }
 
 .employeeContractBadge {
@@ -5827,10 +5870,11 @@ a:hover {
 
 .employeeRowActions a {
   display: inline-flex;
-  min-height: 31px;
-  padding: 0 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px solid #b9ddd7;
-  border-radius: 8px;
+  border-radius: 10px;
   color: #0f615b;
   background: #edf9f6;
   align-items: center;
@@ -9032,18 +9076,69 @@ a:hover {
   background: #fcfefe;
 }
 
-.employeeRowActions {
+.employeeActionMenu {
+  position: relative;
   display: flex;
   justify-content: flex-end;
+}
+
+.employeeActionMenu summary {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d4dfe0;
+  border-radius: 10px;
+  color: #244244;
+  background: #fff;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.employeeActionMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.employeeActionMenu summary:hover {
+  border-color: #b9ddd7;
+  background: #f8fcfb;
+}
+
+.employeeActionMenu[open] summary {
+  border-color: #8fc8c0;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+  background: #f5fbfa;
+}
+
+.employeeRowActions {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 12;
+  display: grid;
+  width: 190px;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dce8e7;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 48px rgba(18, 39, 40, 0.16);
+  backdrop-filter: blur(14px);
 }
 
 .employeeRowActions button {
   display: inline-flex;
-  min-height: 31px;
-  padding: 0 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px solid #d4dfe0;
-  border-radius: 8px;
+  border-radius: 10px;
   color: #526467;
   background: #fff;
   align-items: center;
@@ -9572,12 +9667,21 @@ a:hover {
     text-align: right;
   }
 
-  .employeeRowActions {
-    padding-top: 7px;
+  .employeeActionMenu {
+    width: 100%;
+    justify-content: stretch;
   }
 
-  .employeeRowActions button {
-    flex: 1;
+  .employeeActionMenu summary {
+    width: 100%;
+  }
+
+  .employeeRowActions {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .employeeEditorBackdrop {

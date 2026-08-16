@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { google } from "googleapis";
 import { createGoogleJwt } from "@/lib/googleAuth";
 
@@ -122,7 +123,7 @@ export async function upsertDriveTextFile(input: {
       fileId: existing.id,
       media: {
         mimeType,
-        body: Buffer.from(input.content, "utf8")
+        body: Readable.from(Buffer.from(input.content, "utf8"))
       },
       requestBody: {
         name: input.fileName
@@ -140,7 +141,7 @@ export async function upsertDriveTextFile(input: {
     },
     media: {
       mimeType,
-      body: Buffer.from(input.content, "utf8")
+      body: Readable.from(Buffer.from(input.content, "utf8"))
     },
     fields: "id",
     supportsAllDrives: true
@@ -166,7 +167,7 @@ export async function upsertDriveBinaryFile(input: {
       fileId: existing.id,
       media: {
         mimeType: input.mimeType,
-        body: input.buffer
+        body: Readable.from(input.buffer)
       },
       requestBody: {
         name: input.fileName
@@ -184,7 +185,7 @@ export async function upsertDriveBinaryFile(input: {
     },
     media: {
       mimeType: input.mimeType,
-      body: input.buffer
+      body: Readable.from(input.buffer)
     },
     fields: "id",
     supportsAllDrives: true

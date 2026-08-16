@@ -39,7 +39,7 @@ type EmployeeAdminGuide = {
   cta?: string;
 };
 
-type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "search" | "trash" | "users";
+type IconName = "account" | "calendar" | "close" | "edit" | "location" | "logout" | "search" | "trash" | "users" | "more";
 
 const EMPTY_FORM: EmployeeForm = {
   id: "", name: "", role: "host", level: "", workLocation: "", phone: "", cvReference: "",
@@ -73,6 +73,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "edit") return <svg {...common}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>;
   if (name === "location") return <svg {...common}><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" /></svg>;
   if (name === "logout") return <svg {...common}><path d="M10 17l5-5-5-5M15 12H3M14 4h4a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3h-4" /></svg>;
+  if (name === "more") return <svg {...common}><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>;
   if (name === "search") return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
   if (name === "trash") return <svg {...common}><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
@@ -388,7 +389,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Hợp đồng"><span className="employeeStackValue"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span><small className={`employeeDriveSyncNote ${getDriveSyncMeta(employee).tone}`}>{getDriveSyncMeta(employee).label} · {getDriveSyncMeta(employee).detail}</small></span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a>{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button className="sync" disabled={busy === `drive:${employee.role}:${employee.id}`} onClick={() => void syncDrive(employee)} type="button">{busy === `drive:${employee.role}:${employee.id}` ? "Đang sync..." : "Sync Drive"}</button><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></td>
+                    <td data-label="Thao tác"><details className="employeeActionMenu"><summary><Icon name="more" size={16} /><span>Thao tác</span></summary><div className="employeeRowActions"><a href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a>{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button className="sync" disabled={busy === `drive:${employee.role}:${employee.id}`} onClick={() => void syncDrive(employee)} type="button">{busy === `drive:${employee.role}:${employee.id}` ? "Đang sync..." : "Sync Drive"}</button><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></details></td>
                   </tr>
                 ))}</tbody>
               </table>

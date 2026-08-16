@@ -311,8 +311,8 @@ export default function EmployeeContractForm({
           {message ? <div className="notice successNotice">{message}</div> : null}
           {employeeLocked ? <div className="notice successNotice">Hồ sơ hợp đồng đã hoàn tất 100%. Nhân viên chỉ còn quyền xem, không thể chỉnh sửa thêm.</div> : null}
           {loading ? <div className="contractLoading">Đang tải hồ sơ hợp đồng...</div> : (
-            <form className="contractForm" onSubmit={saveContract}>
-              <section className="contractSection">
+            <form className={`contractForm${employeeLocked ? " isLocked" : ""}`} onSubmit={saveContract}>
+              <section className={`contractSection${employeeLocked ? " isLocked" : ""}`}>
                 <header><span>01</span><div><strong>Thông tin cá nhân</strong><p>Dùng đúng thông tin trên CCCD.</p></div></header>
                 <div className="contractFieldGrid">
                   <label className="wide"><span>Gmail *</span><input autoComplete="email" disabled={employeeLocked} maxLength={180} onChange={(event) => updateField("gmail", event.target.value)} placeholder="tennhanvien@gmail.com" required type="email" value={form.gmail} /></label>
@@ -325,7 +325,7 @@ export default function EmployeeContractForm({
                 </div>
               </section>
 
-              <section className="contractSection">
+              <section className={`contractSection${employeeLocked ? " isLocked" : ""}`}>
                 <header><span>02</span><div><strong>Thông tin nhận thanh toán</strong><p>Tài khoản ngân hàng phải thuộc về nhân viên.</p></div></header>
                 <div className="contractFieldGrid">
                   <label><span>Số tài khoản *</span><input disabled={employeeLocked} inputMode="numeric" maxLength={30} onChange={(event) => updateField("bankAccountNumber", event.target.value.replace(/\D/g, ""))} required value={form.bankAccountNumber} /></label>
@@ -333,12 +333,12 @@ export default function EmployeeContractForm({
                 </div>
               </section>
 
-              <section className="contractSection">
+              <section className={`contractSection${employeeLocked ? " isLocked" : ""}`}>
                 <header><span>03</span><div><strong>Ảnh hai mặt CCCD</strong><p>JPEG, PNG hoặc WebP; tối đa 10 MB mỗi ảnh.</p></div></header>
                 <div className="contractUploadGrid">
                   {(["front", "back"] as const).map((side) => {
                     const uploaded = side === "front" ? profile?.citizenIdFront : profile?.citizenIdBack;
-                    return <label className={`contractUploadCard ${uploaded ? "uploaded" : ""}`} key={side}>
+                    return <label className={`contractUploadCard ${uploaded ? "uploaded" : ""}${employeeLocked ? " locked" : ""}`} key={side}>
                       <FileIcon />
                       <strong>{side === "front" ? "Mặt trước CCCD" : "Mặt sau CCCD"}</strong>
                       <span>{files[side]?.name || (uploaded ? "Đã lưu an toàn" : "Chọn ảnh để tải lên")}</span>
