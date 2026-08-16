@@ -121,6 +121,7 @@ export default function EmployeeContractForm({
   const [target, setTarget] = useState<ContractPayload["target"]>();
   const [profile, setProfile] = useState<EmployeeContractProfile | null>(null);
   const [files, setFiles] = useState<Record<EmployeeContractDocumentSide, File | null>>({ front: null, back: null });
+  const [previewUrls, setPreviewUrls] = useState<Record<EmployeeContractDocumentSide, string>>({ front: "", back: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -159,6 +160,17 @@ export default function EmployeeContractForm({
       });
     return () => { active = false; };
   }, [isAdmin, targetEmployeeId, targetRole]);
+
+  useEffect(() => {
+    const nextFront = files.front ? URL.createObjectURL(files.front) : "";
+    const nextBack = files.back ? URL.createObjectURL(files.back) : "";
+    setPreviewUrls({ front: nextFront, back: nextBack });
+
+    return () => {
+      if (nextFront) URL.revokeObjectURL(nextFront);
+      if (nextBack) URL.revokeObjectURL(nextBack);
+    };
+  }, [files.front, files.back]);
 
   function updateField(field: keyof ContractFormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -328,6 +340,7 @@ export default function EmployeeContractForm({
                       <FileIcon />
                       <strong>{side === "front" ? "Mặt trước CCCD" : "Mặt sau CCCD"}</strong>
                       <span>{files[side]?.name || (uploaded ? "Đã lưu an toàn" : "Chọn ảnh để tải lên")}</span>
+                      {previewUrls[side] ? <img alt={side === "front" ? "Preview mặt trước CCCD" : "Preview mặt sau CCCD"} className="contractUploadPreview" src={previewUrls[side]} /> : null}
                       <input accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(side, event)} type="file" />
                       {uploaded ? <a href={documentUrl(side)} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">Xem ảnh đã lưu</a> : null}
                     </label>;

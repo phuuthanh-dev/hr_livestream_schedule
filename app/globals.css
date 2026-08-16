@@ -5773,6 +5773,7 @@ a:hover {
 .contractUploadCard svg { width: 32px; height: 32px; fill: none; stroke: var(--contract-teal); stroke-width: 1.7; }
 .contractUploadCard strong { color: #2c494d; font-size: 0.78rem; }
 .contractUploadCard span { max-width: 230px; overflow: hidden; font-size: 0.65rem; text-overflow: ellipsis; white-space: nowrap; }
+.contractUploadPreview { width: 100%; max-width: 220px; aspect-ratio: 16 / 10; border: 1px solid #c6dcda; border-radius: 16px; object-fit: cover; }
 .contractUploadCard input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .contractUploadCard a { margin-top: 3px; color: #0f766e; font-size: 0.68rem; text-decoration: underline; }
 
