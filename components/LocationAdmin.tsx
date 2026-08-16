@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import AppShellHeader from "@/components/AppShellHeader";
 import { normalizeLocationCode } from "@/lib/locationUtils";
 import type { ScheduleLocation, ScheduleLocationsPayload } from "@/lib/types";
 
@@ -145,21 +146,19 @@ export default function LocationAdmin({ username }: LocationAdminProps) {
 
   return (
     <main className="availabilityApp locationAdminApp">
-      <header className="appHeader availabilityHeader locationAdminHeader">
-        <div className="brandBlock">
-          <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
-          <span className="brandName">Quản lý địa điểm</span>
-        </div>
-        <div className="locationHeaderNavigation">
-          <a className="todayButton" href="/">Lịch chính</a>
-          <a className="todayButton availabilitySummaryShortcut" href="/availability/summary"><Icon name="chart" size={17} /><span>Tổng hợp rảnh</span></a>
-        </div>
-        <div className="headerActions">
-          <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
-          <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} type="button"><Icon name="account" /></button>
-          <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
-        </div>
-      </header>
+      <AppShellHeader
+        className="availabilityHeader locationAdminHeader"
+        middleContent={(
+          <div className="locationHeaderNavigation">
+            <a className="todayButton" href="/">Lịch chính</a>
+            <a className="todayButton availabilitySummaryShortcut" href="/availability/summary"><Icon name="chart" size={17} /><span>Tổng hợp rảnh</span></a>
+          </div>
+        )}
+        onLogout={logout}
+        onOpenAccount={() => setAccountPanelOpen(true)}
+        title="Quản lý địa điểm"
+        username={username}
+      />
 
       <section className="locationAdminWorkspace">
         <div className="locationAdminHero">

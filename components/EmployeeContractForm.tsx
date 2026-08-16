@@ -2,6 +2,8 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
+import AccountPanel from "@/components/AccountPanel";
+import AppShellHeader from "@/components/AppShellHeader";
 import type { EmployeeContractDocumentSide, EmployeeContractProfile } from "@/lib/employeeContract";
 import type { EmployeeRole } from "@/lib/types";
 
@@ -74,6 +76,37 @@ function FileIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4" /><path d="m7 16 3.5-4 2.7 3 1.8-2 2 3M8 8h.01" /></svg>;
 }
 
+const REQUIRED_CONTRACT_FIELDS: Array<keyof ContractFormState> = [
+  "gmail",
+  "dateOfBirth",
+  "citizenId",
+  "citizenIdIssuedDate",
+  "citizenIdIssuedPlace",
+  "permanentAddress",
+  "temporaryAddress",
+  "bankAccountNumber",
+  "bankName"
+];
+
+function hasValue(value: string) {
+  return value.trim().length > 0;
+}
+
+function calculateContractProgress(form: ContractFormState, profile: EmployeeContractProfile | null) {
+  const completedFieldCount = REQUIRED_CONTRACT_FIELDS.filter((field) => hasValue(form[field])).length;
+  const completedDocumentCount = Number(Boolean(profile?.citizenIdFront)) + Number(Boolean(profile?.citizenIdBack));
+  const totalItems = REQUIRED_CONTRACT_FIELDS.length + 2;
+  const completedItems = completedFieldCount + completedDocumentCount;
+  const percent = totalItems === 0 ? 0 : Math.round((completedItems / totalItems) * 100);
+  const status = completedItems === 0 ? "Chưa bắt đầu" : completedItems >= totalItems ? "Hồ sơ hoàn tất" : "Đang bổ sung";
+  return {
+    completedItems,
+    totalItems,
+    percent,
+    status
+  };
+}
+
 export default function EmployeeContractForm({
   username,
   isAdmin,
@@ -88,6 +121,7 @@ export default function EmployeeContractForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
 
   function targetParams() {
     const params = new URLSearchParams();
@@ -223,14 +257,22 @@ export default function EmployeeContractForm({
   const employeeName = target?.employeeName || username;
   const identity = target ? `${target.role === "host" ? "Host" : "Support Live"} · ${target.employeeId}` : "Đang tải hồ sơ";
   const contractCode = profile?.contractCode || (target?.employeeId ? `${target.employeeId}_HDLT2026` : "");
+  const contractProgress = calculateContractProgress(form, profile);
 
   return (
     <main className="contractApp">
-      <header className="appHeader contractHeader">
-        <div className="brandBlock"><span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span><span className="brandName">Hồ sơ hợp đồng</span></div>
-        <a className="todayButton" href={isAdmin ? "/employees" : "/"}>{isAdmin ? "Danh sách nhân sự" : "Lịch chính"}</a>
-        <div className="contractHeaderIdentity"><strong>{employeeName}</strong><span>{identity}</span></div>
-      </header>
+      <AppShellHeader
+        className="contractHeader"
+        middleContent={<a className="todayButton" href={isAdmin ? "/employees" : "/"}>{isAdmin ? "Danh sách nhân sự" : "Lịch chính"}</a>}
+        onLogout={async () => {
+          await fetch("/api/logout", { method: "POST" });
+          window.location.href = "/login";
+        }}
+        onOpenAccount={() => setAccountPanelOpen(true)}
+        rightContent={<div className="contractHeaderIdentity"><strong>{employeeName}</strong><span>{identity}</span></div>}
+        title="Hồ sơ hợp đồng"
+        username={username}
+      />
 
       <section className="contractWorkspace">
         <aside className="contractIntro">
@@ -238,10 +280,11 @@ export default function EmployeeContractForm({
           <h1>Thông tin để hoàn thiện hợp đồng.</h1>
           <p>Nhân viên trực tiếp cung cấp dữ liệu. Hệ thống không thu thập thông tin BHXH trong biểu mẫu này.</p>
           <div className="contractPrivacyNote"><strong>Mã hợp đồng</strong><span>{contractCode || "Sẽ tạo sau khi xác định mã nhân viên"}</span></div>
-          <div className={`contractProgress ${profile?.completed ? "complete" : ""}`}>
-            <span>{profile?.completed ? "Hồ sơ hoàn tất" : profile ? "Đang bổ sung" : "Chưa bắt đầu"}</span>
-            <strong>{profile?.completed ? "100%" : profile ? `${50 + (profile.citizenIdFront ? 25 : 0) + (profile.citizenIdBack ? 25 : 0)}%` : "0%"}</strong>
-            <i><b style={{ width: profile?.completed ? "100%" : profile ? `${50 + (profile.citizenIdFront ? 25 : 0) + (profile.citizenIdBack ? 25 : 0)}%` : "0%" }} /></i>
+          <div className={`contractProgress ${contractProgress.percent >= 100 ? "complete" : ""}`}>
+            <span>{contractProgress.status}</span>
+            <strong>{contractProgress.percent}%</strong>
+            <i><b style={{ width: `${contractProgress.percent}%` }} /></i>
+            <small>{contractProgress.completedItems}/{contractProgress.totalItems} mục đã hoàn thành</small>
           </div>
           <div className="contractPrivacyNote"><strong>Dữ liệu được giới hạn quyền truy cập</strong><span>Ảnh CCCD lưu ở chế độ riêng tư. Chỉ chính nhân viên và Admin mới mở được qua liên kết có thời hạn.</span></div>
         </aside>
@@ -293,6 +336,10 @@ export default function EmployeeContractForm({
           )}
         </section>
       </section>
+
+      {accountPanelOpen ? (
+        <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
+      ) : null}
     </main>
   );
 }

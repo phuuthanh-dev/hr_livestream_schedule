@@ -1069,6 +1069,13 @@ a:hover {
   align-items: center;
 }
 
+.appHeaderMiddle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
 .brandBlock,
 .dateNavigation,
 .headerActions,
@@ -5596,6 +5603,13 @@ a:hover {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
+}
+
+.contractProgress small {
+  grid-column: 1 / -1;
+  color: rgba(255, 248, 237, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .contractProgress span {

@@ -2,6 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import AppShellHeader from "@/components/AppShellHeader";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
 import { formatLocationCode, getDefaultAvailabilityLocation, normalizeLocationCode } from "@/lib/locationUtils";
 import {
@@ -399,32 +400,28 @@ export default function AvailabilityBoard({
 
   return (
     <main className="availabilityApp">
-      <header className="appHeader availabilityHeader">
-        <div className="brandBlock">
-          <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
-          <span className="brandName">Lịch Rảnh</span>
-        </div>
-
-        <div className="dateNavigation">
-          <a className="todayButton" href="/">Lịch chính</a>
-          <button className="todayButton" onClick={() => setWeekStartKey(getScheduleWeekStartKey())} type="button">Tuần này</button>
-          <div className="iconButtonGroup">
-            <button className="iconButton" aria-label="Tuần trước" onClick={() => startTransition(() => setWeekStartKey((current) => addDaysToScheduleDateKey(current, -7)))} type="button"><Icon name="chevronLeft" /></button>
-            <button className="iconButton" aria-label="Tuần sau" onClick={() => startTransition(() => setWeekStartKey((current) => addDaysToScheduleDateKey(current, 7)))} type="button"><Icon name="chevronRight" /></button>
+      <AppShellHeader
+        className="availabilityHeader"
+        middleContent={(
+          <div className="dateNavigation">
+            <a className="todayButton" href="/">Lịch chính</a>
+            <button className="todayButton" onClick={() => setWeekStartKey(getScheduleWeekStartKey())} type="button">Tuần này</button>
+            <div className="iconButtonGroup">
+              <button className="iconButton" aria-label="Tuần trước" onClick={() => startTransition(() => setWeekStartKey((current) => addDaysToScheduleDateKey(current, -7)))} type="button"><Icon name="chevronLeft" /></button>
+              <button className="iconButton" aria-label="Tuần sau" onClick={() => startTransition(() => setWeekStartKey((current) => addDaysToScheduleDateKey(current, 7)))} type="button"><Icon name="chevronRight" /></button>
+            </div>
+            <div className="currentRange">
+              <h1>{formatWeekTitle(weekStartKey)}</h1>
+              <span>{formatWeekRange(weekStartKey)}</span>
+            </div>
           </div>
-          <div className="currentRange">
-            <h1>{formatWeekTitle(weekStartKey)}</h1>
-            <span>{formatWeekRange(weekStartKey)}</span>
-          </div>
-        </div>
-
-        <div className="headerActions">
-          {isAdmin ? <a className="todayButton availabilitySummaryShortcut" href={`/availability/summary?role=${selectedRole}&weekStartKey=${weekStartKey}`}><Icon name="chart" size={17} /><span>Tổng hợp</span></a> : null}
-          <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
-          <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
-          <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
-        </div>
-      </header>
+        )}
+        onLogout={logout}
+        onOpenAccount={() => setAccountPanelOpen(true)}
+        rightContent={isAdmin ? <a className="todayButton availabilitySummaryShortcut" href={`/availability/summary?role=${selectedRole}&weekStartKey=${weekStartKey}`}><Icon name="chart" size={17} /><span>Tổng hợp</span></a> : null}
+        title="Lịch Rảnh"
+        username={username}
+      />
 
       <div className="availabilityShell">
         <aside className="availabilitySidebar">

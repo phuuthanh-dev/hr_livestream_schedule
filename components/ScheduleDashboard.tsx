@@ -2,6 +2,7 @@
 
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import AppShellHeader from "@/components/AppShellHeader";
 import { getSessionLocationMode } from "@/lib/scheduleAssignment";
 import { getScheduleTodayKey } from "@/lib/scheduleDate";
 import type {
@@ -564,33 +565,26 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
 
   return (
     <main className={`calendarApp ${isAdmin ? "hasAdminDock" : ""}`}>
-      <header className="appHeader">
-        <div className="brandBlock">
-          <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
-          <span className="brandName">Live Calendar</span>
-        </div>
-
-        <div className="dateNavigation">
-          <button className="todayButton" onClick={() => setWeekStartKey(getCurrentWeekStartKey())} type="button">Hôm nay</button>
-          <div className="iconButtonGroup">
-            <button className="iconButton" aria-label="Tuần trước" onClick={() => shiftWeek(-1)} type="button"><Icon name="chevronLeft" /></button>
-            <button className="iconButton" aria-label="Tuần sau" onClick={() => shiftWeek(1)} type="button"><Icon name="chevronRight" /></button>
+      <AppShellHeader
+        middleContent={(
+          <div className="dateNavigation">
+            <button className="todayButton" onClick={() => setWeekStartKey(getCurrentWeekStartKey())} type="button">Hôm nay</button>
+            <div className="iconButtonGroup">
+              <button className="iconButton" aria-label="Tuần trước" onClick={() => shiftWeek(-1)} type="button"><Icon name="chevronLeft" /></button>
+              <button className="iconButton" aria-label="Tuần sau" onClick={() => shiftWeek(1)} type="button"><Icon name="chevronRight" /></button>
+            </div>
+            <div className="currentRange">
+              <h1>{formatWeekTitle(weekStartKey)}</h1>
+              <span>{formatWeekRange(weekStartKey)}</span>
+            </div>
           </div>
-          <div className="currentRange">
-            <h1>{formatWeekTitle(weekStartKey)}</h1>
-            <span>{formatWeekRange(weekStartKey)}</span>
-          </div>
-        </div>
-
-        <div className="headerActions">
-          {isAdmin ? renderAdminActions("desktop") : null}
-          {!isAdmin ? <a className="todayButton availabilityShortcut" href="/availability"><Icon name="calendar" size={17} /><span>Lịch rảnh</span></a> : null}
-          {!isAdmin ? <a className="todayButton" href="/contract"><Icon name="contract" size={17} /><span>Hợp đồng</span></a> : null}
-          <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
-          <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} title="Quản lý tài khoản" type="button"><Icon name="account" /></button>
-          <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
-        </div>
-      </header>
+        )}
+        onLogout={logout}
+        onOpenAccount={() => setAccountPanelOpen(true)}
+        rightContent={<>{isAdmin ? renderAdminActions("desktop") : null}{!isAdmin ? <a className="todayButton availabilityShortcut" href="/availability"><Icon name="calendar" size={17} /><span>Lịch rảnh</span></a> : null}{!isAdmin ? <a className="todayButton" href="/contract"><Icon name="contract" size={17} /><span>Hợp đồng</span></a> : null}</>}
+        title="Live Calendar"
+        username={username}
+      />
 
       {isAdmin ? renderAdminActions("mobile") : null}
 

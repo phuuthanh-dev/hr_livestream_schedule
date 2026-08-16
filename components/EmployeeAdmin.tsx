@@ -4,6 +4,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { FormEvent } from "react";
 import { useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
+import AppShellHeader from "@/components/AppShellHeader";
 import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import type { EmployeeAdminPayload, EmployeeRole, ScheduleLocation, ScheduleLocationsPayload, SchedulePerson } from "@/lib/types";
 
@@ -280,23 +281,21 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
 
   return (
     <main className="employeeAdminApp">
-      <header className="appHeader employeeAdminHeader">
-        <div className="brandBlock">
-          <span className="brandMark"><img className="brandLogo" src="/rr-logo-submark-square.png" alt="" /></span>
-          <span className="brandName">Nhân sự Live</span>
-        </div>
-        <nav className="employeeHeaderNavigation">
-          <a className="todayButton" href="/">Lịch chính</a>
-          <a className="todayButton" href="/applications"><Icon name="users" size={16} /><span>Ứng tuyển</span></a>
-          <a className="todayButton" href="/availability/summary"><Icon name="calendar" size={16} /><span>Lịch rảnh</span></a>
-          <a className="todayButton" href="/locations"><Icon name="location" size={16} /><span>Địa điểm</span></a>
-        </nav>
-        <div className="headerActions">
-          <span className="userAvatar" title={`Đăng nhập: ${username}`}>{username.slice(0, 1).toUpperCase()}</span>
-          <button className="iconButton" aria-label="Quản lý tài khoản" onClick={() => setAccountPanelOpen(true)} type="button"><Icon name="account" /></button>
-          <button className="iconButton" aria-label="Đăng xuất" onClick={logout} type="button"><Icon name="logout" /></button>
-        </div>
-      </header>
+      <AppShellHeader
+        className="employeeAdminHeader"
+        middleContent={(
+          <nav className="employeeHeaderNavigation">
+            <a className="todayButton" href="/">Lịch chính</a>
+            <a className="todayButton" href="/applications"><Icon name="users" size={16} /><span>Ứng tuyển</span></a>
+            <a className="todayButton" href="/availability/summary"><Icon name="calendar" size={16} /><span>Lịch rảnh</span></a>
+            <a className="todayButton" href="/locations"><Icon name="location" size={16} /><span>Địa điểm</span></a>
+          </nav>
+        )}
+        onLogout={logout}
+        onOpenAccount={() => setAccountPanelOpen(true)}
+        title="Nhân sự Live"
+        username={username}
+      />
 
       <section className="employeeAdminWorkspace">
         <div className="employeeAdminHero">
