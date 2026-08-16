@@ -39,6 +39,13 @@ export async function POST(request: Request) {
     if (!existing) {
       return NextResponse.json({ success: false, message: "Hãy lưu thông tin hợp đồng trước khi tải CCCD." }, { status: 409 });
     }
+    if (session.accountType === "employee" && existing.completed) {
+      return NextResponse.json({
+        success: false,
+        message: "Hồ sơ hợp đồng đã hoàn tất. Nhân viên không thể cập nhật thêm."
+      }, { status: 403 });
+    }
+
     const currentFile = side === "front" ? existing.citizenIdFront : existing.citizenIdBack;
     if (currentFile?.publicId === publicId) {
       return NextResponse.json({ success: true, profile: existing, message: "Ảnh CCCD đã được ghi nhận." });

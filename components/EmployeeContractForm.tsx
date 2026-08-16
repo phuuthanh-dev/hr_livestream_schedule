@@ -274,6 +274,7 @@ export default function EmployeeContractForm({
   const identity = target ? `${target.role === "host" ? "Host" : "Support Live"} · ${target.employeeId}` : "Đang tải hồ sơ";
   const contractCode = profile?.contractCode || (target?.employeeId ? `${target.employeeId}_HDLT2026` : "");
   const contractProgress = calculateContractProgress(form, profile);
+  const employeeLocked = !isAdmin && profile?.completed === true;
 
   return (
     <main className="contractApp">
@@ -308,26 +309,27 @@ export default function EmployeeContractForm({
         <section className="contractSurface">
           {error ? <div className="notice errorNotice">{error}</div> : null}
           {message ? <div className="notice successNotice">{message}</div> : null}
+          {employeeLocked ? <div className="notice successNotice">Hồ sơ hợp đồng đã hoàn tất 100%. Nhân viên chỉ còn quyền xem, không thể chỉnh sửa thêm.</div> : null}
           {loading ? <div className="contractLoading">Đang tải hồ sơ hợp đồng...</div> : (
             <form className="contractForm" onSubmit={saveContract}>
               <section className="contractSection">
                 <header><span>01</span><div><strong>Thông tin cá nhân</strong><p>Dùng đúng thông tin trên CCCD.</p></div></header>
                 <div className="contractFieldGrid">
-                  <label className="wide"><span>Gmail *</span><input autoComplete="email" maxLength={180} onChange={(event) => updateField("gmail", event.target.value)} placeholder="tennhanvien@gmail.com" required type="email" value={form.gmail} /></label>
-                  <label><span>Ngày sinh *</span><input onChange={(event) => updateField("dateOfBirth", event.target.value)} required type="date" value={form.dateOfBirth} /></label>
-                  <label><span>CCCD *</span><input inputMode="numeric" maxLength={12} onChange={(event) => updateField("citizenId", event.target.value.replace(/\D/g, ""))} placeholder="12 chữ số" required value={form.citizenId} /></label>
-                  <label><span>Ngày cấp *</span><input onChange={(event) => updateField("citizenIdIssuedDate", event.target.value)} required type="date" value={form.citizenIdIssuedDate} /></label>
-                  <label><span>Nơi cấp *</span><input maxLength={240} onChange={(event) => updateField("citizenIdIssuedPlace", event.target.value)} required value={form.citizenIdIssuedPlace} /></label>
-                  <label className="wide"><span>Địa chỉ thường trú *</span><textarea maxLength={1000} onChange={(event) => updateField("permanentAddress", event.target.value)} required rows={3} value={form.permanentAddress} /></label>
-                  <label className="wide"><span>Địa chỉ tạm trú *</span><textarea maxLength={1000} onChange={(event) => updateField("temporaryAddress", event.target.value)} required rows={3} value={form.temporaryAddress} /></label>
+                  <label className="wide"><span>Gmail *</span><input autoComplete="email" disabled={employeeLocked} maxLength={180} onChange={(event) => updateField("gmail", event.target.value)} placeholder="tennhanvien@gmail.com" required type="email" value={form.gmail} /></label>
+                  <label><span>Ngày sinh *</span><input disabled={employeeLocked} onChange={(event) => updateField("dateOfBirth", event.target.value)} required type="date" value={form.dateOfBirth} /></label>
+                  <label><span>CCCD *</span><input disabled={employeeLocked} inputMode="numeric" maxLength={12} onChange={(event) => updateField("citizenId", event.target.value.replace(/\D/g, ""))} placeholder="12 chữ số" required value={form.citizenId} /></label>
+                  <label><span>Ngày cấp *</span><input disabled={employeeLocked} onChange={(event) => updateField("citizenIdIssuedDate", event.target.value)} required type="date" value={form.citizenIdIssuedDate} /></label>
+                  <label><span>Nơi cấp *</span><input disabled={employeeLocked} maxLength={240} onChange={(event) => updateField("citizenIdIssuedPlace", event.target.value)} required value={form.citizenIdIssuedPlace} /></label>
+                  <label className="wide"><span>Địa chỉ thường trú *</span><textarea disabled={employeeLocked} maxLength={1000} onChange={(event) => updateField("permanentAddress", event.target.value)} required rows={3} value={form.permanentAddress} /></label>
+                  <label className="wide"><span>Địa chỉ tạm trú *</span><textarea disabled={employeeLocked} maxLength={1000} onChange={(event) => updateField("temporaryAddress", event.target.value)} required rows={3} value={form.temporaryAddress} /></label>
                 </div>
               </section>
 
               <section className="contractSection">
                 <header><span>02</span><div><strong>Thông tin nhận thanh toán</strong><p>Tài khoản ngân hàng phải thuộc về nhân viên.</p></div></header>
                 <div className="contractFieldGrid">
-                  <label><span>Số tài khoản *</span><input inputMode="numeric" maxLength={30} onChange={(event) => updateField("bankAccountNumber", event.target.value.replace(/\D/g, ""))} required value={form.bankAccountNumber} /></label>
-                  <label><span>Ngân hàng *</span><input maxLength={120} onChange={(event) => updateField("bankName", event.target.value)} placeholder="Ví dụ: Vietcombank" required value={form.bankName} /></label>
+                  <label><span>Số tài khoản *</span><input disabled={employeeLocked} inputMode="numeric" maxLength={30} onChange={(event) => updateField("bankAccountNumber", event.target.value.replace(/\D/g, ""))} required value={form.bankAccountNumber} /></label>
+                  <label><span>Ngân hàng *</span><input disabled={employeeLocked} maxLength={120} onChange={(event) => updateField("bankName", event.target.value)} placeholder="Ví dụ: Vietcombank" required value={form.bankName} /></label>
                 </div>
               </section>
 
@@ -341,14 +343,14 @@ export default function EmployeeContractForm({
                       <strong>{side === "front" ? "Mặt trước CCCD" : "Mặt sau CCCD"}</strong>
                       <span>{files[side]?.name || (uploaded ? "Đã lưu an toàn" : "Chọn ảnh để tải lên")}</span>
                       {previewUrls[side] ? <img alt={side === "front" ? "Preview mặt trước CCCD" : "Preview mặt sau CCCD"} className="contractUploadPreview" src={previewUrls[side]} /> : null}
-                      <input accept="image/jpeg,image/png,image/webp" onChange={(event) => selectFile(side, event)} type="file" />
+                      <input accept="image/jpeg,image/png,image/webp" disabled={employeeLocked} onChange={(event) => selectFile(side, event)} type="file" />
                       {uploaded ? <a href={documentUrl(side)} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">Xem ảnh đã lưu</a> : null}
                     </label>;
                   })}
                 </div>
               </section>
 
-              <footer className="contractFormFooter"><span>{profile?.updatedAt ? `Cập nhật gần nhất: ${new Date(profile.updatedAt).toLocaleString("vi-VN")}` : "Chưa lưu lần nào"}</span><button disabled={saving} type="submit">{saving ? "Đang lưu hồ sơ..." : "Lưu hồ sơ hợp đồng"}</button></footer>
+              <footer className="contractFormFooter"><span>{profile?.updatedAt ? `Cập nhật gần nhất: ${new Date(profile.updatedAt).toLocaleString("vi-VN")}` : "Chưa lưu lần nào"}</span><button disabled={saving || employeeLocked} type="submit">{employeeLocked ? "Hồ sơ đã khóa" : saving ? "Đang lưu hồ sơ..." : "Lưu hồ sơ hợp đồng"}</button></footer>
             </form>
           )}
         </section>

@@ -3,6 +3,7 @@ import { createGoogleJwt } from "@/lib/googleAuth";
 
 const GOOGLE_DRIVE_SCOPE = ["https://www.googleapis.com/auth/drive"];
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+const DEFAULT_CONTRACT_DRIVE_ROOT_FOLDER_ID = "1IxJs0myuunN49Z944vWzu1gr_8OqLFKv";
 
 export type DriveFileMetadata = {
   id?: string | null;
@@ -23,7 +24,8 @@ function escapeDriveQuery(value: string) {
 export function getContractDriveRootFolderId() {
   return process.env.GOOGLE_DRIVE_CONTRACT_FOLDER_ID?.trim()
     || process.env.LOCAL_CONTRACT_SYNC_FOLDER_ID?.trim()
-    || readRequiredEnv("GOOGLE_DRIVE_CONTRACT_ROOT_FOLDER_ID");
+    || process.env.GOOGLE_DRIVE_CONTRACT_ROOT_FOLDER_ID?.trim()
+    || DEFAULT_CONTRACT_DRIVE_ROOT_FOLDER_ID;
 }
 
 export function createGoogleDriveClient() {

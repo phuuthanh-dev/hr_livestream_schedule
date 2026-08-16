@@ -57,6 +57,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, message: "Không tìm thấy nhân viên cần cập nhật." }, { status: 404 });
     }
 
+    const existingProfile = await getEmployeeContractProfile(person.role, person.id);
+    if (session.accountType === "employee" && existingProfile?.completed) {
+      return NextResponse.json({
+        success: false,
+        message: "Hồ sơ hợp đồng đã hoàn tất. Nhân viên không thể chỉnh sửa thêm."
+      }, { status: 403 });
+    }
+
     const profile = await saveEmployeeContractProfile({
       person,
       values: body,
