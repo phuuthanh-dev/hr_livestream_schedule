@@ -131,6 +131,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [payload, setPayload] = useState<AvailabilityAdminDashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingSchedule, setGeneratingSchedule] = useState(false);
+  const [refreshingUnconfirmedSchedule, setRefreshingUnconfirmedSchedule] = useState(false);
   const [importingSheet, setImportingSheet] = useState(false);
   const [syncingSheet, setSyncingSheet] = useState(false);
   const [syncRuns, setSyncRuns] = useState<AvailabilitySheetSyncRun[]>([]);
@@ -222,8 +223,13 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     window.location.href = "/login";
   }
 
-  async function generateWeekSchedule() {
-    setGeneratingSchedule(true);
+  async function generateWeekSchedule(mode: "safe" | "refresh_unconfirmed" = "safe") {
+    if (mode === "refresh_unconfirmed") {
+      const confirmed = window.confirm(`Làm sạch toàn bộ ca tương lai chưa xác nhận trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại? Ca đã xác nhận và ngày quá khứ sẽ được giữ nguyên.`);
+      if (!confirmed) return;
+    }
+    if (mode === "refresh_unconfirmed") setRefreshingUnconfirmedSchedule(true);
+    else setGeneratingSchedule(true);
     setError("");
     setScheduleMessage("");
 
@@ -231,17 +237,19 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       const response = await fetch("/api/schedule/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ weekStartKey })
+        body: JSON.stringify({ weekStartKey, mode })
       });
       const result = (await response.json()) as SchedulePayload;
       if (!response.ok || !result.success) {
         throw new Error(result.message || result.error || "Không chạy được lịch tuần.");
       }
       setScheduleMessage(result.sync?.message || `Đã chạy lịch tuần ${formatWeekRange(weekStartKey)}.`);
+      setReloadKey((current) => current + 1);
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : "Không chạy được lịch tuần.");
     } finally {
-      setGeneratingSchedule(false);
+      if (mode === "refresh_unconfirmed") setRefreshingUnconfirmedSchedule(false);
+      else setGeneratingSchedule(false);
     }
   }
 
@@ -400,14 +408,27 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
             </button>
             <button
               className="availabilitySummaryGenerate"
-              disabled={loading || generatingSchedule || importingSheet || syncingSheet}
-              onClick={generateWeekSchedule}
+              disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
+              onClick={() => void generateWeekSchedule("safe")}
               type="button"
             >
               <span className="availabilitySummaryGenerateIcon"><Icon name="calendar" size={20} /></span>
               <span>
                 <strong>{generatingSchedule ? "Đang chạy lịch tuần..." : "Chạy lịch tuần"}</strong>
                 <small>Xếp và cập nhật thẳng vào lịch chính</small>
+              </span>
+              <em>{formatWeekRange(weekStartKey)}</em>
+            </button>
+            <button
+              className="availabilitySummaryGenerate availabilitySummaryGenerateSecondary"
+              disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
+              onClick={() => void generateWeekSchedule("refresh_unconfirmed")}
+              type="button"
+            >
+              <span className="availabilitySummaryGenerateIcon"><Icon name="refresh" size={20} /></span>
+              <span>
+                <strong>{refreshingUnconfirmedSchedule ? "Đang làm sạch và chạy lại..." : "Làm sạch ca chưa xác nhận"}</strong>
+                <small>Reset ca tương lai chưa xác nhận rồi chạy lại tuần</small>
               </span>
               <em>{formatWeekRange(weekStartKey)}</em>
             </button>

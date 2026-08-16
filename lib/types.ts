@@ -160,7 +160,7 @@ export type SchedulePayload = {
     success?: boolean;
     message?: string;
     batchId?: string;
-    mode?: "schedule_refresh" | "sheet_snapshot" | "website_generation";
+    mode?: "schedule_refresh" | "sheet_snapshot" | "website_generation" | "website_generation_refresh_unconfirmed";
     inserted?: number;
     updated?: number;
     deactivated?: number;

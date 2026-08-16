@@ -17,10 +17,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json().catch(() => ({}))) as { weekStartKey?: string };
+    const body = (await request.json().catch(() => ({}))) as {
+      weekStartKey?: string;
+      mode?: "safe" | "refresh_unconfirmed";
+    };
     const payload = await generateAndPublishScheduleWeek({
       weekStartKey: body.weekStartKey,
-      requestedBy: session.accountKey
+      requestedBy: session.accountKey,
+      mode: body.mode
     });
     return NextResponse.json(payload);
   } catch (error) {

@@ -47,7 +47,7 @@ type ScheduleSessionDocument = ScheduleSession & {
 type ScheduleSyncRunDocument = {
   batchId: string;
   syncType: "schedule";
-  mode: "schedule_refresh" | "sheet_snapshot" | "website_generation";
+  mode: "schedule_refresh" | "sheet_snapshot" | "website_generation" | "website_generation_refresh_unconfirmed";
   status: "success";
   requestedBy: string;
   sourceGeneratedAt?: Date | null;
@@ -98,12 +98,13 @@ type PublishGeneratedWeekInput = {
   todayKey: string;
   rows: ScheduleSession[];
   requestedBy: string;
+  preserveManualOverrides?: boolean;
   startedAt?: Date;
 };
 
 type ScheduleWriteResult = {
   batchId: string;
-  mode: "website_generation";
+  mode: "website_generation" | "website_generation_refresh_unconfirmed";
   inserted: number;
   updated: number;
   deactivated: number;
@@ -302,7 +303,7 @@ export async function publishGeneratedScheduleWeek(
       ).toArray();
       const protectedSlotKeys = new Set(
         existingFutureRows
-          .filter((row) => row.isHostConfirmed || row.isSupportConfirmed || row.manualOverride)
+          .filter((row) => row.isHostConfirmed || row.isSupportConfirmed || (input.preserveManualOverrides !== false && row.manualOverride))
           .map((row) => buildScheduleLaneKey(row.dateKey, row.slot, getScheduleSessionLane(row)))
       );
       const rowsToPublish = normalizedRows.filter(
@@ -360,7 +361,7 @@ export async function publishGeneratedScheduleWeek(
           dateKey: { $gte: input.weekStartKey, $lte: input.weekEndKey, $gt: input.todayKey },
           isHostConfirmed: { $ne: true },
           isSupportConfirmed: { $ne: true },
-          manualOverride: { $ne: true },
+          ...(input.preserveManualOverrides !== false ? { manualOverride: { $ne: true } } : {}),
           ...(publishKeys.length > 0 ? { sessionKey: { $nin: publishKeys } } : {})
         },
         { $set: { active: false, deactivatedAt: completedAt, updatedAt: completedAt } },
@@ -373,7 +374,7 @@ export async function publishGeneratedScheduleWeek(
         {
           batchId,
           syncType: "schedule",
-          mode: "website_generation",
+          mode: input.preserveManualOverrides === false ? "website_generation_refresh_unconfirmed" : "website_generation",
           status: "success",
           requestedBy: cleanText(input.requestedBy) || "admin:admin",
           sourceGeneratedAt: completedAt,
@@ -392,7 +393,7 @@ export async function publishGeneratedScheduleWeek(
 
   return {
     batchId,
-    mode: "website_generation",
+    mode: input.preserveManualOverrides === false ? "website_generation_refresh_unconfirmed" : "website_generation",
     inserted,
     updated,
     deactivated,

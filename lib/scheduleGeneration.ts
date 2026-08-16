@@ -18,6 +18,7 @@ import type { SchedulePayload } from "@/lib/types";
 type GenerateScheduleWeekInput = {
   weekStartKey?: string;
   requestedBy: string;
+  mode?: "safe" | "refresh_unconfirmed";
 };
 
 export async function generateAndPublishScheduleWeek(
@@ -48,8 +49,9 @@ export async function generateAndPublishScheduleWeek(
     throw new Error("Chưa có Host hoặc Support gửi slot rảnh trong phần còn lại của tuần. Lịch hiện tại được giữ nguyên.");
   }
 
+  const refreshUnconfirmed = input.mode === "refresh_unconfirmed";
   const protectedSessions = existingSessions.filter(
-    (row) => row.dateKey <= todayKey || row.isHostConfirmed || row.isSupportConfirmed || row.manualOverride
+    (row) => row.dateKey <= todayKey || row.isHostConfirmed || row.isSupportConfirmed || (!refreshUnconfirmed && row.manualOverride)
   );
   const generatedRows = generateSchedule({
     weekStartKey,
@@ -65,6 +67,7 @@ export async function generateAndPublishScheduleWeek(
     todayKey,
     rows: generatedRows,
     requestedBy: input.requestedBy,
+    preserveManualOverrides: !refreshUnconfirmed,
     startedAt
   });
   const payload = await getScheduleFromMongo({ from: weekStartKey, to: weekEndKey });
@@ -72,10 +75,15 @@ export async function generateAndPublishScheduleWeek(
   const protectedCount = existingSessions.filter(
     (row) => row.dateKey > todayKey && (row.isHostConfirmed || row.isSupportConfirmed)
   ).length;
+  const resetCount = refreshUnconfirmed
+    ? existingSessions.filter((row) => row.dateKey > todayKey && !row.isHostConfirmed && !row.isSupportConfirmed && row.manualOverride).length
+    : 0;
 
   payload.sync = {
     success: true,
-    message: `Đã chạy và cập nhật trực tiếp ${syncResult.total} ca của tuần. ${openCount} ca còn mở${protectedCount ? `; giữ nguyên ${protectedCount} ca đã xác nhận` : ""}.`,
+    message: refreshUnconfirmed
+      ? `Đã làm sạch ${resetCount} ca chưa xác nhận rồi chạy lại ${syncResult.total} ca của tuần. ${openCount} ca còn mở${protectedCount ? `; giữ nguyên ${protectedCount} ca đã xác nhận` : ""}.`
+      : `Đã chạy và cập nhật trực tiếp ${syncResult.total} ca của tuần. ${openCount} ca còn mở${protectedCount ? `; giữ nguyên ${protectedCount} ca đã xác nhận` : ""}.`,
     ...syncResult
   };
   return payload;
