@@ -198,6 +198,40 @@ test("weekend six-hour block only uses a _6H Support", () => {
   assert.deepEqual(rows.map((row) => row.supportId), Array(3).fill(sixHourSupport.id));
 });
 
+test("weekend falls back to four-hour blocks when no _6H Support can cover three consecutive slots", () => {
+  const hosts = [
+    person("HRLT01", "host"),
+    person("HRLT02", "host", { name: "Host 2" })
+  ];
+  const support = person("HRSL01", "support");
+  const availability = slots.slice(0, 3).flatMap((slot) => [
+    ...hosts.map((host) => available("host", host.id, "2026-08-15", slot, "studio")),
+    available("support", support.id, "2026-08-15", slot)
+  ]);
+  const rows = run([...hosts, support], availability);
+
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows.map((row) => row.supportId), [support.id, support.id, support.id]);
+  assert.equal(rows.filter((row) => row.status === "published").length, 3);
+});
+
+test("weekend can reuse the same Support on another block when no fresh Support is available", () => {
+  const hosts = [
+    person("HRLT01", "host"),
+    person("HRLT02", "host", { name: "Host 2" })
+  ];
+  const support = person("HRSL01", "support");
+  const availability = slots.flatMap((slot) => [
+    ...hosts.map((host) => available("host", host.id, "2026-08-15", slot, "studio")),
+    available("support", support.id, "2026-08-15", slot)
+  ]);
+  const rows = run([...hosts, support], availability);
+
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map((row) => row.supportId), Array(4).fill(support.id));
+  assert.equal(rows.filter((row) => row.status === "published").length, 4);
+});
+
 test("protected slot is not generated again", () => {
   const host = person("HRLT01", "host", { workLocation: "home" });
   const protectedSession = {

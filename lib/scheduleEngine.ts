@@ -29,6 +29,20 @@ type GeneratedItem = {
   host?: SchedulePerson;
 };
 
+type SupportSelectionOptions = {
+  block: GeneratedItem[];
+  dateKey: string;
+  weekend: boolean;
+  blockSize: number;
+  requireSixHour: boolean;
+  allowUsedDay: boolean;
+  people: SchedulePerson[];
+  supportAvailability: Set<string>;
+  supportWeekCounts: Map<string, number>;
+  supportUsedDays: Set<string>;
+  occupiedSupports: Set<string>;
+};
+
 const POSITIVE_TRAINING_VALUES = ["roi", "da training", "da train", "hoan thanh", "completed"];
 
 function normalizeText(value: unknown) {
@@ -210,6 +224,74 @@ function partitionStudioRun(length: number, weekend: boolean) {
   return [3, ...Array.from({ length: (length - 3) / 2 }, () => 2)];
 }
 
+function buildSupportCandidates(options: SupportSelectionOptions) {
+  const { block, dateKey, weekend, blockSize, requireSixHour, allowUsedDay, people, supportAvailability, supportWeekCounts, supportUsedDays, occupiedSupports } = options;
+  const hostHasHighRank = block.some((item) => hostRank(item.host?.level) >= 4);
+
+  return people
+    .filter((person) => person.role === "support" && isQualified(person))
+    .filter((person) => {
+      const key = personKey("support", person.id);
+      const usedDay = supportUsedDays.has(`${key}__${dateKey}`);
+      if (!allowUsedDay && usedDay) return false;
+      if (requireSixHour && !isSixHourSupport(person)) return false;
+      return block.every((item) => supportAvailability.has(`${key}__${dateKey}__${item.row.slot}`)
+        && !occupiedSupports.has(`${key}__${dateKey}__${item.row.slot}`));
+    })
+    .sort((left, right) => {
+      const leftKey = personKey("support", left.id);
+      const rightKey = personKey("support", right.id);
+      const usedDayDifference = Number(supportUsedDays.has(`${leftKey}__${dateKey}`))
+        - Number(supportUsedDays.has(`${rightKey}__${dateKey}`));
+      if (usedDayDifference) return usedDayDifference;
+      const trainingDifference = trainingPriority(right.trainingStatus) - trainingPriority(left.trainingStatus);
+      if (trainingDifference) return trainingDifference;
+      if (weekend && blockSize === 1) {
+        const levelDifference = supportLevel(right.level) - supportLevel(left.level);
+        if (levelDifference) return levelDifference;
+      }
+      const cashDifference = parseCashOffer(left.cashOffer) - parseCashOffer(right.cashOffer);
+      if (cashDifference) return cashDifference;
+      if (hostHasHighRank) {
+        const levelDifference = supportLevel(right.level) - supportLevel(left.level);
+        if (levelDifference) return levelDifference;
+      }
+      const countDifference = getCount(supportWeekCounts, leftKey) - getCount(supportWeekCounts, rightKey);
+      if (countDifference) return countDifference;
+      const nameDifference = compareText(left.name, right.name);
+      return nameDifference || compareText(left.id, right.id);
+    });
+}
+
+function assignSupportBlock(
+  block: GeneratedItem[],
+  candidates: SchedulePerson[],
+  dateKey: string,
+  supportWeekCounts: Map<string, number>,
+  supportUsedDays: Set<string>,
+  occupiedSupports: Set<string>
+) {
+  const primary = candidates[0];
+  const backup = candidates[1];
+  if (!primary) return false;
+
+  const primaryKey = personKey("support", primary.id);
+  supportUsedDays.add(`${primaryKey}__${dateKey}`);
+  block.forEach((item) => {
+    item.row.supportId = primary.id;
+    item.row.supportName = primary.name;
+    item.row.backupSupportId = backup?.id || "";
+    item.row.backupSupportName = backup?.name || "";
+    item.row.supportCandidatePool = candidates.map((person) => person.id).join(", ");
+    item.row.canConfirmSupport = true;
+    item.row.missingSupport = false;
+    addCount(supportWeekCounts, primaryKey);
+    occupiedSupports.add(`${primaryKey}__${dateKey}__${item.row.slot}`);
+    if (!backup) item.row.warnings.push("BACKUP_SUPPORT: Chưa có Support dự phòng phù hợp.");
+  });
+  return true;
+}
+
 export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] {
   const peopleByKey = new Map(input.people.map((person) => [personKey(person.role, person.id), person]));
   const allowedSlots = new Set(input.slots);
@@ -358,6 +440,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
   });
 
   studioByDate.forEach((items, dateKey) => {
+    const weekend = isWeekend(dateKey);
     const runs: GeneratedItem[][] = [];
     items.forEach((item) => {
       const current = runs[runs.length - 1];
@@ -370,70 +453,94 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
 
     runs.forEach((run) => {
       let offset = 0;
-      const blockSizes = partitionStudioRun(run.length, isWeekend(dateKey));
-      blockSizes.forEach((blockSize) => {
-        const block = run.slice(offset, offset + blockSize);
-        offset += blockSize;
-        const hostHasHighRank = block.some((item) => hostRank(item.host?.level) >= 4);
-        const candidates = input.people
-          .filter((person) => person.role === "support" && isQualified(person))
-          .filter((person) => {
-            const sixHour = isSixHourSupport(person);
-            if (isWeekend(dateKey) && blockSize === 3 && !sixHour) return false;
-            if (isWeekend(dateKey) && blockSize === 2 && sixHour) return false;
-            const key = personKey("support", person.id);
-            if (supportUsedDays.has(`${key}__${dateKey}`)) return false;
-            return block.every((item) => supportAvailability.has(`${key}__${dateKey}__${item.row.slot}`)
-              && !occupiedSupports.has(`${key}__${dateKey}__${item.row.slot}`));
-          })
-          .sort((left, right) => {
-            const trainingDifference = trainingPriority(right.trainingStatus) - trainingPriority(left.trainingStatus);
-            if (trainingDifference) return trainingDifference;
-            const cashDifference = parseCashOffer(left.cashOffer) - parseCashOffer(right.cashOffer);
-            if (cashDifference) return cashDifference;
-            if (hostHasHighRank) {
-              const levelDifference = supportLevel(right.level) - supportLevel(left.level);
-              if (levelDifference) return levelDifference;
-            }
-            const countDifference = getCount(supportWeekCounts, personKey("support", left.id))
-              - getCount(supportWeekCounts, personKey("support", right.id));
-            if (countDifference) return countDifference;
-            const nameDifference = compareText(left.name, right.name);
-            return nameDifference || compareText(left.id, right.id);
-          });
+      while (offset < run.length) {
+        const remaining = run.length - offset;
+        const preferredBlockSizes = weekend
+          ? [3, 2, 1].filter((size) => size <= remaining)
+          : [2].filter((size) => size <= remaining);
 
-        const primary = candidates[0];
-        const backup = candidates[1];
-        if (!primary) {
-          block.forEach((item) => {
-            item.row.warnings.push(
-              blockSize === 3
-                ? "OPEN_SUPPORT_6H: Không có Support _6H rảnh trọn block 6 giờ cuối tuần."
-                : "OPEN_SUPPORT: Không có Support rảnh trọn block 4 giờ."
-            );
+        let assigned = false;
+        preferredBlockSizes.forEach((blockSize) => {
+          if (assigned) return;
+          const block = run.slice(offset, offset + blockSize);
+          const requireSixHour = weekend && blockSize === 3;
+          const strictCandidates = buildSupportCandidates({
+            block,
+            dateKey,
+            weekend,
+            blockSize,
+            requireSixHour,
+            allowUsedDay: false,
+            people: input.people,
+            supportAvailability,
+            supportWeekCounts,
+            supportUsedDays,
+            occupiedSupports
           });
-          return;
+          const relaxedCandidates = strictCandidates.length > 0 || !weekend
+            ? strictCandidates
+            : buildSupportCandidates({
+              block,
+              dateKey,
+              weekend,
+              blockSize,
+              requireSixHour,
+              allowUsedDay: true,
+              people: input.people,
+              supportAvailability,
+              supportWeekCounts,
+              supportUsedDays,
+              occupiedSupports
+            });
+
+          if (assignSupportBlock(block, relaxedCandidates, dateKey, supportWeekCounts, supportUsedDays, occupiedSupports)) {
+            if (weekend && blockSize === 1) {
+              block.forEach((item) => item.row.warnings.push("WEEKEND_SUPPORT_FALLBACK_SINGLE: Cuối tuần không ghép được block dài, đã fallback xếp từng slot."));
+            }
+            assigned = true;
+            offset += blockSize;
+            return;
+          }
+
+          if (weekend && blockSize === 3) {
+            block.forEach((item) => item.row.warnings.push("OPEN_SUPPORT_6H: Không có Support _6H rảnh trọn block 6 giờ cuối tuần."));
+          }
+        });
+
+        if (assigned) continue;
+
+        const current = run[offset];
+        if (!weekend) {
+          current.row.warnings.push("SUPPORT_SINGLETON: Ca Studio không ghép được block Support liên tục.");
+          offset += 1;
+          continue;
         }
 
-        const primaryKey = personKey("support", primary.id);
-        supportUsedDays.add(`${primaryKey}__${dateKey}`);
-        block.forEach((item) => {
-          item.row.supportId = primary.id;
-          item.row.supportName = primary.name;
-          item.row.backupSupportId = backup?.id || "";
-          item.row.backupSupportName = backup?.name || "";
-          item.row.supportCandidatePool = candidates.map((person) => person.id).join(", ");
-          item.row.canConfirmSupport = true;
-          item.row.missingSupport = false;
-          addCount(supportWeekCounts, primaryKey);
-          occupiedSupports.add(`${primaryKey}__${dateKey}__${item.row.slot}`);
-          if (!backup) item.row.warnings.push("BACKUP_SUPPORT: Chưa có Support dự phòng phù hợp.");
+        const singleCandidates = buildSupportCandidates({
+          block: [current],
+          dateKey,
+          weekend,
+          blockSize: 1,
+          requireSixHour: false,
+          allowUsedDay: true,
+          people: input.people,
+          supportAvailability,
+          supportWeekCounts,
+          supportUsedDays,
+          occupiedSupports
         });
-      });
 
-      run.slice(offset).forEach((item) => {
-        item.row.warnings.push("SUPPORT_SINGLETON: Ca Studio không ghép được block Support liên tục.");
-      });
+        if (assignSupportBlock([current], singleCandidates, dateKey, supportWeekCounts, supportUsedDays, occupiedSupports)) {
+          current.row.warnings.push("WEEKEND_SUPPORT_FALLBACK_SINGLE: Cuối tuần không ghép được block dài, đã fallback xếp từng slot.");
+        } else {
+          current.row.warnings.push(
+            weekend
+              ? "OPEN_SUPPORT: Có Host nhưng chưa tìm được Support phù hợp cho slot cuối tuần này."
+              : "SUPPORT_SINGLETON: Ca Studio không ghép được block Support liên tục."
+          );
+        }
+        offset += 1;
+      }
     });
   });
 
