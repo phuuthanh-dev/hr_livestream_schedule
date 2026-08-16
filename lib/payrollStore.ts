@@ -186,11 +186,38 @@ export async function importTikTokPayrollReport(
   if (buffer.length === 0) throw new Error("File tải lên đang trống.");
   if (buffer.length > 10 * 1024 * 1024) throw new Error("File vượt quá giới hạn 10 MB.");
   const checksum = createHash("sha256").update(buffer).digest("hex");
+  const parsed = await parseTikTokReport(buffer, fileName);
+  const parsedDateKeys = parsed.rows.map((row) => row.dateKey).sort();
+  const parsedDateFrom = parsedDateKeys[0];
+  const parsedDateTo = parsedDateKeys[parsedDateKeys.length - 1];
   const collections = await getCollections();
   const previous = await collections.imports.findOne({ checksum });
-  if (previous) return { ...toImportRecord(previous), alreadyImported: true };
+  if (previous) {
+    const linkedRows = await collections.reports.countDocuments({
+      $or: [
+        { lastImportBatchId: previous.batchId },
+        { sourceFileName: previous.fileName }
+      ]
+    });
+    const matchesParsedSnapshot = previous.totalRows === parsed.rows.length
+      && previous.invalidRows === parsed.invalidRows
+      && previous.dateFrom === parsedDateFrom
+      && previous.dateTo === parsedDateTo;
+    if (linkedRows > 0 && matchesParsedSnapshot) {
+      return { ...toImportRecord(previous), alreadyImported: true };
+    }
 
-  const parsed = await parseTikTokReport(buffer, fileName);
+    await Promise.all([
+      collections.reports.deleteMany({
+        $or: [
+          { lastImportBatchId: previous.batchId },
+          { sourceFileName: previous.fileName }
+        ]
+      }),
+      collections.imports.deleteOne({ batchId: previous.batchId })
+    ]);
+  }
+
   const batchId = randomUUID();
   const importedAt = new Date();
   const result = await collections.reports.bulkWrite(parsed.rows.map((row) => ({
