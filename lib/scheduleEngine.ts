@@ -27,6 +27,7 @@ type HostCandidate = {
 type GeneratedItem = {
   row: ScheduleSession;
   host?: SchedulePerson;
+  hostCandidates?: HostCandidate[];
 };
 
 type SupportSelectionOptions = {
@@ -169,6 +170,52 @@ function compareText(left: string, right: string) {
   return left.localeCompare(right, "vi", { sensitivity: "base" });
 }
 
+function isCriticalHostDemand(slot: string, lane: ScheduleLane) {
+  if (lane !== "studio") return false;
+  const start = slotStartMinutes(slot);
+  return start >= 18 * 60;
+}
+
+function buildHostSelectionScore(
+  person: SchedulePerson,
+  lane: ScheduleLane,
+  slot: string,
+  weekCount: number,
+  dayCount: number
+) {
+  const rank = hostRank(person.level);
+  const training = trainingPriority(person.trainingStatus);
+  const cashValue = parseCashOffer(person.cashOffer);
+  const noWeeklyLoad = weekCount === 0 ? 1 : 0;
+  const underAssigned = weekCount <= 1 ? 1 : 0;
+  const freshDay = dayCount === 0 ? 1 : 0;
+  const critical = isCriticalHostDemand(slot, lane);
+
+  if (critical) {
+    return [
+      rank,
+      training,
+      noWeeklyLoad,
+      underAssigned,
+      freshDay,
+      -weekCount,
+      -dayCount,
+      -cashValue
+    ];
+  }
+
+  return [
+    noWeeklyLoad,
+    underAssigned,
+    freshDay,
+    -weekCount,
+    rank,
+    training,
+    -dayCount,
+    -cashValue
+  ];
+}
+
 function buildEmptySession(dateKey: string, slot: string, lane: ScheduleLane): ScheduleSession {
   const isStudio = lane === "studio";
   return {
@@ -214,6 +261,15 @@ function addCount(map: Map<string, number>, key: string) {
 
 function getCount(map: Map<string, number>, key: string) {
   return map.get(key) || 0;
+}
+
+function removeCount(map: Map<string, number>, key: string) {
+  const next = (map.get(key) || 0) - 1;
+  if (next > 0) {
+    map.set(key, next);
+    return;
+  }
+  map.delete(key);
 }
 
 function partitionStudioRun(length: number, weekend: boolean) {
@@ -290,6 +346,92 @@ function assignSupportBlock(
     if (!backup) item.row.warnings.push("BACKUP_SUPPORT: Chưa có Support dự phòng phù hợp.");
   });
   return true;
+}
+
+function assignHostToGeneratedItem(item: GeneratedItem, candidate: HostCandidate) {
+  item.host = candidate.person;
+  item.row.hostId = candidate.person.id;
+  item.row.hostName = candidate.person.name;
+  item.row.format = formatLocation(candidate.person, candidate.location);
+  item.row.channel = candidate.person.liveChannelId || "";
+  item.row.supportRequired = candidate.location === "studio";
+  item.row.missingSupport = item.row.supportRequired;
+}
+
+function rebalanceHosts(
+  generated: GeneratedItem[],
+  hostWeekCounts: Map<string, number>,
+  hostDayCounts: Map<string, number>,
+  occupiedHosts: Set<string>
+) {
+  const assignedItems = generated
+    .filter((item) => item.row.hostId && item.host && item.hostCandidates && item.hostCandidates.length > 1)
+    .sort((left, right) => {
+      const leftCritical = Number(isCriticalHostDemand(left.row.slot, getScheduleSessionLane(left.row)));
+      const rightCritical = Number(isCriticalHostDemand(right.row.slot, getScheduleSessionLane(right.row)));
+      if (leftCritical !== rightCritical) return leftCritical - rightCritical;
+      if (left.row.dateKey !== right.row.dateKey) return left.row.dateKey.localeCompare(right.row.dateKey);
+      return slotStartMinutes(left.row.slot) - slotStartMinutes(right.row.slot);
+    });
+
+  assignedItems.forEach((item) => {
+    const lane = getScheduleSessionLane(item.row);
+    if (isCriticalHostDemand(item.row.slot, lane)) return;
+    const currentHost = item.host;
+    if (!currentHost) return;
+
+    const currentKey = personKey("host", currentHost.id);
+    const currentWeekCount = getCount(hostWeekCounts, currentKey);
+    const currentDayKey = `${currentKey}__${item.row.dateKey}`;
+    const currentDayCount = getCount(hostDayCounts, currentDayKey);
+    const currentRank = hostRank(currentHost.level);
+
+    const replacement = item.hostCandidates
+      .filter((candidate) => candidate.person.id !== currentHost.id)
+      .map((candidate) => {
+        const candidateKey = personKey("host", candidate.person.id);
+        const candidateWeekCount = getCount(hostWeekCounts, candidateKey);
+        const candidateDayCount = getCount(hostDayCounts, `${candidateKey}__${item.row.dateKey}`);
+        const candidateRank = hostRank(candidate.person.level);
+        const qualityDrop = currentRank - candidateRank;
+
+        if (candidateDayCount >= 2) return null;
+        if (occupiedHosts.has(`${candidateKey}__${item.row.dateKey}__${item.row.slot}`)) return null;
+        if (candidateWeekCount + 1 >= currentWeekCount) return null;
+        if (qualityDrop > 1) return null;
+
+        return {
+          candidate,
+          candidateWeekCount,
+          candidateDayCount,
+          candidateRank
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((left, right) => {
+        if (left.candidateWeekCount !== right.candidateWeekCount) return left.candidateWeekCount - right.candidateWeekCount;
+        if (left.candidateDayCount !== right.candidateDayCount) return left.candidateDayCount - right.candidateDayCount;
+        if (left.candidateRank !== right.candidateRank) return right.candidateRank - left.candidateRank;
+        const leftTraining = trainingPriority(left.candidate.person.trainingStatus);
+        const rightTraining = trainingPriority(right.candidate.person.trainingStatus);
+        if (leftTraining !== rightTraining) return rightTraining - leftTraining;
+        return compareText(left.candidate.person.name, right.candidate.person.name) || compareText(left.candidate.person.id, right.candidate.person.id);
+      })[0];
+
+    if (!replacement) return;
+
+    removeCount(hostWeekCounts, currentKey);
+    removeCount(hostDayCounts, currentDayKey);
+    occupiedHosts.delete(`${currentKey}__${item.row.dateKey}__${item.row.slot}`);
+
+    const nextKey = personKey("host", replacement.candidate.person.id);
+    addCount(hostWeekCounts, nextKey);
+    addCount(hostDayCounts, `${nextKey}__${item.row.dateKey}`);
+    occupiedHosts.add(`${nextKey}__${item.row.dateKey}__${item.row.slot}`);
+
+    assignHostToGeneratedItem(item, replacement.candidate);
+    item.row.warnings.push(`HOST_REBALANCED: Chuyển ca để san đều tải tuần từ ${currentHost.id} sang ${replacement.candidate.person.id}.`);
+  });
 }
 
 export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] {
@@ -388,15 +530,20 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
           && !occupiedHosts.has(`${key}__${demand.dateKey}__${demand.slot}`);
       })
       .sort((left, right) => {
-        const rankDifference = hostRank(right.person.level) - hostRank(left.person.level);
-        if (rankDifference) return rankDifference;
-        const trainingDifference = trainingPriority(right.person.trainingStatus) - trainingPriority(left.person.trainingStatus);
-        if (trainingDifference) return trainingDifference;
-        const countDifference = getCount(hostWeekCounts, personKey("host", left.person.id))
-          - getCount(hostWeekCounts, personKey("host", right.person.id));
-        if (countDifference) return countDifference;
-        const cashDifference = parseCashOffer(left.person.cashOffer) - parseCashOffer(right.person.cashOffer);
-        if (cashDifference) return cashDifference;
+        const leftKey = personKey("host", left.person.id);
+        const rightKey = personKey("host", right.person.id);
+        const leftWeekCount = getCount(hostWeekCounts, leftKey);
+        const rightWeekCount = getCount(hostWeekCounts, rightKey);
+        const leftDayCount = getCount(hostDayCounts, `${leftKey}__${demand.dateKey}`);
+        const rightDayCount = getCount(hostDayCounts, `${rightKey}__${demand.dateKey}`);
+        const leftScore = buildHostSelectionScore(left.person, demand.lane, demand.slot, leftWeekCount, leftDayCount);
+        const rightScore = buildHostSelectionScore(right.person, demand.lane, demand.slot, rightWeekCount, rightDayCount);
+
+        for (let index = 0; index < leftScore.length; index += 1) {
+          const difference = rightScore[index] - leftScore[index];
+          if (difference) return difference;
+        }
+
         const nameDifference = compareText(left.person.name, right.person.name);
         return nameDifference || compareText(left.person.id, right.person.id);
       });
@@ -406,26 +553,23 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     const row = buildEmptySession(demand.dateKey, demand.slot, demand.lane);
     if (!primary) {
       row.warnings.push("OPEN_HOST: Không có Host đủ điều kiện để xếp ca.");
-      generated.push({ row });
+      generated.push({ row, hostCandidates: demand.candidates });
       return;
     }
 
     const hostKey = personKey("host", primary.person.id);
-    row.hostId = primary.person.id;
-    row.hostName = primary.person.name;
-    row.format = formatLocation(primary.person, primary.location);
-    row.channel = primary.person.liveChannelId || "";
+    assignHostToGeneratedItem({ row }, primary);
     row.canConfirmHost = true;
-    row.supportRequired = primary.location === "studio";
-    row.missingSupport = row.supportRequired;
     row.backupHostId = backup?.person.id || "";
     row.backupHostName = backup?.person.name || "";
     if (!backup) row.warnings.push("BACKUP_HOST: Chưa có Host dự phòng phù hợp.");
     addCount(hostWeekCounts, hostKey);
     addCount(hostDayCounts, `${hostKey}__${demand.dateKey}`);
     occupiedHosts.add(`${hostKey}__${demand.dateKey}__${demand.slot}`);
-    generated.push({ row, host: primary.person });
+    generated.push({ row, host: primary.person, hostCandidates: demand.candidates });
   });
+
+  rebalanceHosts(generated, hostWeekCounts, hostDayCounts, occupiedHosts);
 
   const chronological = generated.slice().sort((left, right) => {
     if (left.row.dateKey !== right.row.dateKey) return left.row.dateKey.localeCompare(right.row.dateKey);

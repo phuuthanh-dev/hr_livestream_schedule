@@ -179,34 +179,72 @@ test("weekday can reuse one Support for a second host-filled four-hour block whe
   assert.ok(rows.every((row) => row.status === "published"));
 });
 
-test("training status is a priority, not a hard filter, for host and support", () => {
-  const trainedHost = person("HRLT01", "host", { trainingStatus: "Đã training", level: "B" });
-  const untrainedHost = person("HRLT02", "host", { trainingStatus: "Chưa", level: "B", name: "Host chưa train" });
-  const trainedSupport = person("HRSL01", "support", { trainingStatus: "Đã Training", cashOffer: "40.000" });
-  const untrainedSupport = person("HRSL02", "support", { trainingStatus: "Chưa Training", cashOffer: "30.000", name: "Support chưa train" });
+test("training status is a priority, not a hard filter, when fairness is equal", () => {
+  const trainedHost = person("HRLT01", "host", { trainingStatus: "Đã training", level: "B", workLocation: "home" });
+  const untrainedHost = person("HRLT02", "host", { trainingStatus: "Chưa", level: "B", name: "Host chưa train", workLocation: "home" });
 
   const trainedRows = run(
-    [trainedHost, untrainedHost, trainedSupport, untrainedSupport],
-    slots.slice(0, 2).flatMap((slot) => [
-      available("host", trainedHost.id, "2026-08-13", slot, "studio"),
-      available("host", untrainedHost.id, "2026-08-13", slot, "studio"),
-      available("support", trainedSupport.id, "2026-08-13", slot),
-      available("support", untrainedSupport.id, "2026-08-13", slot)
-    ])
+    [trainedHost, untrainedHost],
+    [
+      available("host", trainedHost.id, "2026-08-13", slots[0], "home"),
+      available("host", untrainedHost.id, "2026-08-13", slots[0], "home")
+    ]
   );
-  assert.ok(trainedRows.every((row) => row.hostId === trainedHost.id));
-  assert.ok(trainedRows.every((row) => row.supportId === trainedSupport.id));
+  assert.equal(trainedRows.length, 1);
+  assert.equal(trainedRows[0].hostId, trainedHost.id);
 
   const fallbackRows = run(
-    [untrainedHost, untrainedSupport],
-    slots.slice(0, 2).flatMap((slot) => [
-      available("host", untrainedHost.id, "2026-08-13", slot, "studio"),
-      available("support", untrainedSupport.id, "2026-08-13", slot)
-    ])
+    [untrainedHost],
+    [available("host", untrainedHost.id, "2026-08-13", slots[0], "home")]
   );
   assert.ok(fallbackRows.every((row) => row.hostId === untrainedHost.id));
-  assert.ok(fallbackRows.every((row) => row.supportId === untrainedSupport.id));
   assert.ok(fallbackRows.every((row) => row.status === "published"));
+});
+
+test("standard Studio slots boost hosts with lower weekly load over higher-rank hosts", () => {
+  const seniorHost = person("HRLT01", "host", { level: "A", name: "Senior host" });
+  const developingHost = person("HRLT02", "host", { level: "C", name: "Developing host" });
+  const support = person("HRSL01", "support");
+  const availability = [
+    available("host", seniorHost.id, "2026-08-13", slots[0], "studio"),
+    available("host", seniorHost.id, "2026-08-13", slots[1], "studio"),
+    available("host", developingHost.id, "2026-08-13", slots[1], "studio"),
+    available("support", support.id, "2026-08-13", slots[0]),
+    available("support", support.id, "2026-08-13", slots[1])
+  ];
+
+  const rows = run([seniorHost, developingHost, support], availability)
+    .filter((row) => row.format === "Studio");
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].hostId, seniorHost.id);
+  assert.equal(rows[1].hostId, developingHost.id);
+});
+
+test("critical evening Studio slots still keep stronger hosts ahead when weekly load is equal", () => {
+  const eveningSlots = [
+    "18:00 - 20:00",
+    "20:00 - 22:00"
+  ];
+  const seniorHost = person("HRLT01", "host", { level: "A", name: "Senior host" });
+  const developingHost = person("HRLT02", "host", { level: "C", name: "Developing host" });
+  const support = person("HRSL01", "support");
+
+  const rows = generateSchedule({
+    weekStartKey: "2026-08-10",
+    todayKey: "2026-08-12",
+    slots: eveningSlots,
+    people: [seniorHost, developingHost, support],
+    availability: eveningSlots.flatMap((slot) => [
+      available("host", seniorHost.id, "2026-08-13", slot, "studio"),
+      available("host", developingHost.id, "2026-08-13", slot, "studio"),
+      available("support", support.id, "2026-08-13", slot)
+    ]),
+    protectedSessions: []
+  });
+
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((row) => row.hostId === seniorHost.id));
 });
 
 test("weekend six-hour block only uses a _6H Support", () => {
