@@ -458,6 +458,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
         const preferredBlockSizes = weekend
           ? [3, 2, 1].filter((size) => size <= remaining)
           : [2].filter((size) => size <= remaining);
+        const blockHasHostDemand = (block: GeneratedItem[]) => block.every((item) => Boolean(item.row.hostId));
 
         let assigned = false;
         preferredBlockSizes.forEach((blockSize) => {
@@ -477,7 +478,8 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
             supportUsedDays,
             occupiedSupports
           });
-          const relaxedCandidates = strictCandidates.length > 0 || !weekend
+          const allowRelaxedWeekday = !weekend && blockHasHostDemand(block);
+          const relaxedCandidates = strictCandidates.length > 0 || (!weekend && !allowRelaxedWeekday)
             ? strictCandidates
             : buildSupportCandidates({
               block,

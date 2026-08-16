@@ -151,6 +151,34 @@ test("Studio sessions assign Support only when a complete four-hour block is ava
   assert.ok(rows.every((row) => row.status === "published"));
 });
 
+test("weekday can reuse one Support for a second host-filled four-hour block when no fresh Support remains", () => {
+  const earlyHosts = [
+    person("HRLT01", "host", { name: "Host sáng 1" }),
+    person("HRLT02", "host", { name: "Host sáng 2" })
+  ];
+  const lateHosts = [
+    person("HRLT03", "host", { name: "Host chiều 1" }),
+    person("HRLT04", "host", { name: "Host chiều 2" })
+  ];
+  const supportA = person("HRSL01", "support", { name: "Support A" });
+  const supportB = person("HRSL02", "support", { name: "Support B" });
+  const availability = [
+    ...slots.flatMap((slot, index) => {
+      const hosts = index < 2 ? earlyHosts : lateHosts;
+      return hosts.map((host) => available("host", host.id, "2026-08-13", slot, "studio"));
+    }),
+    ...slots.map((slot) => available("support", supportA.id, "2026-08-13", slot)),
+    ...slots.slice(0, 2).map((slot) => available("support", supportB.id, "2026-08-13", slot))
+  ];
+
+  const rows = run([...earlyHosts, ...lateHosts, supportA, supportB], availability)
+    .filter((row) => row.format === "Studio");
+
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map((row) => row.supportId), [supportA.id, supportA.id, supportA.id, supportA.id]);
+  assert.ok(rows.every((row) => row.status === "published"));
+});
+
 test("training status is a priority, not a hard filter, for host and support", () => {
   const trainedHost = person("HRLT01", "host", { trainingStatus: "Đã training", level: "B" });
   const untrainedHost = person("HRLT02", "host", { trainingStatus: "Chưa", level: "B", name: "Host chưa train" });
