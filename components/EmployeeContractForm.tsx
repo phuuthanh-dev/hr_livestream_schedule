@@ -57,18 +57,22 @@ const EMPTY_FORM: ContractFormState = {
   bankName: ""
 };
 
+function safeText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 function toForm(profile?: EmployeeContractProfile | null): ContractFormState {
-  if (!profile) return EMPTY_FORM;
+  if (!profile) return { ...EMPTY_FORM };
   return {
-    gmail: profile.gmail,
-    dateOfBirth: profile.dateOfBirth,
-    citizenId: profile.citizenId,
-    citizenIdIssuedDate: profile.citizenIdIssuedDate,
-    citizenIdIssuedPlace: profile.citizenIdIssuedPlace,
-    permanentAddress: profile.permanentAddress,
-    temporaryAddress: profile.temporaryAddress,
-    bankAccountNumber: profile.bankAccountNumber,
-    bankName: profile.bankName
+    gmail: safeText(profile.gmail),
+    dateOfBirth: safeText(profile.dateOfBirth),
+    citizenId: safeText(profile.citizenId),
+    citizenIdIssuedDate: safeText(profile.citizenIdIssuedDate),
+    citizenIdIssuedPlace: safeText(profile.citizenIdIssuedPlace),
+    permanentAddress: safeText(profile.permanentAddress),
+    temporaryAddress: safeText(profile.temporaryAddress),
+    bankAccountNumber: safeText(profile.bankAccountNumber),
+    bankName: safeText(profile.bankName)
   };
 }
 
@@ -88,8 +92,8 @@ const REQUIRED_CONTRACT_FIELDS: Array<keyof ContractFormState> = [
   "bankName"
 ];
 
-function hasValue(value: string) {
-  return value.trim().length > 0;
+function hasValue(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function calculateContractProgress(form: ContractFormState, profile: EmployeeContractProfile | null) {
