@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
 import AppShellHeader from "@/components/AppShellHeader";
@@ -30,6 +31,7 @@ type AvailabilityAdminDashboardProps = {
 };
 
 type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "location" | "logout" | "refresh" | "users" | "warning";
+type AvailabilityConfirmAction = "refresh_unconfirmed" | "force_pull" | null;
 
 const DAY_NAMES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 
@@ -140,6 +142,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [scheduleMessage, setScheduleMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<AvailabilityConfirmAction>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -223,10 +226,12 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     window.location.href = "/login";
   }
 
-  async function generateWeekSchedule(mode: "safe" | "refresh_unconfirmed" = "safe") {
+  async function generateWeekSchedule(mode: "safe" | "refresh_unconfirmed" = "safe", skipConfirm = false) {
     if (mode === "refresh_unconfirmed") {
-      const confirmed = window.confirm(`Làm sạch toàn bộ ca tương lai chưa xác nhận trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại? Ca đã xác nhận và ngày quá khứ sẽ được giữ nguyên.`);
-      if (!confirmed) return;
+      if (!skipConfirm) {
+        setConfirmAction("refresh_unconfirmed");
+        return;
+      }
     }
     if (mode === "refresh_unconfirmed") setRefreshingUnconfirmedSchedule(true);
     else setGeneratingSchedule(true);
@@ -253,10 +258,12 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
-  async function importAvailabilityFromSheet(force = false) {
+  async function importAvailabilityFromSheet(force = false, skipConfirm = false) {
     if (force) {
-      const confirmed = window.confirm(`Force pull tuần ${formatWeekRange(weekStartKey)} từ Sheet về Website? Dữ liệu lịch rảnh trên website của tuần này sẽ bị sheet ghi đè.`);
-      if (!confirmed) return;
+      if (!skipConfirm) {
+        setConfirmAction("force_pull");
+        return;
+      }
     }
     setImportingSheet(true);
     setError("");
@@ -320,6 +327,34 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       setSyncingSheet(false);
     }
   }
+
+  async function handleConfirmedAction() {
+    if (confirmAction === "refresh_unconfirmed") {
+      setConfirmAction(null);
+      await generateWeekSchedule("refresh_unconfirmed", true);
+      return;
+    }
+    if (confirmAction === "force_pull") {
+      setConfirmAction(null);
+      await importAvailabilityFromSheet(true, true);
+    }
+  }
+
+  const confirmTitle = confirmAction === "refresh_unconfirmed"
+    ? "Làm sạch ca chưa xác nhận"
+    : confirmAction === "force_pull"
+      ? "Force pull từ Sheet"
+      : "";
+  const confirmDescription = confirmAction === "refresh_unconfirmed"
+    ? `Làm sạch toàn bộ ca tương lai chưa xác nhận trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại. Ca đã xác nhận và ngày quá khứ sẽ được giữ nguyên.`
+    : confirmAction === "force_pull"
+      ? `Kéo tuần ${formatWeekRange(weekStartKey)} từ Sheet về Website và cho phép sheet ghi đè dữ liệu lịch rảnh hiện có trên website.`
+      : "";
+  const confirmActionLabel = confirmAction === "refresh_unconfirmed"
+    ? "Làm sạch và chạy lại"
+    : confirmAction === "force_pull"
+      ? "Force pull"
+      : "Xác nhận";
 
   return (
     <main className="availabilityApp availabilitySummaryApp">
@@ -671,6 +706,26 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       </section>
 
       {accountPanelOpen ? <AccountPanel isAdmin username={username} onClose={() => setAccountPanelOpen(false)} /> : null}
+      <AlertDialog.Root open={Boolean(confirmAction)} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="availabilityConfirmOverlay" />
+          <AlertDialog.Content className="availabilityConfirmDialog">
+            <AlertDialog.Title>{confirmTitle}</AlertDialog.Title>
+            <AlertDialog.Description>{confirmDescription}</AlertDialog.Description>
+            <p>Hành động này sẽ chạy ngay sau khi bạn xác nhận.</p>
+            <div className="availabilityConfirmActions">
+              <AlertDialog.Cancel asChild>
+                <button type="button">Huỷ</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button className="danger" onClick={() => void handleConfirmedAction()} type="button">
+                  {confirmActionLabel}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </main>
   );
 }

@@ -9102,6 +9102,68 @@ a:hover {
   background: #b74536;
 }
 
+.availabilityConfirmOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: rgba(17, 22, 24, 0.52);
+  backdrop-filter: blur(6px);
+}
+
+.availabilityConfirmDialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 141;
+  width: min(92vw, 500px);
+  padding: 24px;
+  border: 1px solid rgba(20, 92, 89, 0.18);
+  border-radius: 24px;
+  color: #183534;
+  background: linear-gradient(180deg, #fdfefd 0%, #f5fbf9 100%);
+  box-shadow: 0 28px 80px rgba(12, 53, 51, 0.22);
+  transform: translate(-50%, -50%);
+}
+
+.availabilityConfirmDialog h2 {
+  margin: 0;
+  color: #103231;
+  font-size: 1.08rem;
+  font-weight: 900;
+}
+
+.availabilityConfirmDialog p {
+  margin: 12px 0 0;
+  color: #567270;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.availabilityConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.availabilityConfirmActions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #cee0dc;
+  border-radius: 12px;
+  color: #4c6765;
+  background: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.availabilityConfirmActions button.danger {
+  border-color: #15716d;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f7f7a 0%, #145a57 100%);
+}
+
 .employeeEmptyState {
   display: grid;
   min-height: 240px;
