@@ -5890,6 +5890,23 @@ a:hover {
   white-space: nowrap;
 }
 
+.employeeSecondaryAction {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d4dfe0;
+  border-radius: 10px;
+  color: #526467;
+  background: #fff;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .employeeRowActions a {
   display: inline-flex;
   width: 100%;
@@ -9700,6 +9717,10 @@ a:hover {
   }
 
   .employeePrimaryAction {
+    width: 100%;
+  }
+
+  .employeeSecondaryAction {
     width: 100%;
   }
 

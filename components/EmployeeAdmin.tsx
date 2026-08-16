@@ -135,6 +135,14 @@ function getDriveSyncMeta(employee: SchedulePerson) {
   } as const;
 }
 
+function closeActionMenu(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return;
+  const details = target.closest("details");
+  if (details instanceof HTMLDetailsElement) {
+    details.open = false;
+  }
+}
+
 export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
   const [employees, setEmployees] = useState<SchedulePerson[]>([]);
   const [locations, setLocations] = useState<ScheduleLocation[]>([]);
@@ -389,7 +397,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Hợp đồng"><span className="employeeStackValue"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span><small className={`employeeDriveSyncNote ${getDriveSyncMeta(employee).tone}`}>{getDriveSyncMeta(employee).label} · {getDriveSyncMeta(employee).detail}</small></span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
                     <td data-label="Cập nhật"><span className="employeeUpdatedAt">{formatTimestamp(employee.updatedAt)}</span></td>
-                    <td data-label="Thao tác"><div className="employeeActionInline"><a className="employeePrimaryAction" href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><details className="employeeActionMenu"><summary><Icon name="more" size={16} /><span>Thao tác</span></summary><div className="employeeRowActions">{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`}>Training</a> : null}<button className="sync" disabled={busy === `drive:${employee.role}:${employee.id}`} onClick={() => void syncDrive(employee)} type="button">{busy === `drive:${employee.role}:${employee.id}` ? "Đang sync..." : "Sync Drive"}</button><button onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={() => void toggleEmployee(employee)} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={() => setDeleteTarget(employee)} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></details></div></td>
+                    <td data-label="Thao tác"><div className="employeeActionInline"><a className="employeePrimaryAction" href={`/contract?role=${employee.role}&employeeId=${encodeURIComponent(employee.id)}`}>Hợp đồng</a><button className="employeeSecondaryAction" onClick={() => openEdit(employee)} type="button"><Icon name="edit" size={15} />Sửa</button><details className="employeeActionMenu"><summary><Icon name="more" size={16} /><span>Thao tác</span></summary><div className="employeeRowActions">{employee.role === "support" ? <a href={`/support-training?employeeId=${encodeURIComponent(employee.id)}&employeeName=${encodeURIComponent(employee.name)}`} onClick={(event) => closeActionMenu(event.currentTarget)}>Training</a> : null}<button className="sync" disabled={busy === `drive:${employee.role}:${employee.id}`} onClick={(event) => { closeActionMenu(event.currentTarget); void syncDrive(employee); }} type="button">{busy === `drive:${employee.role}:${employee.id}` ? "Đang sync..." : "Sync Drive"}</button><button className={employee.active === false ? "activate" : "pause"} disabled={busy === employee.id} onClick={(event) => { closeActionMenu(event.currentTarget); void toggleEmployee(employee); }} type="button">{employee.active === false ? "Kích hoạt" : "Tạm ngưng"}</button><button className="danger" disabled={busy === `delete:${employee.role}:${employee.id}` || busy === employee.id} onClick={(event) => { closeActionMenu(event.currentTarget); setDeleteTarget(employee); }} type="button"><Icon name="trash" size={15} />Xoá cứng</button></div></details></div></td>
                   </tr>
                 ))}</tbody>
               </table>
