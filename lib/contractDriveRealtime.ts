@@ -268,6 +268,7 @@ export async function syncEmployeeBundleToDrive(input: {
   await setEmployeeContractDriveSyncStatus({
     role: input.role,
     employeeId: input.employeeId,
+    employeeName: person.name,
     status: "success",
     syncedAt: new Date(),
     folderId
@@ -288,6 +289,7 @@ export async function syncEmployeeBundleToDriveSafely(input: {
     await setEmployeeContractDriveSyncStatus({
       role: input.role,
       employeeId: input.employeeId,
+      employeeName: "",
       status: "error",
       syncedAt: new Date(),
       error: message

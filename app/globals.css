@@ -9171,6 +9171,11 @@ a:hover {
   backdrop-filter: blur(14px);
 }
 
+.employeeActionMenuUpward .employeeRowActions {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
 .employeeRowActions button {
   display: inline-flex;
   width: 100%;

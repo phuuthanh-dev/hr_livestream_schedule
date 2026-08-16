@@ -385,6 +385,7 @@ export function employeeContractPersonKey(role: EmployeeRole, employeeId: string
 export async function setEmployeeContractDriveSyncStatus(input: {
   role: EmployeeRole;
   employeeId: string;
+  employeeName?: string;
   status: "success" | "error";
   syncedAt?: Date;
   folderId?: string;
@@ -395,6 +396,12 @@ export async function setEmployeeContractDriveSyncStatus(input: {
   await collection.updateOne(
     { personKey: personKey(input.role, input.employeeId) },
     {
+      $setOnInsert: {
+        personKey: personKey(input.role, input.employeeId),
+        role: input.role,
+        employeeId: input.employeeId,
+        employeeName: input.employeeName || ""
+      },
       $set: {
         driveSync: {
           status: input.status,
@@ -403,6 +410,7 @@ export async function setEmployeeContractDriveSyncStatus(input: {
           error: input.error || ""
         }
       }
-    }
+    },
+    { upsert: true }
   );
 }
