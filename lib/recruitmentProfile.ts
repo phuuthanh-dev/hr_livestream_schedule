@@ -268,6 +268,12 @@ export async function listRecruitmentProfiles() {
   return documents.map(toProfile);
 }
 
+export async function getRecruitmentProfile(role: EmployeeRole, employeeId: string) {
+  const collection = await getCollection();
+  const document = await collection.findOne({ personKey: personKey(role, employeeId) });
+  return document ? toProfile(document) : null;
+}
+
 export async function saveRecruitmentProfile(input: {
   role: EmployeeRole;
   employeeId: string;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { syncEmployeeBundleToDriveSafely } from "@/lib/contractDriveRealtime";
 import { deleteContractImage, verifyUploadedContractImage } from "@/lib/contractCloudinary";
 import {
   getEmployeeContractProfile,
@@ -16,7 +17,9 @@ function readSide(value: unknown): EmployeeContractDocumentSide | null {
 
 export async function POST(request: Request) {
   const session = await getDashboardSession();
-  if (!session) return NextResponse.json({ success: false, message: "Vui lòng đăng nhập lại." }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ success: false, message: "Vui lòng đăng nhập lại." }, { status: 401 });
+  }
 
   let uploadedPublicId = "";
   try {
@@ -28,7 +31,9 @@ export async function POST(request: Request) {
     }
 
     const person = await resolveEmployeeContractPerson({ session, role: body.role, employeeId: body.employeeId });
-    if (!person) return NextResponse.json({ success: false, message: "Không tìm thấy nhân viên." }, { status: 404 });
+    if (!person) {
+      return NextResponse.json({ success: false, message: "Không tìm thấy nhân viên." }, { status: 404 });
+    }
 
     const existing = await getEmployeeContractProfile(person.role, person.id);
     if (!existing) {
@@ -62,10 +67,17 @@ export async function POST(request: Request) {
       });
     }
 
+    const driveSync = await syncEmployeeBundleToDriveSafely({
+      role: person.role,
+      employeeId: person.id
+    });
+
     return NextResponse.json({
       success: true,
       profile: result.profile,
-      message: `Đã tải ${side === "front" ? "mặt trước" : "mặt sau"} CCCD.`
+      message: driveSync.success
+        ? `Đã tải ${side === "front" ? "mặt trước" : "mặt sau"} CCCD và sync Google Drive.`
+        : `Đã tải ${side === "front" ? "mặt trước" : "mặt sau"} CCCD nhưng sync Google Drive lỗi: ${driveSync.message}`
     });
   } catch (error) {
     if (uploadedPublicId) await deleteContractImage(uploadedPublicId).catch(() => undefined);

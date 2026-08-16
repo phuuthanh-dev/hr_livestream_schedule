@@ -24,6 +24,13 @@ export type EmployeeContractFile = {
 
 type StoredEmployeeContractFile = Omit<EmployeeContractFile, "uploadedAt"> & { uploadedAt: Date };
 
+type StoredEmployeeContractDriveSyncStatus = {
+  status: "success" | "error";
+  syncedAt: Date;
+  folderId?: string;
+  error?: string;
+};
+
 type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   personKey: string;
   role: EmployeeRole;
@@ -35,6 +42,7 @@ type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   citizenIdBack?: StoredEmployeeContractFile;
   completed: boolean;
   submittedAt?: Date;
+  driveSync?: StoredEmployeeContractDriveSyncStatus;
   createdAt: Date;
   createdBy: string;
   updatedAt: Date;
@@ -51,6 +59,13 @@ export type EmployeeContractProfile = NormalizedEmployeeContractInput & {
   completed: boolean;
   submittedAt?: string;
   updatedAt: string;
+};
+
+export type EmployeeContractDriveSyncStatus = {
+  status: "success" | "error";
+  syncedAt: string;
+  folderId?: string;
+  error?: string;
 };
 
 export type EmployeeContractSummary = {
@@ -356,4 +371,29 @@ export async function listEmployeeContractProfiles() {
 
 export function employeeContractPersonKey(role: EmployeeRole, employeeId: string) {
   return personKey(role, employeeId);
+}
+
+export async function setEmployeeContractDriveSyncStatus(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  status: "success" | "error";
+  syncedAt?: Date;
+  folderId?: string;
+  error?: string;
+}) {
+  const collection = await getContractCollection();
+  const syncedAt = input.syncedAt || new Date();
+  await collection.updateOne(
+    { personKey: personKey(input.role, input.employeeId) },
+    {
+      $set: {
+        driveSync: {
+          status: input.status,
+          syncedAt,
+          folderId: input.folderId || "",
+          error: input.error || ""
+        }
+      }
+    }
+  );
 }

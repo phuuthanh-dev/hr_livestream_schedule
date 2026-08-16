@@ -460,3 +460,12 @@ export async function listPeopleApplications() {
   const documents = await collection.find({}).sort({ submittedAt: -1 }).limit(500).toArray();
   return documents.map(toApplication);
 }
+
+export async function getLatestPeopleApplicationForEmployee(role: EmployeeRole, employeeId: string) {
+  const collection = await getApplicationsCollection();
+  const document = await collection.findOne(
+    { role, employeeId: employeeId.trim() },
+    { sort: { updatedAt: -1, submittedAt: -1 } }
+  );
+  return document ? toApplication(document) : null;
+}

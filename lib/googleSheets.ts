@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { createGoogleJwt } from "@/lib/googleAuth";
 
 const GOOGLE_SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -10,20 +11,12 @@ function readRequiredEnv(name: string) {
   return value;
 }
 
-function readGoogleSheetsPrivateKey() {
-  return readRequiredEnv("GOOGLE_SHEETS_PRIVATE_KEY").replace(/\\n/g, "\n");
-}
-
 export function getGoogleSheetsSpreadsheetId() {
   return readRequiredEnv("GOOGLE_SHEETS_SPREADSHEET_ID");
 }
 
 export function createGoogleSheetsClient() {
-  const auth = new google.auth.JWT({
-    email: readRequiredEnv("GOOGLE_SHEETS_CLIENT_EMAIL"),
-    key: readGoogleSheetsPrivateKey(),
-    scopes: GOOGLE_SHEETS_SCOPE
-  });
+  const auth = createGoogleJwt(GOOGLE_SHEETS_SCOPE);
 
   return google.sheets({
     version: "v4",

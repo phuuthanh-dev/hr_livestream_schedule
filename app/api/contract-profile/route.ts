@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
+import { syncEmployeeBundleToDriveSafely } from "@/lib/contractDriveRealtime";
 import { resolveEmployeeContractPerson } from "@/lib/employeeContractAccess";
 import {
   getEmployeeContractProfile,
@@ -61,11 +62,18 @@ export async function PUT(request: Request) {
       values: body,
       actorAccountKey: session.accountKey
     });
+    const driveSync = await syncEmployeeBundleToDriveSafely({
+      role: person.role,
+      employeeId: person.id
+    });
+
     return NextResponse.json({
       success: true,
       target: { role: person.role, employeeId: person.id, employeeName: person.name },
       profile,
-      message: "Đã lưu thông tin hợp đồng."
+      message: driveSync.success
+        ? "Đã lưu thông tin hợp đồng và sync Google Drive."
+        : `Đã lưu thông tin hợp đồng nhưng sync Google Drive lỗi: ${driveSync.message}`
     });
   } catch (error) {
     return NextResponse.json({
