@@ -430,7 +430,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
             <button
               className="availabilitySummaryRefresh"
               disabled={loading || importingSheet}
-              onClick={importAvailabilityFromSheet}
+              onClick={() => void importAvailabilityFromSheet()}
               type="button"
             >
               <Icon name="users" size={18} />
