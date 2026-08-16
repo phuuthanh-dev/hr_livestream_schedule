@@ -8705,6 +8705,29 @@ a:hover {
   font-size: 0.7rem;
 }
 
+.availabilitySyncMetaActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.availabilitySyncToggle {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d6e1e2;
+  border-radius: 999px;
+  color: #3f5d60;
+  background: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.availabilitySyncToggle:hover {
+  border-color: #b9d2d4;
+  background: #f7fbfb;
+}
+
 .recruitmentActionBar {
   display: flex;
   padding: 14px 16px;

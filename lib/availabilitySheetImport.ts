@@ -436,6 +436,7 @@ export async function importAvailabilityFromCollectSheets(
 
     let importedSlots = 0;
     let importedPeople = 0;
+    const importedPersonWeekKeys = new Set<string>();
 
     async function writeImportedWeek(entry: {
       role: EmployeeRole;
@@ -485,6 +486,7 @@ export async function importAvailabilityFromCollectSheets(
 
     for (const entry of availabilityByPersonWeek.values()) {
       const personKey = buildPersonKey(entry.role, entry.employeeId);
+      importedPersonWeekKeys.add(`${personKey}:${entry.weekStartKey}`);
       const normalizedEmployeeId = entry.employeeId.toLowerCase();
       const [existingWeek, existingSlots] = await Promise.all([
         weeks.findOne({ personKey, weekStartKey: entry.weekStartKey }),
@@ -534,6 +536,40 @@ export async function importAvailabilityFromCollectSheets(
       importedSlots += entry.slots.length;
       importedPeople += 1;
       await writeImportedWeek(entry, personKey, normalizedEmployeeId);
+    }
+
+    if (options.force === true && targetWeekStartKey) {
+      const existingWeeks = await weeks
+        .find({ weekStartKey: targetWeekStartKey }, { projection: { personKey: 1, employeeId: 1, role: 1 } })
+        .toArray();
+      const staleWeeks = existingWeeks.filter((entry) => !importedPersonWeekKeys.has(`${entry.personKey}:${targetWeekStartKey}`));
+
+      for (const stale of staleWeeks) {
+        conflicts.push(buildConflict(
+          runId,
+          "sheet_to_website",
+          "force_import",
+          `Force import tuần ${targetWeekStartKey}: xóa dữ liệu website của ${stale.employeeId || stale.personKey} vì nhân sự này không còn trên sheet.`,
+          {
+            weekStartKey: targetWeekStartKey,
+            role: stale.role,
+            employeeId: stale.employeeId
+          }
+        ));
+      }
+
+      if (staleWeeks.length > 0) {
+        await Promise.all([
+          weeks.deleteMany({
+            weekStartKey: targetWeekStartKey,
+            personKey: { $in: staleWeeks.map((entry) => entry.personKey) }
+          }),
+          slots.deleteMany({
+            weekStartKey: targetWeekStartKey,
+            personKey: { $in: staleWeeks.map((entry) => entry.personKey) }
+          })
+        ]);
+      }
     }
 
     const result = {

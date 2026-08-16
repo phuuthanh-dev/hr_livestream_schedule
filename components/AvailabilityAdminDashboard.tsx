@@ -143,6 +143,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [reloadKey, setReloadKey] = useState(0);
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<AvailabilityConfirmAction>(null);
+  const [syncLogExpanded, setSyncLogExpanded] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -530,7 +531,16 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
           <section className={`employeeRosterCard availabilitySyncCard ${syncRuns.length === 0 && syncConflicts.length === 0 ? "isCompact" : ""}`}>
             <div className="employeeRosterMeta">
               <strong>Sync log tuần {formatWeekRange(weekStartKey)}</strong>
-              <span>{syncRuns.length} lần chạy · {syncConflicts.length} conflict gần nhất</span>
+              <div className="availabilitySyncMetaActions">
+                <span>{syncRuns.length} lần chạy · {syncConflicts.length} conflict gần nhất</span>
+                <button
+                  className="availabilitySyncToggle"
+                  onClick={() => setSyncLogExpanded((current) => !current)}
+                  type="button"
+                >
+                  {syncLogExpanded ? "Thu gọn" : "Mở chi tiết"}
+                </button>
+              </div>
             </div>
             {syncRuns.length === 0 ? (
               <div className="employeeEmptyState compact">
@@ -538,7 +548,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                 <span>Tuần này chưa phát sinh lần pull hoặc push nào.</span>
               </div>
             ) : null}
-            {syncRuns.length > 0 ? (
+            {syncRuns.length > 0 && syncLogExpanded ? (
               <div className="employeeTableWrap availabilitySyncTableWrap">
                 <table className="employeeTable availabilitySyncTable">
                   <thead>
@@ -574,7 +584,7 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                 </table>
               </div>
             ) : null}
-            {syncConflicts.length > 0 ? (
+            {syncConflicts.length > 0 && syncLogExpanded ? (
               <div className="employeeTableWrap availabilitySyncTableWrap conflictTable">
                 <table className="employeeTable availabilitySyncTable">
                   <thead>
