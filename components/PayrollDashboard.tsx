@@ -198,8 +198,13 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   }
 
   const summary = payload?.summary;
+  function formatHours(value = 0) {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  }
   const isLocked = payload?.periodStatus === "locked";
   const entries = payload?.entries || [];
+  const personHours = payload?.personHours || [];
   const exceptions = payload?.exceptions || [];
   const latestImport = payload?.imports?.[0];
 
@@ -287,6 +292,30 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <article className="payrollSummaryCard"><span>Gross GMV đối soát</span><strong>{formatMoney(summary?.grossGmv)}</strong><small>Hoa hồng {formatMoney(summary?.commissionPay)}</small></article>
         <article className={`payrollSummaryCard ${exceptions.length ? "warning" : ""}`}><span>Cần kiểm tra</span><strong>{exceptions.length}<em> ngoại lệ</em></strong><small>{exceptions.length ? "Chưa tự động tính các dòng lỗi" : "Dữ liệu đang đầy đủ"}</small><i><Icon name="alert" /></i></article>
       </section>
+
+      {personHours.length > 0 ? (
+        <section className="payrollPersonHours">
+          <div className="payrollPanelTitle">
+            <div><strong>Tổng giờ live theo từng người</strong><span>Giờ theo ca đã xác nhận và khớp báo cáo livestream trong tuần đang chọn</span></div>
+            <small>{personHours.length} nhân sự</small>
+          </div>
+          <div className="payrollPersonHoursGrid">
+            {personHours.map((person) => (
+              <article className={`payrollPersonCard ${person.role}`} key={`${person.role}-${person.employeeId}`}>
+                <div className="payrollPersonCardHead">
+                  <span className={`payrollRoleTag ${person.role}`}>{person.role === "host" ? "Host" : "Support"}</span>
+                  <div><strong>{person.employeeName}</strong><small>{person.employeeId}{person.grade ? ` · ${person.grade}` : ""}</small></div>
+                </div>
+                <div className="payrollPersonStats">
+                  <div><em>{formatHours(person.scheduledHours)}</em><span>giờ live</span></div>
+                  <div><em>{person.sessionCount}</em><span>ca</span></div>
+                  <div><em>{formatMoney(person.netPay)}</em><span>thực nhận</span></div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="payrollWorkspace">
         <nav className="payrollTabs" aria-label="Nội dung bảng lương">

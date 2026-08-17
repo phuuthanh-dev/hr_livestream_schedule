@@ -11,6 +11,7 @@ import type {
   PayrollEntry,
   PayrollException,
   PayrollImportRecord,
+  PayrollPersonHours,
   PayrollRateCard,
   PayrollSettings
 } from "@/lib/types";
@@ -356,6 +357,28 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     entry.grossGmv
   ])).values()).reduce((total, grossGmv) => total + grossGmv, 0);
 
+  const personHoursMap = new Map<string, PayrollPersonHours>();
+  entries.forEach((entry) => {
+    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
+    const current = personHoursMap.get(key) || {
+      employeeId: entry.employeeId,
+      employeeName: entry.employeeName,
+      role: entry.role,
+      grade: entry.grade,
+      sessionCount: 0,
+      scheduledHours: 0,
+      netPay: 0
+    };
+    current.sessionCount += entry.sessionIds.length;
+    current.scheduledHours += entry.scheduledHours;
+    current.netPay += entry.netPay;
+    if (!current.grade && entry.grade) current.grade = entry.grade;
+    personHoursMap.set(key, current);
+  });
+  const personHours = Array.from(personHoursMap.values()).sort((left, right) =>
+    right.scheduledHours - left.scheduledHours || left.employeeName.localeCompare(right.employeeName, "vi")
+  );
+
   return {
     success: true,
     weekStartKey,
@@ -364,6 +387,7 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     generatedAt: period?.generatedAt?.toISOString(),
     summary,
     entries,
+    personHours,
     exceptions,
     rates,
     settings,

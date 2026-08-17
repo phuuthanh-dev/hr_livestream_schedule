@@ -4196,6 +4196,82 @@ a:hover {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.payrollPersonHours {
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid var(--payroll-line);
+  border-radius: 22px;
+  background: var(--payroll-paper);
+}
+
+.payrollPersonHoursGrid {
+  display: grid;
+  padding: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.payrollPersonCard {
+  display: flex;
+  padding: 16px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 16px;
+  background: #fff;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payrollPersonCardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.payrollPersonCardHead > div {
+  display: grid;
+  gap: 2px;
+}
+
+.payrollPersonCardHead strong {
+  font-size: 0.85rem;
+}
+
+.payrollPersonCardHead small {
+  color: var(--payroll-muted);
+  font-size: 0.65rem;
+}
+
+.payrollPersonStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--payroll-line);
+}
+
+.payrollPersonStats > div {
+  display: grid;
+  gap: 2px;
+}
+
+.payrollPersonStats em {
+  font-size: 0.85rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.payrollPersonStats > div:first-child em {
+  color: var(--payroll-green);
+  font-size: 1.05rem;
+}
+
+.payrollPersonStats span {
+  color: var(--payroll-muted);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .payrollWorkspace {
   margin-top: 22px;
   padding-bottom: 70px;

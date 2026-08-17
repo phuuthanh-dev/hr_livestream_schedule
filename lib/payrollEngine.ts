@@ -57,7 +57,7 @@ function personKey(role: PayrollRole, employeeId: string) {
   return `${role}:${employeeId.trim().toLowerCase()}`;
 }
 
-function parseSlotRange(dateKey: string, slot: string) {
+export function parseSlotRange(dateKey: string, slot: string) {
   const match = slot.match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
   if (!match) return null;
   const [year, month, day] = dateKey.split("-").map(Number);

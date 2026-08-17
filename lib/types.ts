@@ -483,6 +483,16 @@ export type PayrollDashboardSummary = {
   exceptionCount: number;
 };
 
+export type PayrollPersonHours = {
+  employeeId: string;
+  employeeName: string;
+  role: PayrollRole;
+  grade: string;
+  sessionCount: number;
+  scheduledHours: number;
+  netPay: number;
+};
+
 export type PayrollDashboardPayload = {
   success: boolean;
   weekStartKey?: string;
@@ -491,6 +501,7 @@ export type PayrollDashboardPayload = {
   generatedAt?: string;
   summary?: PayrollDashboardSummary;
   entries?: PayrollEntry[];
+  personHours?: PayrollPersonHours[];
   exceptions?: PayrollException[];
   rates?: PayrollRateCard[];
   settings?: PayrollSettings;
