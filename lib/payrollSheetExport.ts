@@ -87,6 +87,24 @@ function formatDateKey(dateKey: string) {
   return `${day}/${month}/${year}`;
 }
 
+function dateKeyToSheetSerial(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const spreadsheetEpochUtc = Date.UTC(1899, 11, 30);
+  const dateUtc = Date.UTC(year, month - 1, day);
+  return Math.round((dateUtc - spreadsheetEpochUtc) / 86400000);
+}
+
+function columnLetterFromCount(columnCount: number) {
+  let index = Math.max(1, columnCount);
+  let output = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    output = String.fromCharCode(65 + remainder) + output;
+    index = Math.floor((index - 1) / 26);
+  }
+  return output;
+}
+
 function exceptionMatchesEntry(exception: PayrollException, entry: PayrollEntry) {
   if (exception.dateKey !== entry.dateKey) return false;
   if (exception.employeeId) return exception.employeeId === entry.employeeId;
@@ -108,7 +126,7 @@ export function buildPayrollSheetRows(entries: PayrollEntry[], exceptions: Payro
   const notes = buildExceptionNotes(entries, exceptions);
   return entries.map((entry, index) => [
     entry.sessionIds.join(" | "),
-    formatDateKey(entry.dateKey),
+    dateKeyToSheetSerial(entry.dateKey),
     entry.employeeId,
     entry.employeeName,
     entry.role === "host" ? "HOST" : "SUPPORT",
@@ -288,11 +306,13 @@ export async function exportPayrollWeekToSheet(
   const allRows: Array<Array<string | number>> = [
     PAYROLL_SHEET_HEADERS,
     ...detailRows,
-    [],
+    [""],
     [`TỔNG HỢP THEO NGƯỜI — TUẦN ${formatDateKey(weekStartKey)} → ${formatDateKey(dashboard.weekEndKey || weekStartKey)}`],
     PAYROLL_SUMMARY_HEADERS,
     ...summaryRows
   ];
+  const readbackColumnCount = Math.max(...allRows.map((row) => row.length), 1);
+  const readbackRange = `'${tabTitle.replace(/'/g, "''")}'!A1:${columnLetterFromCount(readbackColumnCount)}${allRows.length}`;
   const quotedTitle = tabTitle.replace(/'/g, "''");
   await sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${quotedTitle}'!A1:AZ` });
   await sheets.spreadsheets.values.update({
@@ -305,6 +325,13 @@ export async function exportPayrollWeekToSheet(
     spreadsheetId,
     requestBody: {
       requests: [
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: 1, endRowIndex: detailRows.length + 1, startColumnIndex: 1, endColumnIndex: 2 },
+            cell: { userEnteredFormat: { numberFormat: { type: "DATE", pattern: "dd/mm/yyyy" } } },
+            fields: "userEnteredFormat.numberFormat"
+          }
+        },
         {
           repeatCell: {
             range: { sheetId, startRowIndex: 1, startColumnIndex: 7, endColumnIndex: 9 },
@@ -338,7 +365,7 @@ export async function exportPayrollWeekToSheet(
 
   const readback = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${quotedTitle}'!A1`,
+    range: readbackRange,
     valueRenderOption: "UNFORMATTED_VALUE"
   });
   const verification = compareWritten(allRows, (readback.data.values as unknown[][]) || []);

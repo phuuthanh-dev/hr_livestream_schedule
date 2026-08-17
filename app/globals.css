@@ -3987,6 +3987,84 @@ a:hover {
   font-size: 0.68rem;
 }
 
+.payrollExportPanel {
+  display: grid;
+  margin-top: 16px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 22px;
+  background: rgba(255, 253, 247, 0.92);
+  box-shadow: 0 12px 32px rgba(21, 54, 53, 0.05);
+  gap: 14px;
+}
+
+.payrollExportSummary,
+.payrollExportDetails {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payrollExportDetails {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.payrollExportChip,
+.payrollExportDetailCard {
+  display: grid;
+  padding: 14px 16px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 18px;
+  background: #fff;
+  gap: 6px;
+  align-content: start;
+}
+
+.payrollExportChip.primary {
+  color: #fff;
+  border-color: var(--payroll-green-dark);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 60%),
+    var(--payroll-green-dark);
+}
+
+.payrollExportChip.warning {
+  border-color: #ecd28d;
+  background: #fff8e9;
+}
+
+.payrollExportChip span,
+.payrollExportDetailCard span {
+  color: var(--payroll-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.payrollExportChip.primary span,
+.payrollExportChip.primary small {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.payrollExportChip strong,
+.payrollExportDetailCard strong {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.payrollExportChip small,
+.payrollExportDetailCard small {
+  color: var(--payroll-muted);
+  line-height: 1.55;
+  font-size: 0.72rem;
+}
+
+.payrollExportChip a {
+  color: var(--payroll-green);
+  font-weight: 800;
+}
+
 .payrollToolbar {
   display: flex;
   min-height: 76px;
@@ -4755,6 +4833,11 @@ a:hover {
     grid-template-columns: 1fr 1fr;
   }
 
+  .payrollExportSummary,
+  .payrollExportDetails {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .payrollSummaryGrid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -4799,6 +4882,11 @@ a:hover {
     grid-template-columns: 1fr;
   }
 
+  .payrollExportSummary,
+  .payrollExportDetails {
+    grid-template-columns: 1fr;
+  }
+
   .payrollHeader {
     min-height: 62px;
     padding: 0 12px;
@@ -4821,6 +4909,7 @@ a:hover {
 
   .payrollHero,
   .payrollSyncPanel,
+  .payrollExportPanel,
   .payrollToolbar,
   .payrollMessage,
   .payrollSummaryGrid,
@@ -4852,6 +4941,10 @@ a:hover {
   .payrollToolbar {
     padding: 10px;
     border-radius: 18px;
+  }
+
+  .payrollExportPanel {
+    padding: 14px;
   }
 
   .payrollWeekControl {
