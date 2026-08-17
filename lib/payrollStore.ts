@@ -13,7 +13,8 @@ import type {
   PayrollImportRecord,
   PayrollPersonHours,
   PayrollRateCard,
-  PayrollSettings
+  PayrollSettings,
+  PayrollSheetExportRecord
 } from "@/lib/types";
 
 type TikTokReportDocument = TikTokReportFragment & {
@@ -315,7 +316,8 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
   assertWeekStart(weekStartKey);
   const weekEndKey = addDaysToScheduleDateKey(weekStartKey, 6);
   const collections = await getCollections();
-  const [{ rates, settings }, period, entryDocuments, exceptionDocuments, importDocuments] = await Promise.all([
+  const database = await getMongoDatabase();
+  const [{ rates, settings }, period, entryDocuments, exceptionDocuments, importDocuments, lastExport] = await Promise.all([
     getPayrollConfiguration(),
     collections.periods.findOne({ weekStartKey }),
     collections.entries.find({ weekStartKey }).sort({ dateKey: 1, employeeName: 1 }).toArray(),
@@ -326,7 +328,10 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
         { dateTo: { $gte: weekStartKey, $lte: weekEndKey } },
         { dateFrom: { $lte: weekStartKey }, dateTo: { $gte: weekEndKey } }
       ]
-    }).sort({ importedAt: -1 }).limit(10).toArray()
+    }).sort({ importedAt: -1 }).limit(10).toArray(),
+    database.collection<PayrollSheetExportRecord & { _id?: unknown }>("payroll_sheet_exports")
+      .findOne({ weekStartKey, dryRun: false }, { sort: { exportedAt: -1 } })
+      .catch(() => null)
   ]);
   const entries = entryDocuments.map(({ generationId: _generationId, ...entry }) => entry);
   const exceptions = exceptionDocuments.map(({ weekStartKey: _weekStart, generationId: _generationId, ...exception }) => exception);
@@ -392,6 +397,7 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     rates,
     settings,
     imports: importDocuments.map(toImportRecord),
+    sheetExport: lastExport ? (({ _id: _ignored, ...record }) => record)(lastExport) : null,
     message: period ? undefined : "Tuần này chưa được tính lương."
   };
 }

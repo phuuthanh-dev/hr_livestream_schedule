@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type {
   PayrollDashboardPayload,
   PayrollRateCard,
-  PayrollSettings
+  PayrollSettings,
+  PayrollSheetExportRecord
 } from "@/lib/types";
 
 type PayrollDashboardProps = {
@@ -156,6 +157,27 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     }
   }
 
+  async function exportToSheet() {
+    setWorking("export-sheet");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/payroll/export-sheet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStartKey })
+      });
+      const result = await response.json() as PayrollSheetExportRecord & { success: boolean; message?: string; sheetUrl?: string };
+      if (!response.ok || !result.success) throw new Error(result.message || "Không xuất được bảng lương ra Google Sheet.");
+      setNotice(`${result.message || "Đã xuất bảng lương."}${result.sheetUrl ? ` Mở tab: ${result.sheetUrl}` : ""}`);
+      await loadDashboard();
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Không xuất được bảng lương ra Google Sheet.");
+    } finally {
+      setWorking("");
+    }
+  }
+
   async function saveRates() {
     if (!draftSettings) return;
     setWorking("rates");
@@ -281,12 +303,36 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           <span className={`payrollStatus ${isLocked ? "locked" : "draft"}`}>{isLocked ? "Đã khóa" : "Bản nháp"}</span>
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
+          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang xuất..." : "Xuất ra Google Sheet"}</button>
           <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => void runAction("lock")} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
         </div>
       </section>
 
       {error ? <div className="payrollMessage error"><Icon name="alert" /><span>{error}</span></div> : null}
       {notice ? <div className="payrollMessage success"><span>{notice}</span></div> : null}
+
+      <section className="payrollSyncPanel">
+        <div className="payrollSyncCard primary">
+          <span>Xuất ra Google Sheet</span>
+          <strong>{payload?.sheetExport ? `Đã xuất ${new Date(payload.sheetExport.exportedAt).toLocaleString("vi-VN")}` : "Chưa xuất lần nào"}</strong>
+          <small>{payload?.sheetExport ? `${payload.sheetExport.rowCount} dòng lương (ngày × người) · tab ${payload.sheetExport.tabTitle}` : "Bấm “Xuất ra Google Sheet” để ghi bảng lương vào tab Payroll_<tuần>."}</small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Tab đích</span>
+          <strong>{payload?.sheetExport ? payload.sheetExport.tabTitle : `Payroll_${weekStartKey}`}</strong>
+          <small>{payload?.sheetExport ? <a href={payload.sheetExport.sheetUrl} target="_blank" rel="noreferrer">Mở tab trong Google Sheet</a> : "Tab sẽ được tạo tự động trong file sheet payroll."}</small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Xác minh read-back</span>
+          <strong>{payload?.sheetExport ? (payload.sheetExport.verification.ok ? "Khớp 100%" : `Lệch ${payload.sheetExport.verification.mismatches} ô`) : "-"}</strong>
+          <small>{payload?.sheetExport ? `Đã đối chiếu ${payload.sheetExport.verification.checked} ô sau khi ghi.` : "Sau khi ghi, hệ thống đọc lại tab và so từng ô."}</small>
+        </div>
+        <div className="payrollSyncCard">
+          <span>Đối chiếu chấm công ↔ lương</span>
+          <strong>{exceptions.length === 0 ? "Không ngoại lệ" : `${exceptions.length} ngoại lệ`}</strong>
+          <small>{exceptions.length === 0 ? "Ca đã xác nhận khớp báo cáo TikTok." : "Xem tab Ngoại lệ trước khi chốt lương."}</small>
+        </div>
+      </section>
 
       <section className="payrollSummaryGrid" aria-busy={loading}>
         <article className="payrollSummaryCard featured"><span>Thực nhận toàn tuần</span><strong>{formatMoney(summary?.netPay)}</strong><small>{summary?.employeeCount || 0} nhân sự · {summary?.entryCount || 0} dòng lương</small><i><Icon name="money" /></i></article>

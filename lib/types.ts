@@ -493,6 +493,36 @@ export type PayrollPersonHours = {
   netPay: number;
 };
 
+export type PayrollSheetExportTotals = {
+  scheduledHours: number;
+  basePay: number;
+  commissionPay: number;
+  adjustments: number;
+  grossPay: number;
+  taxAmount: number;
+  netPay: number;
+};
+
+export type PayrollSheetExportRecord = {
+  exportId: string;
+  weekStartKey: string;
+  weekEndKey: string;
+  spreadsheetId: string;
+  tabTitle: string;
+  sheetUrl: string;
+  exportedAt: string;
+  exportedBy: string;
+  rowCount: number;
+  totals: PayrollSheetExportTotals;
+  exceptionCounts: Record<string, number>;
+  verification: {
+    checked: number;
+    mismatches: number;
+    ok: boolean;
+  };
+  dryRun: boolean;
+};
+
 export type PayrollDashboardPayload = {
   success: boolean;
   weekStartKey?: string;
@@ -506,5 +536,6 @@ export type PayrollDashboardPayload = {
   rates?: PayrollRateCard[];
   settings?: PayrollSettings;
   imports?: PayrollImportRecord[];
+  sheetExport?: PayrollSheetExportRecord | null;
   message?: string;
 };
