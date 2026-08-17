@@ -46,6 +46,14 @@ export type SchedulePerson = {
     hasFront: boolean;
     hasBack: boolean;
     updatedAt?: string;
+    generatedDocument?: {
+      templateId: string;
+      documentId: string;
+      documentUrl: string;
+      fileName: string;
+      generatedAt: string;
+      generatedBy: string;
+    };
     driveSync?: {
       status: "success" | "error";
       syncedAt?: string;

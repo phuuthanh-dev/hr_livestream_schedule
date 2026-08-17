@@ -31,6 +31,15 @@ type StoredEmployeeContractDriveSyncStatus = {
   error?: string;
 };
 
+type StoredEmployeeGeneratedContractDocument = {
+  templateId: string;
+  documentId: string;
+  documentUrl: string;
+  fileName: string;
+  generatedAt: Date;
+  generatedBy: string;
+};
+
 type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   personKey: string;
   role: EmployeeRole;
@@ -43,6 +52,7 @@ type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   completed: boolean;
   submittedAt?: Date;
   driveSync?: StoredEmployeeContractDriveSyncStatus;
+  generatedDocument?: StoredEmployeeGeneratedContractDocument;
   createdAt: Date;
   createdBy: string;
   updatedAt: Date;
@@ -59,6 +69,7 @@ export type EmployeeContractProfile = NormalizedEmployeeContractInput & {
   completed: boolean;
   submittedAt?: string;
   updatedAt: string;
+  generatedDocument?: EmployeeGeneratedContractDocument;
 };
 
 export type EmployeeContractDriveSyncStatus = {
@@ -68,12 +79,22 @@ export type EmployeeContractDriveSyncStatus = {
   error?: string;
 };
 
+export type EmployeeGeneratedContractDocument = {
+  templateId: string;
+  documentId: string;
+  documentUrl: string;
+  fileName: string;
+  generatedAt: string;
+  generatedBy: string;
+};
+
 export type EmployeeContractSummary = {
   completed: boolean;
   hasFront: boolean;
   hasBack: boolean;
   updatedAt?: string;
   driveSync?: EmployeeContractDriveSyncStatus;
+  generatedDocument?: EmployeeGeneratedContractDocument;
 };
 
 export type EmployeeContractProfileRecord = EmployeeContractProfile & {
@@ -173,7 +194,17 @@ function toProfile(document: EmployeeContractDocument): EmployeeContractProfile 
     citizenIdBack: toFile(document.citizenIdBack),
     completed: document.completed,
     submittedAt: document.submittedAt?.toISOString(),
-    updatedAt: document.updatedAt.toISOString()
+    updatedAt: document.updatedAt.toISOString(),
+    generatedDocument: document.generatedDocument
+      ? {
+          templateId: document.generatedDocument.templateId,
+          documentId: document.generatedDocument.documentId,
+          documentUrl: document.generatedDocument.documentUrl,
+          fileName: document.generatedDocument.fileName,
+          generatedAt: document.generatedDocument.generatedAt.toISOString(),
+          generatedBy: document.generatedDocument.generatedBy
+        }
+      : undefined
   };
 }
 
@@ -351,7 +382,7 @@ export async function saveEmployeeContractFile(input: {
 export async function listEmployeeContractSummaries() {
   const collection = await getContractCollection();
   const documents = await collection.find({}, {
-    projection: { personKey: 1, completed: 1, citizenIdFront: 1, citizenIdBack: 1, updatedAt: 1, driveSync: 1 }
+    projection: { personKey: 1, completed: 1, citizenIdFront: 1, citizenIdBack: 1, updatedAt: 1, driveSync: 1, generatedDocument: 1 }
   }).toArray();
   return new Map(documents.map((document) => [document.personKey, {
     completed: document.completed,
@@ -364,6 +395,16 @@ export async function listEmployeeContractSummaries() {
           syncedAt: document.driveSync.syncedAt?.toISOString(),
           folderId: document.driveSync.folderId || undefined,
           error: document.driveSync.error || undefined
+        }
+      : undefined,
+    generatedDocument: document.generatedDocument
+      ? {
+          templateId: document.generatedDocument.templateId,
+          documentId: document.generatedDocument.documentId,
+          documentUrl: document.generatedDocument.documentUrl,
+          fileName: document.generatedDocument.fileName,
+          generatedAt: document.generatedDocument.generatedAt.toISOString(),
+          generatedBy: document.generatedDocument.generatedBy
         }
       : undefined
   } satisfies EmployeeContractSummary]));
@@ -413,4 +454,59 @@ export async function setEmployeeContractDriveSyncStatus(input: {
     },
     { upsert: true }
   );
+}
+
+export async function saveGeneratedEmployeeContractDocument(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  employeeName: string;
+  actorAccountKey: string;
+  templateId: string;
+  documentId: string;
+  documentUrl: string;
+  fileName: string;
+}) {
+  const collection = await getContractCollection();
+  const now = new Date();
+  const updated = await collection.findOneAndUpdate(
+    { personKey: personKey(input.role, input.employeeId) },
+    {
+      $setOnInsert: {
+        personKey: personKey(input.role, input.employeeId),
+        role: input.role,
+        employeeId: input.employeeId,
+        employeeName: input.employeeName,
+        contractCode: buildEmployeeContractCode(input.employeeId),
+        normalizedEmployeeId: normalizeEmployeeId(input.employeeId),
+        gmail: "",
+        dateOfBirth: "",
+        citizenId: "",
+        citizenIdIssuedDate: "",
+        citizenIdIssuedPlace: "",
+        permanentAddress: "",
+        temporaryAddress: "",
+        bankAccountNumber: "",
+        bankName: "",
+        completed: false,
+        createdAt: now,
+        createdBy: input.actorAccountKey
+      },
+      $set: {
+        employeeName: input.employeeName,
+        generatedDocument: {
+          templateId: input.templateId,
+          documentId: input.documentId,
+          documentUrl: input.documentUrl,
+          fileName: input.fileName,
+          generatedAt: now,
+          generatedBy: input.actorAccountKey
+        },
+        updatedAt: now,
+        updatedBy: input.actorAccountKey
+      }
+    },
+    { upsert: true, returnDocument: "after" }
+  );
+  if (!updated) throw new Error("Không lưu được metadata hợp đồng đã tạo.");
+  return toProfile(updated);
 }

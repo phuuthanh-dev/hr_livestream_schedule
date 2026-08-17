@@ -127,6 +127,7 @@ export default function EmployeeContractForm({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [generatingDoc, setGeneratingDoc] = useState(false);
 
   function targetParams() {
     const params = new URLSearchParams();
@@ -264,6 +265,33 @@ export default function EmployeeContractForm({
     }
   }
 
+  async function generateContractDocument() {
+    if (!isAdmin || !targetRole || !targetEmployeeId) return;
+    setGeneratingDoc(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/contract-profile/generate-doc", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: targetRole, employeeId: targetEmployeeId })
+      });
+      const payload = await response.json() as ContractPayload & {
+        document?: { id: string; url: string; fileName: string };
+      };
+      if (!response.ok || !payload.success || !payload.profile) {
+        throw new Error(payload.message || "Không tạo được hợp đồng Google Doc.");
+      }
+      setProfile(payload.profile);
+      setForm(toForm(payload.profile));
+      setMessage(payload.message || "Đã tạo hợp đồng Google Doc.");
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Không tạo được hợp đồng Google Doc.");
+    } finally {
+      setGeneratingDoc(false);
+    }
+  }
+
   function documentUrl(side: EmployeeContractDocumentSide) {
     const params = targetParams();
     params.set("side", side);
@@ -304,6 +332,18 @@ export default function EmployeeContractForm({
             <small>{contractProgress.completedItems}/{contractProgress.totalItems} mục đã hoàn thành</small>
           </div>
           <div className="contractPrivacyNote"><strong>Dữ liệu được giới hạn quyền truy cập</strong><span>Ảnh CCCD lưu ở chế độ riêng tư. Chỉ chính nhân viên và Admin mới mở được qua liên kết có thời hạn.</span></div>
+          {isAdmin ? (
+            <div className="contractPrivacyNote">
+              <strong>Hợp đồng Google Doc</strong>
+              <span>{profile?.generatedDocument ? `Đã tạo lúc ${new Date(profile.generatedDocument.generatedAt).toLocaleString("vi-VN")}` : "Chưa tạo bản hợp đồng từ template."}</span>
+              <div className="contractDocActions">
+                <button disabled={generatingDoc || !targetRole || !targetEmployeeId} onClick={() => void generateContractDocument()} type="button">
+                  {generatingDoc ? "Đang tạo hợp đồng..." : profile?.generatedDocument ? "Tạo lại hợp đồng" : "Tạo hợp đồng Google Doc"}
+                </button>
+                {profile?.generatedDocument ? <a href={profile.generatedDocument.documentUrl} rel="noreferrer" target="_blank">Mở Google Doc</a> : null}
+              </div>
+            </div>
+          ) : null}
         </aside>
 
         <section className="contractSurface">

@@ -5987,6 +5987,43 @@ a:hover {
 .contractPrivacyNote strong { color: #b9f3df; font-size: 0.72rem; }
 .contractPrivacyNote span { color: rgba(255, 255, 255, 0.58); font-size: 0.65rem; line-height: 1.6; }
 
+.contractDocActions {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  gap: 10px;
+}
+
+.contractDocActions button,
+.contractDocActions a {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(185, 243, 223, 0.24);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.contractDocActions a {
+  color: #b9f3df;
+}
+
+.contractDocActions button:hover,
+.contractDocActions a:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.contractDocActions button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
 .contractSurface {
   min-width: 0;
   padding: clamp(18px, 3vw, 34px);
