@@ -475,7 +475,6 @@ export async function saveGeneratedEmployeeContractDocument(input: {
         personKey: personKey(input.role, input.employeeId),
         role: input.role,
         employeeId: input.employeeId,
-        employeeName: input.employeeName,
         contractCode: buildEmployeeContractCode(input.employeeId),
         normalizedEmployeeId: normalizeEmployeeId(input.employeeId),
         gmail: "",
