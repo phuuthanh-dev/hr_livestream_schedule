@@ -65,6 +65,17 @@ function splitDateParts(value: string) {
   };
 }
 
+function currentVietnamDateKey() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  return `${read("year")}-${read("month")}-${read("day")}`;
+}
+
 function formatMoneyDisplay(value: unknown) {
   const cleaned = cleanText(value).replace(/[^\d.-]/g, "");
   if (!cleaned) return "...";
@@ -79,13 +90,14 @@ function buildPlaceholderMap(input: {
   phone?: string;
   contract?: Awaited<ReturnType<typeof getEmployeeContractProfile>> | null;
 }) {
-  const signDateParts = splitDateParts("");
+  const signDateKey = currentVietnamDateKey();
+  const signDateParts = splitDateParts(signDateKey);
   return {
     CONTRACT_CODE: withFallback(input.contract?.contractCode || `${input.employeeId}_HDLT2026`),
     SIGN_DAY: signDateParts.day,
     SIGN_MONTH: signDateParts.month,
     SIGN_YEAR: signDateParts.year,
-    SIGN_LOCATION: "...",
+    SIGN_LOCATION: "Thành phố Hồ Chí Minh",
     FULL_NAME: withFallback(input.contract?.employeeName || input.employeeName),
     DOB: formatDateDisplay(input.contract?.dateOfBirth || ""),
     CITIZEN_ID: withFallback(input.contract?.citizenId),
