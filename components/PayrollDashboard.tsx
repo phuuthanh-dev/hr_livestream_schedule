@@ -14,7 +14,7 @@ type PayrollDashboardProps = {
 
 type Tab = "payroll" | "exceptions" | "rates";
 
-function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "download" | "alert" | "money" | "clock" | "calendar" }) {
+function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "download" | "alert" | "money" | "clock" | "calendar" | "chevron" }) {
   const paths = {
     back: <path d="m15 18-6-6 6-6M9 12h10" />,
     upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M5 15v4h14v-4" /></>,
@@ -24,7 +24,8 @@ function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "down
     alert: <><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5m0 3h.01" /></>,
     money: <><circle cx="12" cy="12" r="9" /><path d="M15 8.5c-.7-.5-1.5-.8-2.5-.8-1.4 0-2.5.7-2.5 1.8 0 2.8 5 1.2 5 4 0 1.1-1.1 1.8-2.5 1.8-1 0-2-.3-2.8-.9M12.5 6v12" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4m8-4v4M3 10h18" /></>
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4m8-4v4M3 10h18" /></>,
+    chevron: <path d="m6 9 6 6 6-6" />
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -79,6 +80,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [file, setFile] = useState<File | null>(null);
   const [draftRates, setDraftRates] = useState<PayrollRateCard[]>([]);
   const [draftSettings, setDraftSettings] = useState<PayrollSettings | null>(null);
+  const [personHoursOpen, setPersonHoursOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadDashboard(signal?: AbortSignal) {
@@ -297,23 +299,39 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <section className="payrollPersonHours">
           <div className="payrollPanelTitle">
             <div><strong>Tổng giờ live theo từng người</strong><span>Giờ theo ca đã xác nhận và khớp báo cáo livestream trong tuần đang chọn</span></div>
-            <small>{personHours.length} nhân sự</small>
+            <div className="payrollPersonHoursActions">
+              <small>{personHours.length} nhân sự</small>
+              <button
+                aria-expanded={personHoursOpen}
+                className={`payrollCollapseButton ${personHoursOpen ? "open" : ""}`.trim()}
+                onClick={() => setPersonHoursOpen((current) => !current)}
+                type="button"
+              >
+                <span>{personHoursOpen ? "Thu gọn" : "Mở rộng"}</span>
+                <Icon name="chevron" />
+              </button>
+            </div>
           </div>
-          <div className="payrollPersonHoursGrid">
-            {personHours.map((person) => (
-              <article className={`payrollPersonCard ${person.role}`} key={`${person.role}-${person.employeeId}`}>
-                <div className="payrollPersonCardHead">
-                  <span className={`payrollRoleTag ${person.role}`}>{person.role === "host" ? "Host" : "Support"}</span>
-                  <div><strong>{person.employeeName}</strong><small>{person.employeeId}{person.grade ? ` · ${person.grade}` : ""}</small></div>
-                </div>
-                <div className="payrollPersonStats">
-                  <div><em>{formatHours(person.scheduledHours)}</em><span>giờ live</span></div>
-                  <div><em>{person.sessionCount}</em><span>ca</span></div>
-                  <div><em>{formatMoney(person.netPay)}</em><span>thực nhận</span></div>
-                </div>
-              </article>
-            ))}
-          </div>
+          {personHoursOpen ? (
+            <div className="payrollPersonHoursList">
+              {personHours.map((person) => (
+                <article className={`payrollPersonRow ${person.role}`} key={`${person.role}-${person.employeeId}`}>
+                  <div className="payrollPersonRowIdentity">
+                    <span className={`payrollRoleTag ${person.role}`}>{person.role === "host" ? "Host" : "Support"}</span>
+                    <div>
+                      <strong>{person.employeeName}</strong>
+                      <small>{person.employeeId}{person.grade ? ` · ${person.grade}` : ""}</small>
+                    </div>
+                  </div>
+                  <div className="payrollPersonRowMetrics">
+                    <div><em>{formatHours(person.scheduledHours)}</em><span>Giờ live</span></div>
+                    <div><em>{person.sessionCount}</em><span>Ca</span></div>
+                    <div><em>{formatMoney(person.netPay)}</em><span>Thực nhận</span></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
