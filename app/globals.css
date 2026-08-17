@@ -4197,6 +4197,9 @@ a:hover {
 }
 
 .payrollPersonHours {
+  width: min(1380px, calc(100% - 56px));
+  margin-right: auto;
+  margin-left: auto;
   margin-top: 22px;
   overflow: hidden;
   border: 1px solid var(--payroll-line);

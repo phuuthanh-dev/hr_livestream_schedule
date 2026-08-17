@@ -80,7 +80,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [file, setFile] = useState<File | null>(null);
   const [draftRates, setDraftRates] = useState<PayrollRateCard[]>([]);
   const [draftSettings, setDraftSettings] = useState<PayrollSettings | null>(null);
-  const [personHoursOpen, setPersonHoursOpen] = useState(true);
+  const [personHoursOpen, setPersonHoursOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadDashboard(signal?: AbortSignal) {
