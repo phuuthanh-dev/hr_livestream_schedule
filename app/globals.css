@@ -3989,6 +3989,9 @@ a:hover {
 
 .payrollExportPanel {
   display: grid;
+  width: min(1440px, calc(100% - clamp(28px, 6vw, 96px)));
+  margin-right: auto;
+  margin-left: auto;
   margin-top: 16px;
   padding: 16px 18px 18px;
   border: 1px solid var(--payroll-line);
@@ -4063,6 +4066,31 @@ a:hover {
 .payrollExportChip a {
   color: var(--payroll-green);
   font-weight: 800;
+}
+
+.payrollExportCollapsed {
+  display: flex;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  gap: 10px;
+}
+
+.payrollExportCollapsedItem {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 999px;
+  color: var(--payroll-muted);
+  background: #fff;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.73rem;
+  line-height: 1.4;
+}
+
+.payrollExportCollapsedItem strong {
+  color: var(--payroll-ink);
 }
 
 .payrollToolbar {
@@ -4838,6 +4866,10 @@ a:hover {
     grid-template-columns: 1fr 1fr;
   }
 
+  .payrollExportCollapsed {
+    gap: 8px;
+  }
+
   .payrollSummaryGrid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -4885,6 +4917,10 @@ a:hover {
   .payrollExportSummary,
   .payrollExportDetails {
     grid-template-columns: 1fr;
+  }
+
+  .payrollExportCollapsed {
+    flex-direction: column;
   }
 
   .payrollHeader {

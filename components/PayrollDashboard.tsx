@@ -320,7 +320,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
             <span>Ghi tab `Payroll_yyyy-mm-dd`, đọc lại đúng vùng dữ liệu và đối soát ngay sau khi xuất.</span>
           </div>
           <div className="payrollPersonHoursActions">
-            <small>{sheetExport ? `${sheetExport.rowCount} dòng lương` : "Chưa có lần xuất nào"}</small>
+            <small>{sheetExport ? `${sheetExport.rowCount} dòng · ${sheetExport.tabTitle}` : "Chưa có lần xuất nào"}</small>
             <button
               aria-expanded={sheetExportOpen}
               className={`payrollCollapseButton ${sheetExportOpen ? "open" : ""}`.trim()}
@@ -333,48 +333,56 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           </div>
         </div>
 
-        <div className="payrollExportSummary">
-          <article className="payrollExportChip primary">
-            <span>Trạng thái xuất</span>
-            <strong>{sheetExport ? "Đã xuất" : "Chưa xuất"}</strong>
-            <small>{sheetExport ? new Date(sheetExport.exportedAt).toLocaleString("vi-VN") : "Bấm nút xuất để tạo tab payroll."}</small>
-          </article>
-          <article className="payrollExportChip">
-            <span>Tab đích</span>
-            <strong>{sheetExport?.tabTitle || `Payroll_${weekStartKey}`}</strong>
-            <small>{sheetExport?.sheetUrl ? <a href={sheetExport.sheetUrl} target="_blank" rel="noreferrer">Mở tab trong Google Sheet</a> : "Tab được tạo tự động trong file payroll."}</small>
-          </article>
-          <article className="payrollExportChip">
-            <span>Read-back</span>
-            <strong>{sheetExport ? (sheetExport.verification.ok ? "Khớp 100%" : `Lệch ${sheetExport.verification.mismatches} ô`) : "-"}</strong>
-            <small>{sheetExport ? `${sheetExport.verification.checked} ô đã được đối chiếu.` : "Sau khi ghi, hệ thống đọc lại đúng vùng vừa xuất."}</small>
-          </article>
-          <article className={`payrollExportChip ${exceptions.length ? "warning" : ""}`.trim()}>
-            <span>Đối chiếu ca ↔ lương</span>
-            <strong>{exceptions.length === 0 ? "Không ngoại lệ" : `${exceptions.length} ngoại lệ`}</strong>
-            <small>{exceptions.length === 0 ? "Ca đã xác nhận đang khớp báo cáo TikTok." : "Xem tab Ngoại lệ trước khi chốt lương."}</small>
-          </article>
-        </div>
-
         {sheetExportOpen ? (
-          <div className="payrollExportDetails">
-            <article className="payrollExportDetailCard">
-              <span>Lần xuất gần nhất</span>
-              <strong>{sheetExport ? `Đã xuất lúc ${new Date(sheetExport.exportedAt).toLocaleTimeString("vi-VN")} ${formatDate(sheetExport.weekStartKey)}` : "Chưa có dữ liệu"}</strong>
-              <small>{sheetExport ? `${sheetExport.rowCount} dòng lương (ngày × người) đã được ghi vào sheet payroll.` : "Xuất lần đầu sẽ tạo mới tab tuần tương ứng."}</small>
-            </article>
-            <article className="payrollExportDetailCard">
-              <span>Xác minh sau ghi</span>
-              <strong>{sheetExport ? (sheetExport.verification.ok ? "Đã read-back khớp hoàn toàn" : `Cần kiểm tra ${sheetExport.verification.mismatches} ô`) : "Chưa xác minh"}</strong>
-              <small>{sheetExport ? `Hệ thống đọc lại ${sheetExport.verification.checked} ô trong đúng tab vừa xuất.` : "Khi xuất xong, hệ thống sẽ kiểm tra lại ngay trong cùng request."}</small>
-            </article>
-            <article className="payrollExportDetailCard">
-              <span>Luồng dữ liệu</span>
-              <strong>Payroll app → Google Sheet payroll</strong>
-              <small>Sheet này là đầu ra để kiểm tra, gửi kế toán và chốt bảng lương theo tuần.</small>
-            </article>
+          <>
+            <div className="payrollExportSummary">
+              <article className="payrollExportChip primary">
+                <span>Trạng thái xuất</span>
+                <strong>{sheetExport ? "Đã xuất" : "Chưa xuất"}</strong>
+                <small>{sheetExport ? new Date(sheetExport.exportedAt).toLocaleString("vi-VN") : "Bấm nút xuất để tạo tab payroll."}</small>
+              </article>
+              <article className="payrollExportChip">
+                <span>Tab đích</span>
+                <strong>{sheetExport?.tabTitle || `Payroll_${weekStartKey}`}</strong>
+                <small>{sheetExport?.sheetUrl ? <a href={sheetExport.sheetUrl} target="_blank" rel="noreferrer">Mở tab trong Google Sheet</a> : "Tab được tạo tự động trong file payroll."}</small>
+              </article>
+              <article className="payrollExportChip">
+                <span>Read-back</span>
+                <strong>{sheetExport ? (sheetExport.verification.ok ? "Khớp 100%" : `Lệch ${sheetExport.verification.mismatches} ô`) : "-"}</strong>
+                <small>{sheetExport ? `${sheetExport.verification.checked} ô đã được đối chiếu.` : "Sau khi ghi, hệ thống đọc lại đúng vùng vừa xuất."}</small>
+              </article>
+              <article className={`payrollExportChip ${exceptions.length ? "warning" : ""}`.trim()}>
+                <span>Đối chiếu ca ↔ lương</span>
+                <strong>{exceptions.length === 0 ? "Không ngoại lệ" : `${exceptions.length} ngoại lệ`}</strong>
+                <small>{exceptions.length === 0 ? "Ca đã xác nhận đang khớp báo cáo TikTok." : "Xem tab Ngoại lệ trước khi chốt lương."}</small>
+              </article>
+            </div>
+            <div className="payrollExportDetails">
+              <article className="payrollExportDetailCard">
+                <span>Lần xuất gần nhất</span>
+                <strong>{sheetExport ? `Đã xuất lúc ${new Date(sheetExport.exportedAt).toLocaleTimeString("vi-VN")} ${formatDate(sheetExport.weekStartKey)}` : "Chưa có dữ liệu"}</strong>
+                <small>{sheetExport ? `${sheetExport.rowCount} dòng lương (ngày × người) đã được ghi vào sheet payroll.` : "Xuất lần đầu sẽ tạo mới tab tuần tương ứng."}</small>
+              </article>
+              <article className="payrollExportDetailCard">
+                <span>Xác minh sau ghi</span>
+                <strong>{sheetExport ? (sheetExport.verification.ok ? "Đã read-back khớp hoàn toàn" : `Cần kiểm tra ${sheetExport.verification.mismatches} ô`) : "Chưa xác minh"}</strong>
+                <small>{sheetExport ? `Hệ thống đọc lại ${sheetExport.verification.checked} ô trong đúng tab vừa xuất.` : "Khi xuất xong, hệ thống sẽ kiểm tra lại ngay trong cùng request."}</small>
+              </article>
+              <article className="payrollExportDetailCard">
+                <span>Luồng dữ liệu</span>
+                <strong>Payroll app → Google Sheet payroll</strong>
+                <small>Sheet này là đầu ra để kiểm tra, gửi kế toán và chốt bảng lương theo tuần.</small>
+              </article>
+            </div>
+          </>
+        ) : (
+          <div className="payrollExportCollapsed">
+            <span className="payrollExportCollapsedItem"><strong>Trạng thái:</strong> {sheetExport ? "Đã xuất" : "Chưa xuất"}</span>
+            <span className="payrollExportCollapsedItem"><strong>Tab:</strong> {sheetExport?.tabTitle || `Payroll_${weekStartKey}`}</span>
+            <span className="payrollExportCollapsedItem"><strong>Read-back:</strong> {sheetExport ? (sheetExport.verification.ok ? "Khớp 100%" : `Lệch ${sheetExport.verification.mismatches} ô`) : "-"}</span>
+            <span className="payrollExportCollapsedItem"><strong>Ngoại lệ:</strong> {exceptions.length}</span>
           </div>
-        ) : null}
+        )}
       </section>
 
       <section className="payrollSummaryGrid" aria-busy={loading}>
