@@ -4185,18 +4185,21 @@ a:hover {
 .payrollRangePanel {
   margin: 0 auto 18px;
   width: min(1220px, calc(100vw - 56px));
-  padding: 18px 20px;
+  padding: 0;
   border: 1px solid var(--payroll-line);
   border-radius: 24px;
   background: var(--payroll-paper);
   box-shadow: 0 18px 34px rgba(18, 39, 40, 0.06);
+  overflow: hidden;
 }
 
 .payrollRangeFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 16px;
   align-items: end;
+  padding: 18px 20px 20px;
+  border-top: 1px solid var(--payroll-line);
 }
 
 .payrollRangeFields label {
@@ -4213,7 +4216,7 @@ a:hover {
 }
 
 .payrollRangeFields input {
-  min-height: 46px;
+  min-height: 48px;
   padding: 0 14px;
   border: 1px solid var(--payroll-line);
   border-radius: 14px;
@@ -4230,6 +4233,7 @@ a:hover {
 
 .payrollRangeActions {
   display: flex;
+  min-width: 244px;
   gap: 10px;
   align-items: center;
   justify-content: flex-end;
@@ -4321,6 +4325,12 @@ a:hover {
   color: var(--payroll-ink);
   border: 1px solid var(--payroll-line);
   background: #fff;
+}
+
+.payrollActionButton.subtle.active {
+  color: var(--payroll-green);
+  border-color: rgba(13, 112, 104, 0.25);
+  background: #eef9f5;
 }
 
 .payrollMessage {
@@ -5110,16 +5120,17 @@ a:hover {
 
   .payrollRangePanel {
     width: min(1220px, calc(100vw - 32px));
-    padding: 16px;
     border-radius: 20px;
   }
 
   .payrollRangeFields {
     grid-template-columns: 1fr;
+    padding: 16px;
   }
 
   .payrollRangeActions {
     width: 100%;
+    min-width: 0;
     flex-direction: column;
   }
 
