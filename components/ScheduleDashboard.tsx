@@ -303,6 +303,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [peopleError, setPeopleError] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   const todayKey = getScheduleTodayKey(timezone || undefined);
@@ -452,6 +454,37 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
+  async function deleteSelectedSession() {
+    if (!selectedSession || !isAdmin) return;
+    setDeleteBusy(true);
+    setAssignmentError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: selectedSession.sessionId,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không xóa được ca live.");
+      }
+      applyPayload(payload);
+      setDeleteConfirmOpen(false);
+      setMessage(payload.message || `Đã xóa ca ${selectedSession.slot}.`);
+    } catch (deleteError) {
+      setAssignmentError(deleteError instanceof Error ? deleteError.message : "Không xóa được ca live.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
@@ -524,6 +557,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   useEffect(() => {
     if (!selectedSessionId) return;
     setAssignmentError("");
+    setDeleteConfirmOpen(false);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     function closeOnEscape(event: KeyboardEvent) {
@@ -903,6 +937,44 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 {assignmentBusy ? <p className="assignmentStatus">Đang cập nhật {assignmentBusy === "host" ? "Host" : assignmentBusy === "support" ? "Support" : "địa điểm"}...</p> : null}
                 {peopleError || assignmentError ? <p className="assignmentError">{assignmentError || peopleError}</p> : null}
                 <p className="assignmentHint">Tên, mã, kênh live, địa điểm, trạng thái và cảnh báo được đồng bộ tự động.</p>
+                <div className="drawerDangerZone">
+                  <div className="drawerDangerHeader">
+                    <strong>Xóa ca live</strong>
+                    <span>Ẩn ca này khỏi lịch chính bằng cách deactivate session hiện tại.</span>
+                  </div>
+                  {!deleteConfirmOpen ? (
+                    <button
+                      className="dangerGhostButton"
+                      disabled={deleteBusy || Boolean(assignmentBusy)}
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      type="button"
+                    >
+                      Xóa ca này
+                    </button>
+                  ) : (
+                    <div className="dangerConfirmCard">
+                      <p>Ca <strong>{selectedSession.slot}</strong> ngày <strong>{selectedSession.dateLabel}</strong> sẽ bị xóa khỏi lịch hiển thị.</p>
+                      <div className="dangerConfirmActions">
+                        <button
+                          className="dangerGhostButton"
+                          disabled={deleteBusy}
+                          onClick={() => setDeleteConfirmOpen(false)}
+                          type="button"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          className="dangerSolidButton"
+                          disabled={deleteBusy}
+                          onClick={() => void deleteSelectedSession()}
+                          type="button"
+                        >
+                          {deleteBusy ? "Đang xóa..." : "Xác nhận xóa"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </section>
             ) : null}
 

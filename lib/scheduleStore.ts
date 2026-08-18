@@ -120,6 +120,11 @@ export type UpdateScheduleAssignmentInput = {
   actorAccountKey: string;
 };
 
+export type DeleteScheduleSessionInput = {
+  sessionId: string;
+  actorAccountKey: string;
+};
+
 let indexesPromise: Promise<void> | undefined;
 
 function cleanText(value: unknown): string {
@@ -531,6 +536,35 @@ export async function updateScheduleSessionAssignment(
   );
   if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi cập nhật được lưu.");
   return updated;
+}
+
+export async function deleteScheduleSession(
+  input: DeleteScheduleSessionInput
+): Promise<ScheduleSession> {
+  const { sessions } = await getCollections();
+  const sessionId = cleanText(input.sessionId);
+  if (!sessionId) throw new Error("Thiếu Session ID cần xóa.");
+
+  const document = await sessions.findOne({ sessionKey: sessionId, active: true });
+  if (!document) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
+  const current = toScheduleSession(document);
+  const now = new Date();
+
+  const result = await sessions.updateOne(
+    { sessionKey: sessionId, active: true },
+    {
+      $set: {
+        active: false,
+        deactivatedAt: now,
+        manualOverride: true,
+        manualOverrideUpdatedAt: now,
+        manualOverrideUpdatedBy: cleanText(input.actorAccountKey) || "admin:admin",
+        updatedAt: now
+      }
+    }
+  );
+  if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi xóa được lưu.");
+  return current;
 }
 
 export async function applyScheduleConfirmationToMongo(input: ApplyConfirmationInput): Promise<void> {

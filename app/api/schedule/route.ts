@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
-import { getScheduleFromMongo, updateScheduleSessionAssignment } from "@/lib/scheduleStore";
+import { deleteScheduleSession, getScheduleFromMongo, updateScheduleSessionAssignment } from "@/lib/scheduleStore";
 import type { AvailabilityLocationPreference, SchedulePayload } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -76,6 +76,45 @@ export async function PATCH(request: Request) {
     return NextResponse.json<SchedulePayload>(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không cập nhật được ca.";
+    return NextResponse.json<SchedulePayload>(
+      { success: false, message },
+      { status: updateErrorStatus(message) }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await getDashboardSession();
+  if (!session || session.accountType !== "admin") {
+    return NextResponse.json<SchedulePayload>(
+      { success: false, message: "Chỉ Admin được xóa ca live." },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const body = (await request.json()) as {
+      sessionId?: string;
+      from?: string;
+      to?: string;
+    };
+    if (!body.sessionId) {
+      return NextResponse.json<SchedulePayload>(
+        { success: false, message: "Thiếu Session ID cần xóa." },
+        { status: 400 }
+      );
+    }
+
+    const deleted = await deleteScheduleSession({
+      sessionId: body.sessionId,
+      actorAccountKey: session.accountKey
+    });
+    const payload = await getScheduleFromMongo({ from: body.from, to: body.to });
+    payload.updatedSessionId = deleted.sessionId;
+    payload.message = `Đã xóa ca ${deleted.slot} ngày ${deleted.dateLabel} khỏi lịch hiển thị.`;
+    return NextResponse.json<SchedulePayload>(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Không xóa được ca live.";
     return NextResponse.json<SchedulePayload>(
       { success: false, message },
       { status: updateErrorStatus(message) }

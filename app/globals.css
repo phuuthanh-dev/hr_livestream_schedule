@@ -2140,6 +2140,82 @@ a:hover {
   color: var(--red);
 }
 
+.drawerDangerZone {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(220, 38, 38, 0.14);
+}
+
+.drawerDangerHeader {
+  display: grid;
+  gap: 4px;
+}
+
+.drawerDangerHeader strong {
+  color: #991b1b;
+  font-size: 0.76rem;
+}
+
+.drawerDangerHeader span {
+  color: #7f1d1d;
+  font-size: 0.6rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.dangerGhostButton,
+.dangerSolidButton {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dangerGhostButton {
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  color: #b42318;
+  background: #fff5f5;
+}
+
+.dangerSolidButton {
+  border: 1px solid #dc2626;
+  color: #fff;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.18);
+}
+
+.dangerGhostButton:disabled,
+.dangerSolidButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dangerConfirmCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(220, 38, 38, 0.16);
+  border-radius: 14px;
+  background: rgba(254, 242, 242, 0.95);
+}
+
+.dangerConfirmCard p {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.dangerConfirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .drawerAlert {
   display: flex;
   margin-bottom: 14px;
