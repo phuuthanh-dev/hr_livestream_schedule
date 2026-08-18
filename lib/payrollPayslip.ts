@@ -317,6 +317,8 @@ async function buildPayslipDocument(input: {
     ["Thưởng đạt mốc mắt xem kỷ lục phiên 15/07", "Không phát sinh"],
     ["250.000", formatMoney(summary.taxAmount)],
     ["Quên xác nhận ca ngày 13/07", "Không phát sinh"],
+    ["Đi muộn làm chậm giờ lên sóng (Phiên live 10/07)", "Không phát sinh"],
+    ["Muộn 20 phút", "-"],
     ["1 x 50.000đ", "-"],
     ["50.000", "0"],
     ["438.000", formatMoney(summary.taxAmount)],
