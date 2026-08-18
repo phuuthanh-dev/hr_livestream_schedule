@@ -20,7 +20,7 @@
     "sync:contracts:drive": "node local_programs/contract_drive_sync/sync-contracts.mjs",
     "sync:contracts:drive:watch": "node local_programs/contract_drive_sync/sync-contracts.mjs --watch",
     "sync:contracts:drive:install-agent": "node local_programs/contract_drive_sync/install-macos-launch-agent.mjs",
-    "eval:host-rank": "python3 local_programs/livestream_host_rank_eval/host_rank_eval.py analyze"
+    "eval:host-grade": "python3 local_programs/livestream_host_grade_review/host_grade_review.py analyze"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

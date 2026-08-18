@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""livestream-host-rank-eval — đánh giá host livestream theo rank Base_Salary_Card.
+"""livestream-host-grade-review — đánh giá/review grade host livestream từ transcript theo Base_Salary_Card.
 
 Đọc transcript các ca live (thư mục raw/<host>/<session>/ gồm transcript.txt
 timestamped + summary.md), tính điểm theo rubric ánh xạ từ tiêu chí grade

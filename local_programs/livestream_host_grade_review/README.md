@@ -1,13 +1,13 @@
-# livestream-host-rank-eval
+# livestream-host-grade-review
 
 Program local đánh giá host livestream theo rank `Base_Salary_Card` (sheet master HR_STREAMING).
-Thuộc dự án `hr_livestream_schedule` — đặt tại `local_programs/livestream_host_rank_eval/`.
+Thuộc dự án `hr_livestream_schedule` — đặt tại `local_programs/livestream_host_grade_review/`.
 
 ## Lệnh
 
 ```bash
 # từ project root hr_livestream_schedule
-npm run eval:host-rank -- \
+npm run eval:host-grade -- \
   --raw-dir  <raw transcript root: raw/<host>/<session_ca_live>/> \
   --roster   <roster.json: HR id + rank/lương/%HH hiện tại> \
   --out      <thư mục kết quả>
