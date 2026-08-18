@@ -19,7 +19,8 @@
     "sync:offers:host": "node local_programs/host_offer_sync/sync-host-offers.mjs",
     "sync:contracts:drive": "node local_programs/contract_drive_sync/sync-contracts.mjs",
     "sync:contracts:drive:watch": "node local_programs/contract_drive_sync/sync-contracts.mjs --watch",
-    "sync:contracts:drive:install-agent": "node local_programs/contract_drive_sync/install-macos-launch-agent.mjs"
+    "sync:contracts:drive:install-agent": "node local_programs/contract_drive_sync/install-macos-launch-agent.mjs",
+    "eval:host-rank": "python3 local_programs/livestream_host_rank_eval/host_rank_eval.py analyze"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.23",

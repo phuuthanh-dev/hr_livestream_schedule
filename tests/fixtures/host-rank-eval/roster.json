@@ -1,0 +1,9 @@
+{
+  "HRLT08": {
+    "hr_id": "HRLT08",
+    "name": "Fixture Host Tám",
+    "current_rank": "B",
+    "current_salary_vnd_h": 60000,
+    "current_commission": "2%"
+  }
+}
