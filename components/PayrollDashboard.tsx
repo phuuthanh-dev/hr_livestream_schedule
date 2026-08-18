@@ -179,6 +179,37 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     }
   }
 
+  async function generatePayslips() {
+    setWorking("payslips");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/payroll/generate-payslips", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ weekStartKey })
+      });
+      const result = await response.json() as {
+        success: boolean;
+        message?: string;
+        generatedCount?: number;
+        failedCount?: number;
+        documents?: Array<{ documentUrl: string }>;
+      };
+      if (!response.ok || (!result.success && !result.generatedCount)) {
+        throw new Error(result.message || "Không tạo được phiếu lương.");
+      }
+      const suffix = result.documents?.length
+        ? ` Mở phiếu đầu tiên: ${result.documents[0].documentUrl}`
+        : "";
+      setNotice(`${result.message || "Đã tạo phiếu lương."}${suffix}`);
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : "Không tạo được phiếu lương.");
+    } finally {
+      setWorking("");
+    }
+  }
+
   async function saveRates() {
     if (!draftSettings) return;
     setWorking("rates");
@@ -304,6 +335,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <div className="payrollActions">
           <span className={`payrollStatus ${isLocked ? "locked" : "draft"}`}>{isLocked ? "Đã khóa" : "Bản nháp"}</span>
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
+          <button className="payrollActionButton subtle" disabled={entries.length === 0 || Boolean(working)} onClick={() => void generatePayslips()} type="button"><Icon name="download" />{working === "payslips" ? "Đang tạo phiếu..." : "Tạo phiếu lương"}</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
           <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang xuất..." : "Xuất ra Google Sheet"}</button>
           <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => void runAction("lock")} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
