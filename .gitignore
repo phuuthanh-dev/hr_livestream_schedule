@@ -21,3 +21,6 @@ local_programs/*/.state/
 local_programs/*/.tmp/
 local_programs/*/.env.local
 tmp/
+
+# grade review runtime data (transcripts, roster, results)
+data/host_grade_review/
