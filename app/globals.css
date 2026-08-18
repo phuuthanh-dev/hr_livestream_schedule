@@ -4182,6 +4182,59 @@ a:hover {
   gap: 16px;
 }
 
+.payrollRangePanel {
+  margin: 0 auto 18px;
+  width: min(1220px, calc(100vw - 56px));
+  padding: 18px 20px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 24px;
+  background: var(--payroll-paper);
+  box-shadow: 0 18px 34px rgba(18, 39, 40, 0.06);
+}
+
+.payrollRangeFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.payrollRangeFields label {
+  display: grid;
+  gap: 8px;
+}
+
+.payrollRangeFields label span {
+  color: var(--payroll-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.payrollRangeFields input {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 14px;
+  color: var(--payroll-ink);
+  background: #fff;
+  font: inherit;
+}
+
+.payrollRangeFields input:focus {
+  outline: none;
+  border-color: var(--payroll-green);
+  box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.1);
+}
+
+.payrollRangeActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .payrollWeekControl,
 .payrollActions {
   display: flex;
@@ -5053,6 +5106,25 @@ a:hover {
   .payrollToolbar {
     padding: 10px;
     border-radius: 18px;
+  }
+
+  .payrollRangePanel {
+    width: min(1220px, calc(100vw - 32px));
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .payrollRangeFields {
+    grid-template-columns: 1fr;
+  }
+
+  .payrollRangeActions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .payrollRangeActions .payrollActionButton {
+    width: 100%;
   }
 
   .payrollExportPanel {

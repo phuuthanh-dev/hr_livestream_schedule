@@ -22,11 +22,11 @@ export type EmployeeContractFile = {
   uploadedAt: string;
 };
 
-type StoredEmployeeContractFile = Omit<EmployeeContractFile, "uploadedAt"> & { uploadedAt: Date };
+type StoredEmployeeContractFile = Omit<EmployeeContractFile, "uploadedAt"> & { uploadedAt?: Date | string };
 
 type StoredEmployeeContractDriveSyncStatus = {
   status: "success" | "error";
-  syncedAt: Date;
+  syncedAt?: Date | string;
   folderId?: string;
   error?: string;
 };
@@ -36,7 +36,7 @@ type StoredEmployeeGeneratedContractDocument = {
   documentId: string;
   documentUrl: string;
   fileName: string;
-  generatedAt: Date;
+  generatedAt?: Date | string;
   generatedBy: string;
 };
 
@@ -50,12 +50,12 @@ type EmployeeContractDocument = NormalizedEmployeeContractInput & {
   citizenIdFront?: StoredEmployeeContractFile;
   citizenIdBack?: StoredEmployeeContractFile;
   completed: boolean;
-  submittedAt?: Date;
+  submittedAt?: Date | string;
   driveSync?: StoredEmployeeContractDriveSyncStatus;
   generatedDocument?: StoredEmployeeGeneratedContractDocument;
-  createdAt: Date;
+  createdAt?: Date | string;
   createdBy: string;
-  updatedAt: Date;
+  updatedAt?: Date | string;
   updatedBy: string;
 };
 
@@ -115,6 +115,20 @@ function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function asIsoString(value: unknown) {
+  if (!value) return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
+  }
+  return undefined;
+}
+
 function normalizeDateInput(value: unknown) {
   const raw = cleanText(value, 40);
   if (!raw) return "";
@@ -172,10 +186,12 @@ async function getContractCollection(): Promise<Collection<EmployeeContractDocum
 }
 
 function toFile(file?: StoredEmployeeContractFile): EmployeeContractFile | undefined {
-  return file ? { ...file, uploadedAt: file.uploadedAt.toISOString() } : undefined;
+  const uploadedAt = asIsoString(file?.uploadedAt);
+  return file && uploadedAt ? { ...file, uploadedAt } : undefined;
 }
 
 function toProfile(document: EmployeeContractDocument): EmployeeContractProfile {
+  const updatedAt = asIsoString(document.updatedAt) || new Date(0).toISOString();
   return {
     role: document.role,
     employeeId: document.employeeId,
@@ -193,15 +209,15 @@ function toProfile(document: EmployeeContractDocument): EmployeeContractProfile 
     citizenIdFront: toFile(document.citizenIdFront),
     citizenIdBack: toFile(document.citizenIdBack),
     completed: document.completed,
-    submittedAt: document.submittedAt?.toISOString(),
-    updatedAt: document.updatedAt.toISOString(),
+    submittedAt: asIsoString(document.submittedAt),
+    updatedAt,
     generatedDocument: document.generatedDocument
       ? {
           templateId: document.generatedDocument.templateId,
           documentId: document.generatedDocument.documentId,
           documentUrl: document.generatedDocument.documentUrl,
           fileName: document.generatedDocument.fileName,
-          generatedAt: document.generatedDocument.generatedAt.toISOString(),
+          generatedAt: asIsoString(document.generatedDocument.generatedAt) || updatedAt,
           generatedBy: document.generatedDocument.generatedBy
         }
       : undefined
@@ -384,30 +400,35 @@ export async function listEmployeeContractSummaries() {
   const documents = await collection.find({}, {
     projection: { personKey: 1, completed: 1, citizenIdFront: 1, citizenIdBack: 1, updatedAt: 1, driveSync: 1, generatedDocument: 1 }
   }).toArray();
-  return new Map(documents.map((document) => [document.personKey, {
-    completed: document.completed,
-    hasFront: Boolean(document.citizenIdFront?.publicId),
-    hasBack: Boolean(document.citizenIdBack?.publicId),
-    updatedAt: document.updatedAt?.toISOString(),
-    driveSync: document.driveSync
-      ? {
-          status: document.driveSync.status,
-          syncedAt: document.driveSync.syncedAt?.toISOString(),
-          folderId: document.driveSync.folderId || undefined,
-          error: document.driveSync.error || undefined
-        }
-      : undefined,
-    generatedDocument: document.generatedDocument
-      ? {
-          templateId: document.generatedDocument.templateId,
-          documentId: document.generatedDocument.documentId,
-          documentUrl: document.generatedDocument.documentUrl,
-          fileName: document.generatedDocument.fileName,
-          generatedAt: document.generatedDocument.generatedAt.toISOString(),
-          generatedBy: document.generatedDocument.generatedBy
-        }
-      : undefined
-  } satisfies EmployeeContractSummary]));
+  return new Map(documents.map((document) => {
+    const updatedAt = asIsoString(document.updatedAt);
+    const driveSyncedAt = asIsoString(document.driveSync?.syncedAt);
+    const generatedAt = asIsoString(document.generatedDocument?.generatedAt) || updatedAt;
+    return [document.personKey, {
+      completed: document.completed,
+      hasFront: Boolean(document.citizenIdFront?.publicId),
+      hasBack: Boolean(document.citizenIdBack?.publicId),
+      updatedAt,
+      driveSync: document.driveSync && driveSyncedAt
+        ? {
+            status: document.driveSync.status,
+            syncedAt: driveSyncedAt,
+            folderId: document.driveSync.folderId || undefined,
+            error: document.driveSync.error || undefined
+          }
+        : undefined,
+      generatedDocument: document.generatedDocument && generatedAt
+        ? {
+            templateId: document.generatedDocument.templateId,
+            documentId: document.generatedDocument.documentId,
+            documentUrl: document.generatedDocument.documentUrl,
+            fileName: document.generatedDocument.fileName,
+            generatedAt,
+            generatedBy: document.generatedDocument.generatedBy
+          }
+        : undefined
+    } satisfies EmployeeContractSummary];
+  }));
 }
 
 export async function listEmployeeContractProfiles() {

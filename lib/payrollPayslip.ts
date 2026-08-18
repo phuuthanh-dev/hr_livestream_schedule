@@ -9,8 +9,9 @@ import {
   findDriveChildByName,
   getContractDriveRootFolderId
 } from "@/lib/googleDrive";
+import { getMongoDatabase } from "@/lib/mongodb";
 import { getPayrollDashboard } from "@/lib/payrollStore";
-import type { EmployeeRole, PayrollDashboardPayload } from "@/lib/types";
+import type { EmployeeRole, PayrollDashboardPayload, PayrollEntry } from "@/lib/types";
 
 const DEFAULT_PAYROLL_PAYSLIP_TEMPLATE_DOC_ID = "1ykdRKfFj0UHpOgLylvAg_ly5gOZhhNfEITdcaefxjQg";
 const GOOGLE_DOCS_SCOPE = [
@@ -29,8 +30,8 @@ export type PayrollPayslipDocument = {
 
 export type PayrollPayslipBatchResult = {
   success: boolean;
-  weekStartKey: string;
-  weekEndKey: string;
+  fromDate: string;
+  toDate: string;
   generatedCount: number;
   failedCount: number;
   documents: PayrollPayslipDocument[];
@@ -162,6 +163,10 @@ function normalizeRoleLabel(role: EmployeeRole) {
   return role === "support" ? "Support Livestream" : "Host Livestream";
 }
 
+function isValidDateKey(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(cleanText(value));
+}
+
 function summarizePayrollPeople(payload: PayrollDashboardPayload) {
   const summaries = new Map<string, PayrollPayslipPersonSummary>();
   for (const entry of payload.entries || []) {
@@ -195,9 +200,42 @@ function summarizePayrollPeople(payload: PayrollDashboardPayload) {
   );
 }
 
+function summarizePayrollEntries(entries: PayrollEntry[]) {
+  const summaries = new Map<string, PayrollPayslipPersonSummary>();
+  for (const entry of entries) {
+    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
+    const current = summaries.get(key) || {
+      employeeId: entry.employeeId,
+      role: entry.role,
+      employeeName: entry.employeeName,
+      grade: entry.grade,
+      totalHours: 0,
+      basePay: 0,
+      commissionPay: 0,
+      grossPay: 0,
+      taxAmount: 0,
+      netPay: 0,
+      sessionCount: 0
+    };
+    current.employeeName = current.employeeName || entry.employeeName;
+    current.grade = current.grade || entry.grade;
+    current.totalHours += entry.scheduledHours;
+    current.basePay += entry.basePay;
+    current.commissionPay += entry.commissionPay;
+    current.grossPay += entry.grossPay;
+    current.taxAmount += entry.taxAmount;
+    current.netPay += entry.netPay;
+    current.sessionCount += entry.sessionIds.length;
+    summaries.set(key, current);
+  }
+  return Array.from(summaries.values()).sort((left, right) =>
+    left.role.localeCompare(right.role) || left.employeeName.localeCompare(right.employeeName, "vi")
+  );
+}
+
 async function buildPayslipDocument(input: {
-  weekStartKey: string;
-  weekEndKey: string;
+  fromDate: string;
+  toDate: string;
   summary: PayrollPayslipPersonSummary;
   actorAccountKey: string;
 }) {
@@ -227,7 +265,7 @@ async function buildPayslipDocument(input: {
     || cleanText(summary.employeeName)
     || summary.employeeId;
   const hourlyRate = summary.totalHours > 0 ? Math.round(summary.basePay / summary.totalHours) : 0;
-  const fileName = safeFileName(`PHIEU_LUONG_${summary.employeeId}_${input.weekStartKey}_${input.weekEndKey}_${employeeName}`);
+  const fileName = safeFileName(`PHIEU_LUONG_${summary.employeeId}_${input.fromDate}_${input.toDate}_${employeeName}`);
   const existing = await findDriveChildByName({
     drive,
     parentId: folderId,
@@ -254,8 +292,8 @@ async function buildPayslipDocument(input: {
         employeeId: summary.employeeId,
         role: summary.role,
         documentType: "payroll_payslip",
-        weekStartKey: input.weekStartKey,
-        weekEndKey: input.weekEndKey
+        fromDate: input.fromDate,
+        toDate: input.toDate
       }
     },
     fields: "id",
@@ -268,7 +306,7 @@ async function buildPayslipDocument(input: {
     ["Nguyễn Văn A", employeeName],
     ["Đội ngũ Livestream", "Đội ngũ Livestream"],
     ["Host Live chính", normalizeRoleLabel(summary.role)],
-    ["Ghi mã phiên live nhân sự đã live", `Từ ${formatDateDisplay(input.weekStartKey)} đến ${formatDateDisplay(input.weekEndKey)} · ${summary.sessionCount} ca live`],
+    ["Ghi mã phiên live nhân sự đã live", `Từ ${formatDateDisplay(input.fromDate)} đến ${formatDateDisplay(input.toDate)} · ${summary.sessionCount} ca live`],
     ["4.380.000", formatMoney(summary.grossPay)],
     ["30 giờ x 60.000đ", `${summary.totalHours} giờ x ${formatMoney(hourlyRate)}đ`],
     ["1.800.000", formatMoney(summary.basePay)],
@@ -326,8 +364,8 @@ export async function generatePayrollPayslipsForWeek(weekStartKey: string, actor
   for (const summary of summaries) {
     try {
       documents.push(await buildPayslipDocument({
-        weekStartKey,
-        weekEndKey: payload.weekEndKey,
+        fromDate: weekStartKey,
+        toDate: payload.weekEndKey,
         summary,
         actorAccountKey
       }));
@@ -345,14 +383,71 @@ export async function generatePayrollPayslipsForWeek(weekStartKey: string, actor
   const failedCount = failures.length;
   return {
     success: failedCount === 0,
-    weekStartKey,
-    weekEndKey: payload.weekEndKey,
+    fromDate: weekStartKey,
+    toDate: payload.weekEndKey,
     generatedCount,
     failedCount,
     documents,
     failures,
     message: failedCount === 0
       ? `Đã tạo ${generatedCount} phiếu lương trong tuần ${formatDateDisplay(weekStartKey)} - ${formatDateDisplay(payload.weekEndKey)}.`
+      : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra.`
+  };
+}
+
+export async function generatePayrollPayslipsForRange(fromDate: string, toDate: string, actorAccountKey: string): Promise<PayrollPayslipBatchResult> {
+  if (!isValidDateKey(fromDate) || !isValidDateKey(toDate)) {
+    throw new Error("Khoảng ngày tạo phiếu lương không hợp lệ.");
+  }
+  if (fromDate > toDate) {
+    throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
+  }
+
+  const database = await getMongoDatabase();
+  const entries = await database
+    .collection<PayrollEntry>("payroll_entries")
+    .find({ dateKey: { $gte: fromDate, $lte: toDate } })
+    .sort({ dateKey: 1, employeeName: 1 })
+    .toArray();
+
+  const summaries = summarizePayrollEntries(entries);
+  if (summaries.length === 0) {
+    throw new Error("Khoảng ngày này chưa có bảng lương để tạo phiếu lương.");
+  }
+
+  const documents: PayrollPayslipDocument[] = [];
+  const failures: PayrollPayslipBatchResult["failures"] = [];
+
+  for (const summary of summaries) {
+    try {
+      documents.push(await buildPayslipDocument({
+        fromDate,
+        toDate,
+        summary,
+        actorAccountKey
+      }));
+    } catch (error) {
+      failures.push({
+        employeeId: summary.employeeId,
+        role: summary.role,
+        employeeName: summary.employeeName,
+        message: error instanceof Error ? error.message : "Không tạo được phiếu lương."
+      });
+    }
+  }
+
+  const generatedCount = documents.length;
+  const failedCount = failures.length;
+  return {
+    success: failedCount === 0,
+    fromDate,
+    toDate,
+    generatedCount,
+    failedCount,
+    documents,
+    failures,
+    message: failedCount === 0
+      ? `Đã tạo ${generatedCount} phiếu lương từ ${formatDateDisplay(fromDate)} đến ${formatDateDisplay(toDate)}.`
       : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra.`
   };
 }

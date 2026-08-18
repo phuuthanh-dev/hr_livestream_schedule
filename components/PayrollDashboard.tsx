@@ -83,6 +83,9 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [draftSettings, setDraftSettings] = useState<PayrollSettings | null>(null);
   const [personHoursOpen, setPersonHoursOpen] = useState(false);
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
+  const [payslipRangeOpen, setPayslipRangeOpen] = useState(false);
+  const [payslipFromDate, setPayslipFromDate] = useState(initialWeekStartKey || currentWeekStart());
+  const [payslipToDate, setPayslipToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadDashboard(signal?: AbortSignal) {
@@ -107,6 +110,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     const controller = new AbortController();
     void loadDashboard(controller.signal);
     return () => controller.abort();
+  }, [weekStartKey]);
+
+  useEffect(() => {
+    setPayslipFromDate(weekStartKey);
+    setPayslipToDate(addDays(weekStartKey, 6));
   }, [weekStartKey]);
 
   async function uploadReport() {
@@ -184,10 +192,20 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setError("");
     setNotice("");
     try {
+      if (!payslipFromDate || !payslipToDate) {
+        throw new Error("Hãy chọn đủ từ ngày và đến ngày.");
+      }
+      if (payslipFromDate > payslipToDate) {
+        throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
+      }
       const response = await fetch("/api/payroll/generate-payslips", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ weekStartKey })
+        body: JSON.stringify({
+          weekStartKey,
+          fromDate: payslipFromDate,
+          toDate: payslipToDate
+        })
       });
       const result = await response.json() as {
         success: boolean;
@@ -203,6 +221,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         ? ` Mở phiếu đầu tiên: ${result.documents[0].documentUrl}`
         : "";
       setNotice(`${result.message || "Đã tạo phiếu lương."}${suffix}`);
+      setPayslipRangeOpen(false);
     } catch (generateError) {
       setError(generateError instanceof Error ? generateError.message : "Không tạo được phiếu lương.");
     } finally {
@@ -335,12 +354,39 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <div className="payrollActions">
           <span className={`payrollStatus ${isLocked ? "locked" : "draft"}`}>{isLocked ? "Đã khóa" : "Bản nháp"}</span>
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
-          <button className="payrollActionButton subtle" disabled={entries.length === 0 || Boolean(working)} onClick={() => void generatePayslips()} type="button"><Icon name="download" />{working === "payslips" ? "Đang tạo phiếu..." : "Tạo phiếu lương"}</button>
+          <button className="payrollActionButton subtle" disabled={entries.length === 0 || Boolean(working)} onClick={() => setPayslipRangeOpen((current) => !current)} type="button"><Icon name="download" />Tạo phiếu lương</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
           <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang xuất..." : "Xuất ra Google Sheet"}</button>
           <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => void runAction("lock")} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
         </div>
       </section>
+
+      {payslipRangeOpen ? (
+        <section className="payrollRangePanel">
+          <div className="payrollPanelTitle">
+            <div>
+              <strong>Tạo phiếu lương theo khoảng ngày</strong>
+              <span>Chỉ tạo cho các nhân sự đang có `payroll entries` trong range đã chọn.</span>
+            </div>
+          </div>
+          <div className="payrollRangeFields">
+            <label>
+              <span>Từ ngày</span>
+              <input max={payslipToDate || undefined} onChange={(event) => setPayslipFromDate(event.target.value)} type="date" value={payslipFromDate} />
+            </label>
+            <label>
+              <span>Đến ngày</span>
+              <input min={payslipFromDate || undefined} onChange={(event) => setPayslipToDate(event.target.value)} type="date" value={payslipToDate} />
+            </label>
+            <div className="payrollRangeActions">
+              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { setPayslipFromDate(weekStartKey); setPayslipToDate(addDays(weekStartKey, 6)); setPayslipRangeOpen(false); }} type="button">Hủy</button>
+              <button className="payrollActionButton" disabled={Boolean(working)} onClick={() => void generatePayslips()} type="button">
+                <Icon name="download" />{working === "payslips" ? "Đang tạo phiếu..." : "Xác nhận tạo phiếu"}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {error ? <div className="payrollMessage error"><Icon name="alert" /><span>{error}</span></div> : null}
       {notice ? <div className="payrollMessage success"><span>{notice}</span></div> : null}
