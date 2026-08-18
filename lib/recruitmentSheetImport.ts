@@ -289,6 +289,17 @@ function setCellByIndex(row: string[], index: number, value: string) {
   row[index] = value;
 }
 
+function columnLetterFromIndex(index: number) {
+  let remaining = index + 1;
+  let letters = "";
+  while (remaining > 0) {
+    const modulo = (remaining - 1) % 26;
+    letters = String.fromCharCode(65 + modulo) + letters;
+    remaining = Math.floor((remaining - modulo) / 26);
+  }
+  return letters;
+}
+
 function buildHostEmployeeMutation(input: {
   employeeId: string;
   row: string[];
@@ -398,7 +409,7 @@ function buildHostSheetRow(input: {
 }) {
   const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
   const indexMap = buildIndexMap(input.header);
-  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || "");
+  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || input.contract?.contractCode || "");
   setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
   setCell(row, indexMap, "họ và tên đầy đủ", input.profile.fullName);
   setCell(row, indexMap, "tên gọi khác", input.profile.aliasName);
@@ -442,6 +453,7 @@ function buildSupportSheetRow(input: {
 }) {
   const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
   const indexMap = buildIndexMap(input.header);
+  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || input.contract?.contractCode || "");
   setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
   setCell(row, indexMap, "tên", input.profile.fullName);
   setCell(row, indexMap, "sđt", input.profile.phone);
@@ -486,6 +498,62 @@ async function appendSheetRows(tabName: string, spreadsheetId: string, rows: str
       values: rows
     }
   });
+}
+
+export async function updateRecruitmentSheetContractCode(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  contractCode: string;
+}) {
+  const tabName = input.role === "host" ? HOST_TAB_NAME : SUPPORT_TAB_NAME;
+  const { spreadsheetId, values } = await readSheet(tabName);
+  const header = values[0] || [];
+  const indexMap = buildIndexMap(header);
+  const employeeIdIndex = indexMap.get("mã nhân viên");
+  const contractCodeIndex = indexMap.get("mã hđ");
+  if (employeeIdIndex === undefined) {
+    throw new Error(`Tab ${tabName} thiếu cột Mã nhân viên.`);
+  }
+  if (contractCodeIndex === undefined) {
+    throw new Error(`Tab ${tabName} thiếu cột Mã HĐ.`);
+  }
+
+  const normalizedEmployeeId = normalizeText(input.employeeId).toUpperCase();
+  const matches = values.slice(1)
+    .map((row, index) => ({
+      row,
+      rowNumber: index + 2,
+      employeeId: normalizeText(row[employeeIdIndex]).toUpperCase()
+    }))
+    .filter((item) => item.employeeId === normalizedEmployeeId);
+
+  if (matches.length === 0) {
+    return {
+      success: false,
+      spreadsheetId,
+      tabName,
+      rowNumber: 0,
+      message: `Không tìm thấy ${input.employeeId} trong tab ${tabName} để ghi Mã HĐ.`
+    };
+  }
+  if (matches.length > 1) {
+    throw new Error(`Tab ${tabName} có nhiều dòng trùng mã ${input.employeeId}, chưa ghi Mã HĐ để tránh sai dòng.`);
+  }
+
+  const columnLetter = columnLetterFromIndex(contractCodeIndex);
+  const rowNumber = matches[0].rowNumber;
+  await applySheetUpdates(spreadsheetId, [{
+    range: `'${tabName}'!${columnLetter}${rowNumber}:${columnLetter}${rowNumber}`,
+    values: [[input.contractCode]]
+  }]);
+
+  return {
+    success: true,
+    spreadsheetId,
+    tabName,
+    rowNumber,
+    message: `Đã ghi Mã HĐ ${input.contractCode} vào ${tabName} dòng ${rowNumber}.`
+  };
 }
 
 export async function importRecruitmentProfilesFromSheets(actorAccountKey: string): Promise<ImportSummary> {
@@ -699,7 +767,7 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
             employeeId,
             actorAccountKey,
             values: {
-              sheetContractCode: "",
+              sheetContractCode: getColumn(row, indexMap, "mã hđ"),
               fullName: getColumn(row, indexMap, "tên") || person?.name || employeeId,
               aliasName: "",
               phone: getColumn(row, indexMap, "sđt") || person?.phone || "",
@@ -938,6 +1006,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             indexMap,
             columns: [
               "họ và tên đầy đủ",
+              "mã hđ",
               "tên gọi khác",
               "sđt",
               "lương mong muốn",
@@ -993,6 +1062,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             indexMap,
             columns: [
               "tên",
+              "mã hđ",
               "sđt",
               "level",
               "lương mong muốn theo giờ",

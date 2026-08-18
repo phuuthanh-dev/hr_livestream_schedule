@@ -6,6 +6,7 @@ import {
 } from "@/lib/employeeContract";
 import { findSchedulePerson } from "@/lib/employeeRoster";
 import { getRecruitmentProfile } from "@/lib/recruitmentProfile";
+import { updateRecruitmentSheetContractCode } from "@/lib/recruitmentSheetImport";
 import {
   createGoogleDriveClient,
   ensureEmployeeDriveFolder,
@@ -295,11 +296,28 @@ export async function generateEmployeeContractGoogleDoc(input: {
     documentUrl,
     fileName
   });
+  let sheetUpdate: Awaited<ReturnType<typeof updateRecruitmentSheetContractCode>>;
+  try {
+    sheetUpdate = await updateRecruitmentSheetContractCode({
+      role: person.role,
+      employeeId: person.id,
+      contractCode: profile.contractCode
+    });
+  } catch (error) {
+    sheetUpdate = {
+      success: false,
+      spreadsheetId: "",
+      tabName: person.role === "host" ? "Thông tin Mẫu Live" : "Thông tin Support Live",
+      rowNumber: 0,
+      message: error instanceof Error ? error.message : "Không ghi được Mã HĐ về Google Sheet."
+    };
+  }
 
   return {
     profile,
     documentId,
     documentUrl,
-    fileName
+    fileName,
+    sheetUpdate
   };
 }

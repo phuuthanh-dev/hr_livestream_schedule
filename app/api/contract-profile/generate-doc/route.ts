@@ -37,7 +37,10 @@ export async function POST(request: Request) {
         url: result.documentUrl,
         fileName: result.fileName
       },
-      message: `Đã tạo hợp đồng Google Doc cho ${person.name}. Những field chưa có dữ liệu đang được điền tạm bằng "...".`
+      sheetUpdate: result.sheetUpdate,
+      message: result.sheetUpdate.success
+        ? `Đã tạo hợp đồng Google Doc cho ${person.name} và ghi Mã HĐ về sheet. Những field chưa có dữ liệu đang được điền tạm bằng "...".`
+        : `Đã tạo hợp đồng Google Doc cho ${person.name}, nhưng chưa ghi được Mã HĐ về sheet: ${result.sheetUpdate.message}`
     });
   } catch (error) {
     return NextResponse.json({
