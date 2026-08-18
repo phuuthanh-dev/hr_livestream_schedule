@@ -9682,6 +9682,44 @@ a:hover {
   opacity: 0.62;
 }
 
+.recruitmentRowActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.recruitmentRowActions a,
+.recruitmentRowActions button {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #d4dfe0;
+  border-radius: 12px;
+  color: #355457;
+  background: #fff;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.recruitmentRowActions a {
+  border-color: #b9ddd7;
+  color: #0f615b;
+  background: #edf9f6;
+}
+
+.recruitmentRowActions a:hover,
+.recruitmentRowActions button:hover {
+  border-color: #a7d0ca;
+  background: #f7fbfb;
+}
+
 .employeeDeleteOverlay {
   position: fixed;
   inset: 0;
@@ -10199,6 +10237,16 @@ a:hover {
     margin-top: 8px;
     box-shadow: none;
     backdrop-filter: none;
+  }
+
+  .recruitmentRowActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .recruitmentRowActions a,
+  .recruitmentRowActions button {
+    width: 100%;
   }
 
   .employeeEditorBackdrop {

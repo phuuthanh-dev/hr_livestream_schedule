@@ -562,7 +562,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
                           <span className="employeeUpdatedAt">{formatTimestamp(profile?.updatedAt || app?.updatedAt)}</span>
                         </td>
                         <td data-label="Thao tác">
-                          <div className="employeeRowActions">
+                          <div className="recruitmentRowActions">
                             {(app?.employeeId || profile?.employeeId) ? <a href={`/contract?role=${role}&employeeId=${encodeURIComponent(app?.employeeId || profile?.employeeId || "")}`}>Hợp đồng</a> : null}
                             <button onClick={() => openEditor(record)} type="button">Sửa hồ sơ</button>
                           </div>
