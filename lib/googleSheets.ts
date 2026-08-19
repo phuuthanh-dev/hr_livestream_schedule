@@ -3,7 +3,8 @@ import { createGoogleJwt } from "@/lib/googleAuth";
 
 const GOOGLE_SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"];
 const DEFAULT_HR_MASTER_SPREADSHEET_ID = "1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw";
-const DEFAULT_LIVE_SESSION_MASTER_SHEET_NAME = "Live_Session_Master";
+const DEFAULT_LIVE_SESSION_MASTER_SHEET_NAME = "Live_Session_Master_Web";
+const DEFAULT_TIKTOK_SALES_IMPORT_SHEET_NAME = "TikTok_Sales_Import";
 
 function readRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -23,6 +24,10 @@ export function getGoogleHrMasterSpreadsheetId() {
 
 export function getGoogleLiveSessionMasterSheetName() {
   return process.env.GOOGLE_LIVE_SESSION_MASTER_SHEET_NAME?.trim() || DEFAULT_LIVE_SESSION_MASTER_SHEET_NAME;
+}
+
+export function getGoogleTikTokSalesImportSheetName() {
+  return process.env.GOOGLE_TIKTOK_SALES_IMPORT_SHEET_NAME?.trim() || DEFAULT_TIKTOK_SALES_IMPORT_SHEET_NAME;
 }
 
 export function createGoogleSheetsClient() {

@@ -179,6 +179,39 @@ test("weekday can reuse one Support for a second host-filled four-hour block whe
   assert.ok(rows.every((row) => row.status === "published"));
 });
 
+test("weekday Studio singleton slot falls back to a single Support assignment when a candidate is available", () => {
+  const extendedSlots = [
+    "18:00 - 20:00",
+    "20:00 - 22:00",
+    "22:00 - 00:00"
+  ];
+  const hostA = person("HRLT01", "host", { name: "Host 1" });
+  const hostB = person("HRLT02", "host", { name: "Host 2" });
+  const hostC = person("HRLT03", "host", { name: "Host 3" });
+  const support = person("HRSL01", "support", { name: "Support singleton" });
+
+  const rows = generateSchedule({
+    weekStartKey: "2026-08-17",
+    todayKey: "2026-08-12",
+    slots: extendedSlots,
+    people: [hostA, hostB, hostC, support],
+    availability: [
+      available("host", hostA.id, "2026-08-20", extendedSlots[0], "studio"),
+      available("host", hostB.id, "2026-08-20", extendedSlots[1], "studio"),
+      available("host", hostC.id, "2026-08-20", extendedSlots[2], "studio"),
+      available("support", support.id, "2026-08-20", extendedSlots[2])
+    ],
+    protectedSessions: []
+  }).filter((row) => row.format === "Studio");
+
+  assert.equal(rows.length, 3);
+  assert.equal(rows[2].slot, "22:00 - 00:00");
+  assert.equal(rows[2].hostId, hostC.id);
+  assert.equal(rows[2].supportId, support.id);
+  assert.equal(rows[2].status, "published");
+  assert.ok(rows[2].warnings.includes("WEEKDAY_SUPPORT_FALLBACK_SINGLE: Ngày thường không ghép được block Support liên tục, đã fallback xếp từng slot."));
+});
+
 test("training status is a priority, not a hard filter, when fairness is equal", () => {
   const trainedHost = person("HRLT01", "host", { trainingStatus: "Đã training", level: "B", workLocation: "home" });
   const untrainedHost = person("HRLT02", "host", { trainingStatus: "Chưa", level: "B", name: "Host chưa train", workLocation: "home" });

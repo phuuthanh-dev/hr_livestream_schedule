@@ -13,6 +13,20 @@ export type TikTokReportFragment = {
   grossGmv: number;
   returnedGmv: number;
   grossOrders: number;
+  itemsSold?: number;
+  aov?: number;
+  avgViewDuration?: string;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  productImpressions?: number;
+  productClicks?: number;
+  impressions?: number;
+  showGpm?: string;
+  engagement?: string;
+  ctr?: string;
+  tapThroughRate?: string;
+  estimatedCommission?: number;
   rowNumber: number;
 };
 
@@ -54,6 +68,10 @@ function parseCount(value: Cell) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.round(value));
   const parsed = Number(cleanText(value).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
+function parseMetricText(value: Cell) {
+  return cleanText(value);
 }
 
 function parseBangkokDate(value: Cell) {
@@ -116,6 +134,10 @@ function findColumn(headers: string[], candidates: string[]) {
   return headers.findIndex((header) => candidates.some((candidate) => header === candidate || header.includes(candidate)));
 }
 
+function findExactColumn(headers: string[], candidates: string[]) {
+  return headers.findIndex((header) => candidates.some((candidate) => header === candidate));
+}
+
 function parseCsv(text: string): Row[] {
   const rows: Row[] = [];
   let row: string[] = [];
@@ -176,7 +198,21 @@ export async function parseTikTokReport(buffer: Buffer, fileName: string): Promi
     account: findColumn(headers, ["ten nha sang tao", "creator name", "account id"]),
     grossGmv: findColumn(headers, ["gmv nho buoi live cua nha sang tao", "gross gmv", "gmv"]),
     returnedGmv: findColumn(headers, ["hoan tien", "returned gmv", "refund"]),
-    orders: findColumn(headers, ["don hang nho buoi live", "gross orders", "orders"])
+    orders: findColumn(headers, ["don hang nho buoi live", "gross orders", "orders"]),
+    itemsSold: findColumn(headers, ["so mon ban ra", "items sold"]),
+    aov: findColumn(headers, ["aov"]),
+    avgViewDuration: findColumn(headers, ["avg view duration", "thoi luong xem trung binh", "thời lượng xem trung bình"]),
+    likes: findColumn(headers, ["likes", "luot thich", "lượt thích"]),
+    comments: findColumn(headers, ["comments", "binh luan", "bình luận"]),
+    shares: findColumn(headers, ["shares", "chia se", "chia sẻ"]),
+    productImpressions: findColumn(headers, ["product impressions", "luot hien thi san pham", "lượt hiển thị sản phẩm"]),
+    productClicks: findColumn(headers, ["product clicks", "luot nhap san pham", "luot nhap vao san pham", "lượt nhấp sản phẩm"]),
+    impressions: findExactColumn(headers, ["impressions", "luot hien thi", "lượt hiển thị"]),
+    showGpm: findColumn(headers, ["show gpm", "gpm trung binh moi ngay", "gpm trung bình mỗi ngày"]),
+    engagement: findColumn(headers, ["engagement", "ty le tuong tac trung binh moi ngay", "tỷ lệ tương tác trung bình mỗi ngày"]),
+    ctr: findColumn(headers, ["ctr"]),
+    tapThroughRate: findColumn(headers, ["tap through rate", "ty le nhan vao trung binh moi ngay", "tỷ lệ nhấn vào trung bình mỗi ngày"]),
+    estimatedCommission: findColumn(headers, ["estimated commission", "hoa hong uoc tinh", "hoa hồng ước tính"])
   };
   if ([columns.liveId, columns.start, columns.end, columns.account, columns.grossGmv].some((index) => index < 0)) {
     throw new Error("File thiếu một trong các cột bắt buộc: Live ID, thời gian, creator hoặc GMV.");
@@ -206,6 +242,20 @@ export async function parseTikTokReport(buffer: Buffer, fileName: string): Promi
       grossGmv: parseVnd(row[columns.grossGmv]),
       returnedGmv: columns.returnedGmv >= 0 ? parseVnd(row[columns.returnedGmv]) : 0,
       grossOrders: columns.orders >= 0 ? parseCount(row[columns.orders]) : 0,
+      itemsSold: columns.itemsSold >= 0 ? parseCount(row[columns.itemsSold]) : undefined,
+      aov: columns.aov >= 0 ? parseVnd(row[columns.aov]) : undefined,
+      avgViewDuration: columns.avgViewDuration >= 0 ? parseMetricText(row[columns.avgViewDuration]) : undefined,
+      likes: columns.likes >= 0 ? parseCount(row[columns.likes]) : undefined,
+      comments: columns.comments >= 0 ? parseCount(row[columns.comments]) : undefined,
+      shares: columns.shares >= 0 ? parseCount(row[columns.shares]) : undefined,
+      productImpressions: columns.productImpressions >= 0 ? parseCount(row[columns.productImpressions]) : undefined,
+      productClicks: columns.productClicks >= 0 ? parseCount(row[columns.productClicks]) : undefined,
+      impressions: columns.impressions >= 0 ? parseCount(row[columns.impressions]) : undefined,
+      showGpm: columns.showGpm >= 0 ? parseMetricText(row[columns.showGpm]) : undefined,
+      engagement: columns.engagement >= 0 ? parseMetricText(row[columns.engagement]) : undefined,
+      ctr: columns.ctr >= 0 ? parseMetricText(row[columns.ctr]) : undefined,
+      tapThroughRate: columns.tapThroughRate >= 0 ? parseMetricText(row[columns.tapThroughRate]) : undefined,
+      estimatedCommission: columns.estimatedCommission >= 0 ? parseVnd(row[columns.estimatedCommission]) : undefined,
       rowNumber
     });
   });

@@ -658,7 +658,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
         if (assigned) continue;
 
         const current = run[offset];
-        if (!weekend) {
+        if (!weekend && !current.row.hostId) {
           current.row.warnings.push("SUPPORT_SINGLETON: Ca Studio không ghép được block Support liên tục.");
           offset += 1;
           continue;
@@ -679,7 +679,11 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
         });
 
         if (assignSupportBlock([current], singleCandidates, dateKey, supportWeekCounts, supportUsedDays, occupiedSupports)) {
-          current.row.warnings.push("WEEKEND_SUPPORT_FALLBACK_SINGLE: Cuối tuần không ghép được block dài, đã fallback xếp từng slot.");
+          current.row.warnings.push(
+            weekend
+              ? "WEEKEND_SUPPORT_FALLBACK_SINGLE: Cuối tuần không ghép được block dài, đã fallback xếp từng slot."
+              : "WEEKDAY_SUPPORT_FALLBACK_SINGLE: Ngày thường không ghép được block Support liên tục, đã fallback xếp từng slot."
+          );
         } else {
           current.row.warnings.push(
             weekend
