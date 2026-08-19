@@ -506,7 +506,7 @@ export default function AvailabilityBoard({
                     <span>{saving ? "Đang lưu..." : isAdmin ? "Lưu thay đổi" : "Lưu nháp"}</span>
                   </button>
                   {!isAdmin ? (
-                    <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
+                    <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("submit")} type="button">
                       <Icon name="check" />
                       <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
                     </button>
@@ -692,7 +692,7 @@ export default function AvailabilityBoard({
           <span>{saving ? "Đang lưu..." : isAdmin ? "Lưu thay đổi" : "Lưu nháp"}</span>
         </button>
         {!isAdmin ? (
-          <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection || slots.length === 0} onClick={() => void persistAvailability("submit")} type="button">
+          <button className="syncButton" disabled={!canEdit || !hasEditableSlots || !hasValidTargetLocation || submitting || loadingWeek || !hasTargetSelection} onClick={() => void persistAvailability("submit")} type="button">
             <Icon name="check" />
             <span>{submitting ? "Đang gửi..." : "Gửi lịch rảnh"}</span>
           </button>
