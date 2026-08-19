@@ -5,7 +5,9 @@ import { parseTikTokReport } from "../lib/payrollImport.ts";
 
 const rates = [
   { id: "host:c", role: "host", grade: "C", hourlyRate: 100_000, commissionMode: "fixed", commissionRate: 0.07, sortOrder: 1, active: true },
-  { id: "support:1", role: "support", grade: "Cấp 1", hourlyRate: 30_000, commissionMode: "none", commissionRate: 0, sortOrder: 2, active: true }
+  { id: "host:a", role: "host", grade: "A", hourlyRate: 200_000, commissionMode: "gmv_tier", commissionRate: 0.18, sortOrder: 2, active: true },
+  { id: "host:s", role: "host", grade: "S", hourlyRate: 500_000, commissionMode: "gmv_tier", commissionRate: 0.2, sortOrder: 3, active: true },
+  { id: "support:1", role: "support", grade: "Cấp 1", hourlyRate: 30_000, commissionMode: "none", commissionRate: 0, sortOrder: 4, active: true }
 ];
 
 const settings = {
@@ -17,6 +19,8 @@ const settings = {
 const people = [
   { id: "H01", name: "Host One", role: "host", level: "C", active: true },
   { id: "H02", name: "Host Two", role: "host", level: "C", active: true },
+  { id: "HA", name: "Host A", role: "host", level: "A", active: true },
+  { id: "HS", name: "Host S", role: "host", level: "S", active: true },
   { id: "S01", name: "Support One", role: "support", level: "Cấp 1", active: true }
 ];
 
@@ -174,6 +178,24 @@ test("unconfirmed roles do not receive payroll", () => {
   const result = calculate([session({ isHostConfirmed: false, isSupportConfirmed: false })], [fragment()]);
   assert.equal(result.entries.length, 0);
   assert.equal(result.exceptions.filter((item) => item.type === "unconfirmed_shift").length, 2);
+});
+
+test("host A and S keep their default commission floor before higher GMV tiers apply", () => {
+  const resultA = calculate(
+    [session({ hostId: "HA", hostName: "Host A" })],
+    [fragment({ grossGmv: 1_000_000, returnedGmv: 0 })]
+  );
+  const hostA = resultA.entries.find((entry) => entry.role === "host");
+  assert.equal(hostA.commissionRate, 0.18);
+  assert.equal(hostA.commissionPay, 180_000);
+
+  const resultS = calculate(
+    [session({ hostId: "HS", hostName: "Host S" })],
+    [fragment({ grossGmv: 1_000_000, returnedGmv: 0 })]
+  );
+  const hostS = resultS.entries.find((entry) => entry.role === "host");
+  assert.equal(hostS.commissionRate, 0.2);
+  assert.equal(hostS.commissionPay, 200_000);
 });
 
 test("CSV TikTok report is normalized with Vietnamese currency", async () => {

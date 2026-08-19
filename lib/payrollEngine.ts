@@ -182,7 +182,7 @@ function commissionRateFor(rate: PayrollRateCard, eligibleGmv: number, settings:
   return settings.hostGmvTiers
     .slice()
     .sort((left, right) => left.minimumGmv - right.minimumGmv)
-    .reduce((selected, tier) => eligibleGmv >= tier.minimumGmv ? tier.commissionRate : selected, 0);
+    .reduce((selected, tier) => eligibleGmv >= tier.minimumGmv ? Math.max(selected, tier.commissionRate) : selected, rate.commissionRate);
 }
 
 export function calculatePayroll(input: PayrollCalculationInput) {
