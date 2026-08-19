@@ -517,10 +517,13 @@ export type PayrollSheetExportRecord = {
   weekEndKey: string;
   spreadsheetId: string;
   tabTitle: string;
+  summaryTabTitle?: string;
   sheetUrl: string;
+  summarySheetUrl?: string;
   exportedAt: string;
   exportedBy: string;
   rowCount: number;
+  summaryRowCount?: number;
   totals: PayrollSheetExportTotals;
   exceptionCounts: Record<string, number>;
   verification: {

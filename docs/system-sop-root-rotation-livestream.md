@@ -34,16 +34,13 @@ MongoDB hiện giữ dữ liệu runtime cho:
 
 ### 2.2. Nguồn dữ liệu Google Sheet đang kết nối
 
-Hệ thống hiện đang kết nối programmatically đến 3 file Google Sheet chính:
+Hệ thống hiện đang kết nối programmatically đến 2 file Google Sheet chính:
 
 1. File tuyển dụng + collect lịch rảnh  
    URL: [https://docs.google.com/spreadsheets/d/12WU5jM-KC9EngkA_xBS3U82KYnO-8RMwGwk9fwcGe3o/edit?usp=sharing](https://docs.google.com/spreadsheets/d/12WU5jM-KC9EngkA_xBS3U82KYnO-8RMwGwk9fwcGe3o/edit?usp=sharing)
 
 2. File master HR / grading / session chuẩn  
    URL: [https://docs.google.com/spreadsheets/d/1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw/edit?gid=1442437380#gid=1442437380](https://docs.google.com/spreadsheets/d/1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw/edit?gid=1442437380#gid=1442437380)
-
-3. File workspace payroll  
-   URL: [https://docs.google.com/spreadsheets/d/19JJ86Hpe7tTnyjTIrJrFcli6ZbupiWIV4s235iHvsvA/edit?usp=sharing](https://docs.google.com/spreadsheets/d/19JJ86Hpe7tTnyjTIrJrFcli6ZbupiWIV4s235iHvsvA/edit?usp=sharing)
 
 ### 2.3. Ghi chú quan trọng
 
@@ -68,7 +65,9 @@ File thực thi chính:
 ### 3.2. Biến môi trường chính
 
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
-- `GOOGLE_PAYROLL_SPREADSHEET_ID`
+- `GOOGLE_HR_MASTER_SPREADSHEET_ID`
+- `GOOGLE_PAYROLL_SHEET_NAME`
+- `GOOGLE_PAYROLL_SUMMARY_SHEET_NAME`
 
 ### 3.3. Ý nghĩa vận hành
 
@@ -242,34 +241,27 @@ Code liên quan:
 - [calc_livestream_payroll.py](D:/HR_STREAMING/skills/05_payroll/livestream-payroll-rules/scripts/calc_livestream_payroll.py)
 - [host_grade_review.py](D:/HR_STREAMING/local_programs/livestream_host_grade_review/host_grade_review.py)
 
-## 4.3. File: Livestream Payroll Workspace
+## 4.3. Payroll tabs trong HR master file
 
-URL: [https://docs.google.com/spreadsheets/d/19JJ86Hpe7tTnyjTIrJrFcli6ZbupiWIV4s235iHvsvA/edit?usp=sharing](https://docs.google.com/spreadsheets/d/19JJ86Hpe7tTnyjTIrJrFcli6ZbupiWIV4s235iHvsvA/edit?usp=sharing)
+Payroll không còn ghi sang file workspace riêng.
 
-### Các tab đang có
+Hiện tại website ghi trực tiếp vào file master HR:
 
-- `Host`
-- `Support`
-- `Bảng lươngT7`
-- `Payroll_2026-08-03`
-- `Payroll_2026-08-10`
+URL: [https://docs.google.com/spreadsheets/d/1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw/edit?gid=1442437380#gid=1442437380](https://docs.google.com/spreadsheets/d/1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw/edit?gid=1442437380#gid=1442437380)
+
+### Các tab payroll đang dùng thật
+
+- `Payroll_Sheet`
+- `Payroll_Summary_Raw`
 
 ### Luồng dùng trong code
 
 Website payroll export hiện:
 
-- không ghi vào `Host`
-- không ghi vào `Support`
-- không ghi vào `Bảng lươngT7`
-
-Website sẽ tạo hoặc cập nhật động các tab theo format:
-
-- `Payroll_yyyy-mm-dd`
-
-Ví dụ:
-
-- `Payroll_2026-08-03`
-- `Payroll_2026-08-10`
+- ghi chi tiết từng dòng lương theo ca vào `Payroll_Sheet`
+- ghi tổng hợp theo nhân sự vào `Payroll_Summary_Raw`
+- khi recalculate một tuần, chỉ replace các dòng thuộc tuần đó
+- giữ nguyên dữ liệu của các tuần khác trong cùng tab
 
 Code liên quan:
 
@@ -362,16 +354,12 @@ Nguồn runtime để export payroll là:
 
 File:
 
-- `Livestream Payroll Workspace`
+- `HR_STREAMING_ MASTER FILE`
 
 Tab đích:
 
-- tạo động theo tuần với format `Payroll_yyyy-mm-dd`
-
-Ví dụ:
-
-- `Payroll_2026-08-03`
-- `Payroll_2026-08-10`
+- `Payroll_Sheet`
+- `Payroll_Summary_Raw`
 
 ### Quy tắc export
 
@@ -563,6 +551,6 @@ Tóm tắt nhanh:
 
 - Tuyển dụng Host/Support sync qua `Thông tin Mẫu Live` và `Thông tin Support Live`
 - Lịch rảnh sync qua `Collect lịch live chính` và `Collect lịch sp live`
-- Payroll export ghi ra `Livestream Payroll Workspace` dưới tab `Payroll_yyyy-mm-dd`
+- Payroll export ghi trực tiếp vào `Payroll_Sheet` và `Payroll_Summary_Raw` trong HR master file
 - Grade review local program ghi về `Grade_Review`
 - Hợp đồng và phiếu lương sinh file Google Doc và lưu trong folder nhân sự trên Google Drive

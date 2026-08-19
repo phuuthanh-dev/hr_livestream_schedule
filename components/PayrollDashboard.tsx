@@ -202,12 +202,13 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ weekStartKey })
       });
-      const result = await response.json() as PayrollSheetExportRecord & { success: boolean; message?: string; sheetUrl?: string };
-      if (!response.ok || !result.success) throw new Error(result.message || "Không xuất được bảng lương ra Google Sheet.");
-      setNotice(`${result.message || "Đã xuất bảng lương."}${result.sheetUrl ? ` Mở tab: ${result.sheetUrl}` : ""}`);
+      const result = await response.json() as PayrollSheetExportRecord & { success: boolean; message?: string; sheetUrl?: string; summarySheetUrl?: string };
+      if (!response.ok || !result.success) throw new Error(result.message || "Không đồng bộ được bảng lương sang Google Sheet.");
+      const summarySuffix = result.summarySheetUrl ? ` · Summary: ${result.summarySheetUrl}` : "";
+      setNotice(`${result.message || "Đã đồng bộ bảng lương."}${result.sheetUrl ? ` Detail: ${result.sheetUrl}` : ""}${summarySuffix}`);
       await loadDashboard();
     } catch (exportError) {
-      setError(exportError instanceof Error ? exportError.message : "Không xuất được bảng lương ra Google Sheet.");
+      setError(exportError instanceof Error ? exportError.message : "Không đồng bộ được bảng lương sang Google Sheet.");
     } finally {
       setWorking("");
     }
@@ -388,7 +389,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
           <button className={`payrollActionButton subtle ${payslipRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setPayslipRangeOpen((current) => !current)} type="button"><Icon name="download" />Tạo phiếu lương</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
-          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang xuất..." : "Xuất ra Google Sheet"}</button>
+          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Sync Payroll_Sheet"}</button>
           <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => void runAction("lock")} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
         </div>
       </section>
@@ -452,11 +453,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
       <section className="payrollExportPanel">
         <div className="payrollPanelTitle">
           <div>
-            <strong>Xuất bảng lương ra Google Sheet</strong>
-            <span>Ghi tab `Payroll_yyyy-mm-dd`, đọc lại đúng vùng dữ liệu và đối soát ngay sau khi xuất.</span>
+            <strong>Đồng bộ bảng lương vào file master</strong>
+            <span>Ghi chi tiết vào <code>Payroll_Sheet</code> và tổng hợp theo người vào <code>Payroll_Summary_Raw</code>, rồi read-back ngay sau khi ghi.</span>
           </div>
           <div className="payrollPersonHoursActions">
-            <small>{sheetExport ? `${sheetExport.rowCount} dòng · ${sheetExport.tabTitle}` : "Chưa có lần xuất nào"}</small>
+            <small>{sheetExport ? `${sheetExport.rowCount} dòng · ${sheetExport.tabTitle}` : "Chưa có lần đồng bộ nào"}</small>
             <button
               aria-expanded={sheetExportOpen}
               className={`payrollCollapseButton ${sheetExportOpen ? "open" : ""}`.trim()}
@@ -474,13 +475,18 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
             <div className="payrollExportSummary">
               <article className="payrollExportChip primary">
                 <span>Trạng thái xuất</span>
-                <strong>{sheetExport ? "Đã xuất" : "Chưa xuất"}</strong>
-                <small>{sheetExport ? new Date(sheetExport.exportedAt).toLocaleString("vi-VN") : "Bấm nút xuất để tạo tab payroll."}</small>
+                <strong>{sheetExport ? "Đã đồng bộ" : "Chưa đồng bộ"}</strong>
+                <small>{sheetExport ? new Date(sheetExport.exportedAt).toLocaleString("vi-VN") : "Bấm nút sync để ghi vào file master."}</small>
               </article>
               <article className="payrollExportChip">
-                <span>Tab đích</span>
-                <strong>{sheetExport?.tabTitle || `Payroll_${weekStartKey}`}</strong>
-                <small>{sheetExport?.sheetUrl ? <a href={sheetExport.sheetUrl} target="_blank" rel="noreferrer">Mở tab trong Google Sheet</a> : "Tab được tạo tự động trong file payroll."}</small>
+                <span>Tab chi tiết</span>
+                <strong>{sheetExport?.tabTitle || "Payroll_Sheet"}</strong>
+                <small>{sheetExport?.sheetUrl ? <a href={sheetExport.sheetUrl} target="_blank" rel="noreferrer">Mở Payroll_Sheet</a> : "Tab chi tiết nằm trong file master."}</small>
+              </article>
+              <article className="payrollExportChip">
+                <span>Tab tổng hợp</span>
+                <strong>{sheetExport?.summaryTabTitle || "Payroll_Summary_Raw"}</strong>
+                <small>{sheetExport?.summarySheetUrl ? <a href={sheetExport.summarySheetUrl} target="_blank" rel="noreferrer">Mở Payroll_Summary_Raw</a> : "Tab tổng hợp nằm trong file master."}</small>
               </article>
               <article className="payrollExportChip">
                 <span>Read-back</span>
@@ -496,8 +502,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
             <div className="payrollExportDetails">
               <article className="payrollExportDetailCard">
                 <span>Lần xuất gần nhất</span>
-                <strong>{sheetExport ? `Đã xuất lúc ${new Date(sheetExport.exportedAt).toLocaleTimeString("vi-VN")} ${formatDate(sheetExport.weekStartKey)}` : "Chưa có dữ liệu"}</strong>
-                <small>{sheetExport ? `${sheetExport.rowCount} dòng lương (ngày × người) đã được ghi vào sheet payroll.` : "Xuất lần đầu sẽ tạo mới tab tuần tương ứng."}</small>
+                <strong>{sheetExport ? `Đã đồng bộ lúc ${new Date(sheetExport.exportedAt).toLocaleTimeString("vi-VN")} ${formatDate(sheetExport.weekStartKey)}` : "Chưa có dữ liệu"}</strong>
+                <small>{sheetExport ? `${sheetExport.rowCount} dòng chi tiết và ${sheetExport.summaryRowCount || 0} dòng tổng hợp đã được ghi vào file master.` : "Lần sync đầu sẽ tạo tab chi tiết và tab tổng hợp nếu chưa có."}</small>
               </article>
               <article className="payrollExportDetailCard">
                 <span>Xác minh sau ghi</span>
@@ -506,15 +512,16 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
               </article>
               <article className="payrollExportDetailCard">
                 <span>Luồng dữ liệu</span>
-                <strong>Payroll app → Google Sheet payroll</strong>
-                <small>Sheet này là đầu ra để kiểm tra, gửi kế toán và chốt bảng lương theo tuần.</small>
+                <strong>Payroll app → HR master file</strong>
+                <small>Payroll giờ được ghi trực tiếp vào file master để HR, vận hành và downstream dùng chung.</small>
               </article>
             </div>
           </>
         ) : (
           <div className="payrollExportCollapsed">
-            <span className="payrollExportCollapsedItem"><strong>Trạng thái:</strong> {sheetExport ? "Đã xuất" : "Chưa xuất"}</span>
-            <span className="payrollExportCollapsedItem"><strong>Tab:</strong> {sheetExport?.tabTitle || `Payroll_${weekStartKey}`}</span>
+            <span className="payrollExportCollapsedItem"><strong>Trạng thái:</strong> {sheetExport ? "Đã đồng bộ" : "Chưa đồng bộ"}</span>
+            <span className="payrollExportCollapsedItem"><strong>Chi tiết:</strong> {sheetExport?.tabTitle || "Payroll_Sheet"}</span>
+            <span className="payrollExportCollapsedItem"><strong>Tổng hợp:</strong> {sheetExport?.summaryTabTitle || "Payroll_Summary_Raw"}</span>
             <span className="payrollExportCollapsedItem"><strong>Read-back:</strong> {sheetExport ? (sheetExport.verification.ok ? "Khớp 100%" : `Lệch ${sheetExport.verification.mismatches} ô`) : "-"}</span>
             <span className="payrollExportCollapsedItem"><strong>Ngoại lệ:</strong> {exceptions.length}</span>
           </div>
