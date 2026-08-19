@@ -1544,6 +1544,50 @@ a:hover {
   gap: 16px;
 }
 
+.adminScheduleToolbar {
+  display: flex;
+  min-height: 58px;
+  margin-bottom: 10px;
+  padding: 10px 12px 10px 15px;
+  border: 1px solid #dfe5e2;
+  border-radius: 16px;
+  background: linear-gradient(100deg, #f5faf7 0%, #fffaf0 100%);
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.adminScheduleToolbarCopy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.adminScheduleToolbarCopy strong {
+  color: #244d3e;
+  font-size: 0.8rem;
+}
+
+.adminScheduleToolbarCopy span {
+  color: #69736f;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.adminScheduleToolbarCopy code {
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #0f615b;
+  background: #e9f8f4;
+  font-size: 0.67rem;
+  font-weight: 800;
+}
+
+.masterSyncButton {
+  justify-content: center;
+  white-space: nowrap;
+}
+
 .employeeViewCopy {
   display: grid;
   min-width: 0;
@@ -5581,6 +5625,15 @@ a:hover {
 
   .employeeViewToolbar {
     display: none;
+  }
+
+  .adminScheduleToolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .masterSyncButton {
+    width: 100%;
   }
 
   .scheduleWorkspace {

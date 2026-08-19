@@ -24,7 +24,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "sync" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -87,6 +87,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "search") {
     return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>;
+  }
+  if (name === "sync") {
+    return <svg {...common}><path d="M21 12a9 9 0 0 1-15.36 6.36" /><path d="M3 12A9 9 0 0 1 18.36 5.64" /><path d="M3 16v-4h4" /><path d="M21 8v4h-4" /></svg>;
   }
   if (name === "users") {
     return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
@@ -305,6 +308,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [assignmentError, setAssignmentError] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [syncMasterBusy, setSyncMasterBusy] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   const todayKey = getScheduleTodayKey(timezone || undefined);
@@ -488,6 +492,32 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
+  }
+
+  async function syncLiveSessionMaster() {
+    if (!isAdmin || syncMasterBusy) return;
+    setSyncMasterBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/sync-master", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          weekStartKey
+        })
+      });
+      const payload = await response.json() as { success?: boolean; message?: string; error?: string; sheetName?: string };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không sync được Live_Session_Master_Web.");
+      }
+      setMessage(payload.message || `Đã sync lịch tuần này ra ${payload.sheetName || "Live_Session_Master_Web"}.`);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "Không sync được Live_Session_Master_Web.");
+    } finally {
+      setSyncMasterBusy(false);
+    }
   }
 
   function shiftWeek(delta: number) {
@@ -694,6 +724,23 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
         </aside>
 
         <section className="scheduleWorkspace">
+          {isAdmin ? (
+            <div className="adminScheduleToolbar">
+              <div className="adminScheduleToolbarCopy">
+                <strong>Đồng bộ lịch master</strong>
+                <span>Đẩy các ca active trong tuần {formatWeekRange(weekStartKey)} từ website sang tab <code>Live_Session_Master_Web</code>.</span>
+              </div>
+              <button
+                className={`syncButton masterSyncButton ${syncMasterBusy ? "isLoading" : ""}`}
+                disabled={syncMasterBusy || loading}
+                onClick={() => void syncLiveSessionMaster()}
+                type="button"
+              >
+                <Icon name="sync" size={18} />
+                <span>{syncMasterBusy ? "Đang sync master..." : "Sync Live_Session_Master_Web"}</span>
+              </button>
+            </div>
+          ) : null}
           {!isAdmin ? (
             <div className="employeeViewToolbar">
               <div className="employeeViewCopy">
