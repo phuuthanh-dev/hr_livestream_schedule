@@ -117,6 +117,31 @@ function compareSessions(a, b) {
   return normalizeText(a.sessionId).localeCompare(normalizeText(b.sessionId));
 }
 
+function compareSheetRows(left, right) {
+  const leftDateKey = parseSheetDateToKey(left[2] || "");
+  const rightDateKey = parseSheetDateToKey(right[2] || "");
+  if (leftDateKey && rightDateKey && leftDateKey !== rightDateKey) {
+    return leftDateKey < rightDateKey ? 1 : -1;
+  }
+  if (leftDateKey && !rightDateKey) return -1;
+  if (!leftDateKey && rightDateKey) return 1;
+
+  const slotDiff = slotSortValue(left[3] || "") - slotSortValue(right[3] || "");
+  if (slotDiff !== 0) return slotDiff;
+
+  const leftSessionId = normalizeText(left[11] || "");
+  const rightSessionId = normalizeText(right[11] || "");
+  return leftSessionId.localeCompare(rightSessionId);
+}
+
+function renumberRows(rows) {
+  return rows.map((row, index) => {
+    const nextRow = [...row];
+    nextRow[0] = String(index + 1);
+    return nextRow;
+  });
+}
+
 function isRowInsideRange(row, from, to) {
   if (!from && !to) return true;
   const dateKey = parseSheetDateToKey(row[2] || "");
@@ -233,7 +258,8 @@ async function main() {
     const header = values[0]?.length ? values[0] : HEADERS;
     const existingRows = values.slice(1);
     const preservedRows = existingRows.filter((row) => !isRowInsideRange(row, from, to));
-    const allRows = [header, ...builtRows, ...preservedRows];
+    const mergedRows = [...builtRows, ...preservedRows].sort(compareSheetRows);
+    const allRows = [header, ...renumberRows(mergedRows)];
 
     await sheets.spreadsheets.values.clear({
       spreadsheetId: args.spreadsheetId,

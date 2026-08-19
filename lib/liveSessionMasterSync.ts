@@ -95,6 +95,31 @@ function compareSessions(a: ScheduleSession, b: ScheduleSession) {
   return a.sessionId.localeCompare(b.sessionId);
 }
 
+function compareSheetRows(left: string[], right: string[]) {
+  const leftDateKey = parseSheetDateToKey(left[2] || "");
+  const rightDateKey = parseSheetDateToKey(right[2] || "");
+  if (leftDateKey && rightDateKey && leftDateKey !== rightDateKey) {
+    return leftDateKey < rightDateKey ? 1 : -1;
+  }
+  if (leftDateKey && !rightDateKey) return -1;
+  if (!leftDateKey && rightDateKey) return 1;
+
+  const slotDiff = slotSortValue(left[3] || "") - slotSortValue(right[3] || "");
+  if (slotDiff !== 0) return slotDiff;
+
+  const leftSessionId = normalizeText(left[11] || "");
+  const rightSessionId = normalizeText(right[11] || "");
+  return leftSessionId.localeCompare(rightSessionId);
+}
+
+function renumberRows(rows: string[][]) {
+  return rows.map((row, index) => {
+    const nextRow = [...row];
+    nextRow[0] = String(index + 1);
+    return nextRow;
+  });
+}
+
 function buildDateRange(input: Pick<LiveSessionMasterSyncInput, "from" | "to" | "weekStartKey">) {
   if (input.weekStartKey) {
     if (!isValidScheduleDateKey(input.weekStartKey)) {
@@ -183,7 +208,8 @@ export async function syncLiveSessionMasterFromWebsite(
   const existingRows = values.slice(1);
   const preservedRows = existingRows.filter((row) => !isRowInsideRange(row, from, to));
   const rebuiltRows = sourceRows.map((session, index) => scheduleSessionToRow(session, index));
-  const allRows = [header, ...rebuiltRows, ...preservedRows];
+  const mergedRows = [...rebuiltRows, ...preservedRows].sort(compareSheetRows);
+  const allRows = [header, ...renumberRows(mergedRows)];
 
   const quotedSheetName = sheetName.replace(/'/g, "''");
   await sheets.spreadsheets.values.clear({
