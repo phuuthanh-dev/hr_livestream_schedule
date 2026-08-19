@@ -213,13 +213,34 @@ function buildExceptionNotes(entries: PayrollEntry[], exceptions: PayrollExcepti
 }
 
 function buildEntryTimeRange(entry: PayrollEntry) {
+  const formatTimeRange = (start: string, end: string) =>
+    `${start.slice(0, 2)}:${start.slice(2)}-${end.slice(0, 2)}:${end.slice(2)}`;
+
+  const addHours = (hhmm: string, hours: number) => {
+    const total = (Number(hhmm.slice(0, 2)) * 60) + Number(hhmm.slice(2));
+    const adjusted = (total + (hours * 60)) % (24 * 60);
+    const normalized = adjusted < 0 ? adjusted + (24 * 60) : adjusted;
+    const hour = String(Math.floor(normalized / 60)).padStart(2, "0");
+    const minute = String(normalized % 60).padStart(2, "0");
+    return `${hour}${minute}`;
+  };
+
   const times = entry.sessionIds
     .map((sessionId) => {
-      const match = sessionId.match(/-(\d{4})(\d{4})-/);
-      if (!match) return null;
-      const start = match[1];
-      const end = match[2];
-      return `${start.slice(0, 2)}:${start.slice(2)}-${end.slice(0, 2)}:${end.slice(2)}`;
+      const sessionCodeMatch = sessionId.match(/^SS-\d{8}-(\d{4})(\d{4})-/);
+      if (sessionCodeMatch) {
+        const start = sessionCodeMatch[1];
+        const end = sessionCodeMatch[2];
+        return formatTimeRange(start, end);
+      }
+
+      const sessionKeyMatch = sessionId.match(/^AUTO_\d{8}_(\d{4})_(?:HOME|STUDIO)$/);
+      if (sessionKeyMatch) {
+        const start = sessionKeyMatch[1];
+        return formatTimeRange(start, addHours(start, 2));
+      }
+
+      return null;
     })
     .filter(Boolean) as string[];
   return times.join(" | ");
