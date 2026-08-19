@@ -5,6 +5,7 @@ import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
 import { buildScheduleLaneKey, getScheduleSessionLane } from "@/lib/scheduleLane";
+import { buildScheduleSessionCode, getScheduleSessionCode } from "@/lib/scheduleSessionCode";
 import type {
   AccountType,
   AvailabilityLocationPreference,
@@ -154,6 +155,13 @@ function normalizeScheduleSession(input: ScheduleSession): ScheduleSession {
     rowNumber: cleanNumber(input.rowNumber),
     stt: cleanText(input.stt),
     sessionId: cleanText(input.sessionId),
+    sessionCode: cleanText(input.sessionCode) || buildScheduleSessionCode({
+      dateKey: cleanText(input.dateKey),
+      slot: cleanText(input.slot),
+      hostId: cleanText(input.hostId),
+      supportId: cleanText(input.supportId),
+      lane: cleanText(input.format).toLowerCase().includes("home") ? "home" : "studio"
+    }),
     dateKey: cleanText(input.dateKey),
     dateLabel: cleanText(input.dateLabel),
     weekday: cleanText(input.weekday),
@@ -285,6 +293,7 @@ export async function publishGeneratedScheduleWeek(
     }
     if (seenSessionIds.has(row.sessionId)) throw new Error(`Session ID bị trùng: ${row.sessionId}.`);
     seenSessionIds.add(row.sessionId);
+    row.sessionCode = getScheduleSessionCode(row);
   });
 
   const { sessions, syncRuns } = await getCollections();

@@ -1,5 +1,6 @@
 import type { AvailabilityLocationPreference, SchedulePerson, ScheduleSession } from "./types";
 import { buildScheduleLaneKey, getScheduleSessionLane, type ScheduleLane } from "./scheduleLane.ts";
+import { buildScheduleSessionCode, buildScheduleSessionKey } from "./scheduleSessionCode.ts";
 
 export type SubmittedScheduleSlot = {
   personKey: string;
@@ -140,13 +141,6 @@ function addDateDays(dateKey: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function sessionId(dateKey: string, slot: string, lane: ScheduleLane) {
-  const start = slotStartMinutes(slot);
-  const hours = String(Math.floor(start / 60)).padStart(2, "0");
-  const minutes = String(start % 60).padStart(2, "0");
-  return `AUTO_${dateKey.replace(/-/g, "")}_${hours}${minutes}_${lane.toUpperCase()}`;
-}
-
 function locationForHost(person: SchedulePerson, preference?: AvailabilityLocationPreference) {
   const configured = normalizeText(person.workLocation).replace(/\s+/g, "-");
   if (!configured) return undefined;
@@ -221,7 +215,8 @@ function buildEmptySession(dateKey: string, slot: string, lane: ScheduleLane): S
   return {
     rowNumber: 0,
     stt: "",
-    sessionId: sessionId(dateKey, slot, lane),
+    sessionId: buildScheduleSessionKey(dateKey, slot, lane),
+    sessionCode: buildScheduleSessionCode({ dateKey, slot, lane }),
     dateKey,
     dateLabel: dateLabel(dateKey),
     weekday: weekdayLabel(dateKey),

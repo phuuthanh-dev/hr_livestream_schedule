@@ -1,4 +1,5 @@
 import type { AvailabilityLocationPreference, SchedulePerson, ScheduleSession } from "./types";
+import { buildScheduleSessionCode } from "./scheduleSessionCode.ts";
 
 const ASSIGNMENT_WARNING_PREFIXES = [
   "OPEN_HOST:",
@@ -116,6 +117,14 @@ export function buildManualScheduleAssignment(input: BuildManualAssignmentInput)
     warningLevel: !hostId || missingSupport ? "danger" : warnings.length ? "info" : "ok",
     manualOverride: true
   };
+
+  next.sessionCode = buildScheduleSessionCode({
+    dateKey: next.dateKey,
+    slot: next.slot,
+    hostId: next.hostId,
+    supportId: next.supportId,
+    lane: locationMode
+  });
 
   if (input.hostWasEdited) {
     next.backupHostId = "";

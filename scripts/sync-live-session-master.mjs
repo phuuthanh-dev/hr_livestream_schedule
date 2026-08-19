@@ -110,11 +110,43 @@ function slotSortValue(slot) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+function parseSlot(slot) {
+  const match = normalizeText(slot).match(/^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/);
+  if (!match) return { start: "0000", end: "0000" };
+  const [, startHour, startMinute, endHour, endMinute] = match;
+  return {
+    start: `${startHour.padStart(2, "0")}${startMinute}`,
+    end: `${endHour.padStart(2, "0")}${endMinute}`
+  };
+}
+
+function formatDatePart(dateKey) {
+  const match = normalizeText(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return normalizeText(dateKey).replace(/\D/g, "") || "00000000";
+  const [, year, month, day] = match;
+  return `${day}${month}${year}`;
+}
+
+function getLane(format) {
+  return normalizeText(format).toLowerCase().includes("home") ? "home" : "studio";
+}
+
+function getSessionCode(session) {
+  const current = normalizeText(session.sessionCode);
+  if (current) return current;
+  const { start, end } = parseSlot(session.slot);
+  const hostToken = normalizeText(session.hostId) || "NOHOST";
+  const supportToken = getLane(session.format) === "home"
+    ? "NO_SUPPORT"
+    : (normalizeText(session.supportId) || "NO_SUPPORT");
+  return `SS-${formatDatePart(session.dateKey)}-${start}${end}-${hostToken}-${supportToken}`;
+}
+
 function compareSessions(a, b) {
   if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? 1 : -1;
   const slotDiff = slotSortValue(a.slot) - slotSortValue(b.slot);
   if (slotDiff !== 0) return slotDiff;
-  return normalizeText(a.sessionId).localeCompare(normalizeText(b.sessionId));
+  return getSessionCode(a).localeCompare(getSessionCode(b));
 }
 
 function compareSheetRows(left, right) {
@@ -164,7 +196,7 @@ function buildRow(session, index) {
     normalizeText(session.supportName),
     normalizeText(session.channel),
     normalizeText(session.scriptUrl),
-    normalizeText(session.sessionId),
+    normalizeText(getSessionCode(session)),
     normalizeText(session.hostConfirm),
     normalizeText(session.supportConfirm),
     normalizeText(session.backupHostId),
@@ -234,6 +266,7 @@ async function main() {
           channel: 1,
           scriptUrl: 1,
           sessionId: 1,
+          sessionCode: 1,
           hostConfirm: 1,
           supportConfirm: 1,
           backupHostId: 1,

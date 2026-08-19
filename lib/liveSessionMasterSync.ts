@@ -3,6 +3,7 @@ import { createGoogleSheetsClient, getGoogleHrMasterSpreadsheetId, getGoogleLive
 import { getMongoDatabase } from "@/lib/mongodb";
 import { getScheduleFromMongo } from "@/lib/scheduleStore";
 import { getScheduleWeekDateKeys, getScheduleWeekStartKey, isValidScheduleDateKey } from "@/lib/scheduleDate";
+import { getScheduleSessionCode } from "@/lib/scheduleSessionCode";
 import type { ScheduleSession } from "@/lib/types";
 
 const DEFAULT_HEADERS = [
@@ -92,7 +93,7 @@ function compareSessions(a: ScheduleSession, b: ScheduleSession) {
   if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? 1 : -1;
   const slotDiff = slotSortValue(a.slot) - slotSortValue(b.slot);
   if (slotDiff !== 0) return slotDiff;
-  return a.sessionId.localeCompare(b.sessionId);
+  return getScheduleSessionCode(a).localeCompare(getScheduleSessionCode(b));
 }
 
 function compareSheetRows(left: string[], right: string[]) {
@@ -161,7 +162,7 @@ function scheduleSessionToRow(session: ScheduleSession, index: number): string[]
     normalizeText(session.supportName),
     normalizeText(session.channel),
     normalizeText(session.scriptUrl),
-    normalizeText(session.sessionId),
+    normalizeText(getScheduleSessionCode(session)),
     normalizeText(session.hostConfirm),
     normalizeText(session.supportConfirm),
     normalizeText(session.backupHostId),

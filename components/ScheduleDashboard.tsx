@@ -188,6 +188,7 @@ function sessionMatchesQuery(session: ScheduleSession, query: string) {
   if (!query) return true;
   const haystack = [
     session.sessionId,
+    session.sessionCode,
     session.hostId,
     session.hostName,
     session.supportId,
@@ -906,7 +907,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       {selectedSession ? (
         <>
           <div className="drawerBackdrop" onClick={() => setSelectedSessionId("")} />
-          <aside className="sessionDrawer" role="dialog" aria-modal="true" aria-label={`Chi tiết ${selectedSession.sessionId}`}>
+          <aside className="sessionDrawer" role="dialog" aria-modal="true" aria-label={`Chi tiết ${selectedSession.sessionCode || selectedSession.sessionId}`}>
             <div className={`drawerAccent ${getSessionTone(selectedSession)}`} />
             <div className="drawerHeader">
               <div>
@@ -1037,7 +1038,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <div><dt>Kịch bản</dt><dd>{isUrl(selectedSession.scriptUrl) ? <a href={selectedSession.scriptUrl} target="_blank" rel="noreferrer">Mở kịch bản ↗</a> : selectedSession.scriptUrl || "-"}</dd></div>
               <div><dt>Backup host</dt><dd>{getPersonLabel(selectedSession.backupHostId, selectedSession.backupHostName, "-")}</dd></div>
               <div><dt>Backup support</dt><dd>{getPersonLabel(selectedSession.backupSupportId, selectedSession.backupSupportName, "-")}</dd></div>
-              <div><dt>Session ID</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div>
+              <div><dt>Session Code</dt><dd><code>{selectedSession.sessionCode || "-"}</code></dd></div>
+              <div><dt>Session Key</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div>
               {selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
             </dl>
 

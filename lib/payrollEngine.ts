@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { TikTokReportFragment } from "./payrollImport.ts";
 import { getScheduleSessionLane } from "./scheduleLane.ts";
+import { getScheduleSessionCode } from "./scheduleSessionCode.ts";
 import type {
   PayrollEntry,
   PayrollException,
@@ -402,7 +403,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
       grade,
       location: getScheduleSessionLane(first),
       accountId: live.accountId,
-      sessionIds: uniqueSessions.map((session) => session.sessionId),
+      sessionIds: uniqueSessions.map((session) => getScheduleSessionCode(session)),
       tiktokLiveIds: live.tiktokLiveIds,
       scheduledHours,
       hourlyRate: rate.hourlyRate,

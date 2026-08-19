@@ -113,6 +113,7 @@ export type ScheduleSession = {
   rowNumber: number;
   stt: string;
   sessionId: string;
+  sessionCode?: string;
   dateKey: string;
   dateLabel: string;
   weekday: string;
