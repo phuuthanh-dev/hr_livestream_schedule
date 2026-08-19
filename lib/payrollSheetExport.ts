@@ -418,19 +418,19 @@ function compareDetailRows(left: SheetGridRow, right: SheetGridRow) {
   const leftDate = parseDateDisplayToKey(left[1]);
   const rightDate = parseDateDisplayToKey(right[1]);
   if (leftDate && rightDate && leftDate !== rightDate) {
-    return leftDate < rightDate ? -1 : 1;
+    return leftDate > rightDate ? -1 : 1;
   }
   const leftSession = String(normalizeCell(left[0]));
   const rightSession = String(normalizeCell(right[0]));
-  if (leftSession !== rightSession) return leftSession.localeCompare(rightSession);
-  return String(normalizeCell(left[4])).localeCompare(String(normalizeCell(right[4])));
+  if (leftSession !== rightSession) return rightSession.localeCompare(leftSession);
+  return String(normalizeCell(right[4])).localeCompare(String(normalizeCell(left[4])));
 }
 
 function compareSummaryRows(left: SheetGridRow, right: SheetGridRow) {
   const leftWeek = parseDateDisplayToKey(left[0]);
   const rightWeek = parseDateDisplayToKey(right[0]);
   if (leftWeek && rightWeek && leftWeek !== rightWeek) {
-    return leftWeek < rightWeek ? -1 : 1;
+    return leftWeek > rightWeek ? -1 : 1;
   }
   return String(normalizeCell(left[2])).localeCompare(String(normalizeCell(right[2])));
 }
