@@ -488,7 +488,8 @@ async function writeFixedSheet(args: {
   const { sheetId, quotedTitle } = await ensureSheetTab(sheets, spreadsheetId, sheetName);
   const current = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${quotedTitle}'!A:AZ`
+    range: `'${quotedTitle}'!A:AZ`,
+    valueRenderOption: "UNFORMATTED_VALUE"
   });
   const values = (current.data.values as string[][] | undefined) || [];
   const existingHeaders = values[0]?.length ? values[0].map((cell) => String(normalizeCell(cell))) : [...headers];
