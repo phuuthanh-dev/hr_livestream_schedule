@@ -151,6 +151,20 @@ function normalizeCell(value: unknown) {
   return String(value).trim();
 }
 
+function convertSheetsSerialToDateKey(value: number) {
+  if (!Number.isFinite(value)) return "";
+  const epochUtc = Date.UTC(1899, 11, 30);
+  const timestamp = epochUtc + Math.round(value) * 24 * 60 * 60 * 1000;
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function normalizeDateLikeCell(value: unknown) {
+  if (typeof value === "number") {
+    return convertSheetsSerialToDateKey(value);
+  }
+  return parseDateDisplayToKey(value);
+}
+
 function columnLetterFromCount(columnCount: number) {
   let index = Math.max(1, columnCount);
   let output = "";
@@ -321,11 +335,20 @@ function buildReconciliation(dashboard: PayrollDashboardPayload) {
   };
 }
 
-function compareWritten(expected: SheetGridRow[], actual: unknown[][]) {
+function compareWritten(headers: readonly string[], expected: SheetGridRow[], actual: unknown[][]) {
+  const dateHeaders = new Set(["Ngày Live", "Week_Start", "Week_End"]);
   let checked = 0;
   let mismatches = 0;
   expected.forEach((row, rowIndex) => {
     row.forEach((cell, cellIndex) => {
+      const header = headers[cellIndex] || "";
+      if (dateHeaders.has(header)) {
+        const expectedDate = normalizeDateLikeCell(cell);
+        const actualDate = normalizeDateLikeCell(actual[rowIndex]?.[cellIndex]);
+        checked += 1;
+        if (expectedDate !== actualDate) mismatches += 1;
+        return;
+      }
       const expectedValue = normalizeCell(cell);
       const actualValue = normalizeCell(actual[rowIndex]?.[cellIndex]);
       checked += 1;
@@ -496,7 +519,7 @@ async function writeFixedSheet(args: {
     sheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`,
     rowCount: replacementRows.length,
     preservedRows: preservedRows.length,
-    verification: compareWritten(allRows, (readback.data.values as unknown[][]) || [])
+    verification: compareWritten(headers, allRows, (readback.data.values as unknown[][]) || [])
   };
 }
 
