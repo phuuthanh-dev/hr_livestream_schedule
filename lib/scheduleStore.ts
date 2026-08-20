@@ -5,7 +5,7 @@ import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
 import { buildScheduleLaneKey, getScheduleSessionLane } from "@/lib/scheduleLane";
-import { buildScheduleSessionCode, getScheduleSessionCode } from "@/lib/scheduleSessionCode";
+import { buildScheduleSessionCode, buildScheduleSessionKey, getScheduleSessionCode } from "@/lib/scheduleSessionCode";
 import type {
   AccountType,
   AvailabilityLocationPreference,
@@ -43,6 +43,15 @@ type ScheduleSessionDocument = ScheduleSession & {
   supportConfirmationRevision?: number;
   manualOverrideUpdatedAt?: Date;
   manualOverrideUpdatedBy?: string;
+};
+
+type ScheduleConflictCheckInput = {
+  excludeSessionId?: string;
+  dateKey: string;
+  slot: string;
+  lane: "home" | "studio";
+  hostId?: string;
+  supportId?: string;
 };
 
 type ScheduleSyncRunDocument = {
@@ -126,6 +135,13 @@ export type DeleteScheduleSessionInput = {
   actorAccountKey: string;
 };
 
+export type CreateScheduleSessionInput = {
+  dateKey: string;
+  slot: string;
+  locationMode: AvailabilityLocationPreference;
+  actorAccountKey: string;
+};
+
 let indexesPromise: Promise<void> | undefined;
 
 function cleanText(value: unknown): string {
@@ -140,6 +156,54 @@ function cleanNumber(value: unknown): number {
 function buildPersonKey(role: EmployeeRole, employeeId: string): string {
   const normalizedId = cleanText(employeeId).toLowerCase();
   return normalizedId ? `${role}:${normalizedId}` : "";
+}
+
+function weekdayLabel(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("vi-VN", { weekday: "long", timeZone: DEFAULT_TIMEZONE })
+    .format(new Date(Date.UTC(year, month - 1, day, 5)));
+}
+
+function dateLabel(dateKey: string) {
+  const [year, month, day] = dateKey.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function slotStartMinutes(slot: string) {
+  const match = slot.match(/^\s*(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : Number.MAX_SAFE_INTEGER;
+}
+
+function buildManualSessionKey(dateKey: string, slot: string, lane: "home" | "studio") {
+  const baseKey = buildScheduleSessionKey(dateKey, slot, lane);
+  return `${baseKey}_${randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+async function assertNoScheduleAssignmentConflict(
+  sessions: Collection<ScheduleSessionDocument>,
+  input: ScheduleConflictCheckInput
+) {
+  const hostId = cleanText(input.hostId);
+  const supportId = cleanText(input.supportId);
+  const rows = await sessions.find({
+    active: true,
+    dateKey: input.dateKey,
+    slot: input.slot,
+    ...(input.excludeSessionId ? { sessionKey: { $ne: input.excludeSessionId } } : {})
+  }).toArray();
+
+  for (const row of rows) {
+    const candidate = toScheduleSession(row);
+    if (hostId && cleanText(candidate.hostId).toLowerCase() === hostId.toLowerCase()) {
+      throw new Error(`Host ${candidate.hostName || candidate.hostId} đã được gán ở ca ${candidate.slot} ngày ${candidate.dateLabel}.`);
+    }
+    if (supportId && cleanText(candidate.supportId).toLowerCase() === supportId.toLowerCase()) {
+      throw new Error(`Support ${candidate.supportName || candidate.supportId} đã được gán ở ca ${candidate.slot} ngày ${candidate.dateLabel}.`);
+    }
+    if (!hostId && !supportId && getScheduleSessionLane(candidate) === input.lane && !candidate.hostId && !candidate.supportId) {
+      throw new Error(`Đã có một ca trống ${input.lane === "home" ? "Home" : "Studio"} ở ${candidate.slot} ngày ${candidate.dateLabel}.`);
+    }
+  }
 }
 
 function normalizeScheduleSession(input: ScheduleSession): ScheduleSession {
@@ -508,6 +572,14 @@ export async function updateScheduleSessionAssignment(
     locationMode: input.locationMode,
     studioLocationName: studioLocation?.name
   });
+  await assertNoScheduleAssignmentConflict(sessions, {
+    excludeSessionId: sessionId,
+    dateKey: updated.dateKey,
+    slot: updated.slot,
+    lane: getScheduleSessionLane(updated),
+    hostId: updated.hostId,
+    supportId: updated.supportId
+  });
   const hostNeedsConfirmationReset = current.hostId.toLowerCase() !== updated.hostId.toLowerCase()
     || current.format.toLowerCase() !== updated.format.toLowerCase();
   const supportNeedsConfirmationReset = current.supportId.toLowerCase() !== updated.supportId.toLowerCase()
@@ -545,6 +617,90 @@ export async function updateScheduleSessionAssignment(
   );
   if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi cập nhật được lưu.");
   return updated;
+}
+
+export async function createScheduleSession(
+  input: CreateScheduleSessionInput
+): Promise<ScheduleSession> {
+  const { sessions } = await getCollections();
+  const dateKey = cleanText(input.dateKey);
+  const slot = cleanText(input.slot);
+  const locationMode = input.locationMode === "home" ? "home" : "studio";
+  if (!dateKey) throw new Error("Thiếu ngày tạo ca.");
+  if (!slot) throw new Error("Thiếu khung giờ tạo ca.");
+
+  const now = new Date();
+  const draft: ScheduleSession = {
+    rowNumber: 0,
+    stt: "",
+    sessionId: buildManualSessionKey(dateKey, slot, locationMode),
+    sessionCode: buildScheduleSessionCode({ dateKey, slot, lane: locationMode }),
+    dateKey,
+    dateLabel: dateLabel(dateKey),
+    weekday: weekdayLabel(dateKey),
+    slot,
+    slotSortKey: String(slotStartMinutes(slot)).padStart(4, "0"),
+    hostId: "",
+    hostName: "",
+    format: locationMode === "home" ? "Home" : "Studio",
+    supportId: "",
+    supportName: "",
+    channel: "",
+    scriptUrl: "",
+    hostConfirm: "Chưa xác nhận",
+    supportConfirm: "Chưa xác nhận",
+    backupHostId: "",
+    backupHostName: "",
+    backupSupportId: "",
+    backupSupportName: "",
+    supportCandidatePool: "",
+    status: "open",
+    generatedBy: "website",
+    generationBatchId: "",
+    manualOverride: true,
+    isHostConfirmed: false,
+    isSupportConfirmed: false,
+    canConfirmHost: false,
+    canConfirmSupport: false,
+    supportRequired: locationMode === "studio",
+    isSupportOnly: false,
+    missingSupport: locationMode === "studio",
+    warningLevel: "danger",
+    warnings: locationMode === "studio"
+      ? ["OPEN_HOST: Chưa chọn Host cho ca.", "OPEN_SUPPORT: Ca Studio chưa có Support."]
+      : ["OPEN_HOST: Chưa chọn Host cho ca."]
+  };
+
+  await assertNoScheduleAssignmentConflict(sessions, {
+    dateKey,
+    slot,
+    lane: locationMode,
+    hostId: "",
+    supportId: ""
+  });
+
+  await sessions.insertOne({
+    ...draft,
+    sessionKey: draft.sessionId,
+    hostPersonKey: "",
+    supportPersonKey: "",
+    backupHostPersonKey: "",
+    backupSupportPersonKey: "",
+    active: true,
+    sourceGeneratedAt: null,
+    sourceSnapshotRevision: 0,
+    syncBatchId: `manual-${randomUUID()}`,
+    firstSyncedAt: now,
+    lastSeenAt: now,
+    updatedAt: now,
+    deactivatedAt: null,
+    manualOverrideUpdatedAt: now,
+    manualOverrideUpdatedBy: cleanText(input.actorAccountKey) || "admin:admin",
+    hostConfirmationRevision: 0,
+    supportConfirmationRevision: 0
+  });
+
+  return draft;
 }
 
 export async function deleteScheduleSession(

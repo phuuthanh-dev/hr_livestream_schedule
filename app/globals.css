@@ -1373,6 +1373,92 @@ a:hover {
   margin-bottom: 18px;
 }
 
+.createSessionSection {
+  margin-top: 8px;
+}
+
+.createSessionCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dfe5ee;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(232, 248, 248, 0.92), rgba(255, 255, 255, 0.92));
+  box-shadow: 0 10px 24px rgba(32, 72, 96, 0.06);
+}
+
+.createSessionCopy {
+  display: grid;
+  gap: 4px;
+}
+
+.createSessionCopy strong {
+  color: #1f4f59;
+  font-size: 0.86rem;
+}
+
+.createSessionCopy span {
+  color: #6f7a84;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.createSessionField {
+  display: grid;
+  gap: 6px;
+}
+
+.createSessionField span {
+  color: #53616d;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.createSessionField input,
+.createSessionField select {
+  min-height: 42px;
+  width: 100%;
+  padding: 0 13px;
+  border: 1px solid #c9d8de;
+  border-radius: 12px;
+  color: #183b45;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.createSessionField input:focus,
+.createSessionField select:focus {
+  border-color: #6cc8c6;
+  outline: 2px solid rgba(108, 200, 198, 0.18);
+  outline-offset: 0;
+}
+
+.createSessionButton {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #127b78, #0f5c6b);
+  font-size: 0.84rem;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(18, 123, 120, 0.18);
+}
+
+.createSessionButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  box-shadow: none;
+}
+
 .sidebarLabel {
   margin: 0 10px 7px;
   color: #80868b;
@@ -5787,6 +5873,11 @@ a:hover {
     display: none;
     width: 0;
     height: 0;
+  }
+
+  .createSessionCard {
+    padding: 12px;
+    border-radius: 14px;
   }
 
   .filterOption {

@@ -334,6 +334,10 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [syncMasterBusy, setSyncMasterBusy] = useState(false);
+  const [createSessionDateKey, setCreateSessionDateKey] = useState(() => initialWeekStartKey || getCurrentWeekStartKey());
+  const [createSessionSlot, setCreateSessionSlot] = useState("06:00 - 08:00");
+  const [createSessionLocationMode, setCreateSessionLocationMode] = useState<AvailabilityLocationPreference>("studio");
+  const [createSessionBusy, setCreateSessionBusy] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   const todayKey = getScheduleTodayKey(timezone || undefined);
@@ -491,6 +495,41 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
+  async function createEmptySession() {
+    if (!isAdmin || createSessionBusy) return;
+    setCreateSessionBusy(true);
+    setAssignmentError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          dateKey: createSessionDateKey,
+          slot: createSessionSlot,
+          locationMode: createSessionLocationMode,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không tạo được ca live.");
+      }
+      applyPayload(payload);
+      if (payload.updatedSessionId) {
+        setSelectedSessionId(payload.updatedSessionId);
+      }
+      setMessage(payload.message || `Đã tạo ca ${createSessionSlot}.`);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "Không tạo được ca live.");
+    } finally {
+      setCreateSessionBusy(false);
+    }
+  }
+
   async function deleteSelectedSession() {
     if (!selectedSession || !isAdmin) return;
     setDeleteBusy(true);
@@ -618,6 +657,12 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   }, [todayKey, weekEndKey, weekStartKey]);
 
   useEffect(() => {
+    if (createSessionDateKey < weekStartKey || createSessionDateKey > weekEndKey) {
+      setCreateSessionDateKey(weekStartKey);
+    }
+  }, [createSessionDateKey, weekEndKey, weekStartKey]);
+
+  useEffect(() => {
     if (!selectedSessionId) return;
     setAssignmentError("");
     setHostPickerQuery("");
@@ -740,6 +785,55 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <span className="filterDot" /><span>Chờ confirm</span><strong>{pendingCount}</strong>
             </button>
           </section>
+
+          {isAdmin ? (
+            <section className="sidebarSection createSessionSection">
+              <p className="sidebarLabel">TẠO CA LIVE</p>
+              <div className="createSessionCard">
+                <div className="createSessionCopy">
+                  <strong>Tạo ca trống để fill sau</strong>
+                  <span>Nhập ngày, khung giờ và địa điểm bắt buộc. Host và Support có thể chỉnh sau trong chi tiết ca.</span>
+                </div>
+                <label className="createSessionField">
+                  <span>Ngày</span>
+                  <input
+                    max={weekEndKey}
+                    min={weekStartKey}
+                    onChange={(event) => setCreateSessionDateKey(event.target.value)}
+                    type="date"
+                    value={createSessionDateKey}
+                  />
+                </label>
+                <label className="createSessionField">
+                  <span>Khung giờ</span>
+                  <select onChange={(event) => setCreateSessionSlot(event.target.value)} value={createSessionSlot}>
+                    {slots.map((slot) => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="createSessionField">
+                  <span>Địa điểm</span>
+                  <select
+                    onChange={(event) => setCreateSessionLocationMode(event.target.value as AvailabilityLocationPreference)}
+                    value={createSessionLocationMode}
+                  >
+                    <option value="studio">Studio</option>
+                    <option value="home">Home</option>
+                  </select>
+                </label>
+                <button
+                  className="createSessionButton"
+                  disabled={createSessionBusy || loading}
+                  onClick={() => void createEmptySession()}
+                  type="button"
+                >
+                  <Icon name="calendar" size={16} />
+                  <span>{createSessionBusy ? "Đang tạo ca..." : "Tạo ca mới"}</span>
+                </button>
+              </div>
+            </section>
+          ) : null}
 
           <section className="weekHealth">
             <div className="weekHealthTitle"><span>Tình trạng tuần</span><strong>{weekSummary.total} ca</strong></div>
