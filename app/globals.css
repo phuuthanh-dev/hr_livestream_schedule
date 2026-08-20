@@ -11047,6 +11047,74 @@ a:hover {
   gap: 14px;
 }
 
+.supportTrainingMetaGrid,
+.supportTrainingFeedbackGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.supportTrainingMetaGrid label,
+.supportTrainingFeedbackGrid label {
+  display: grid;
+  gap: 7px;
+}
+
+.supportTrainingMetaGrid label span,
+.supportTrainingFeedbackGrid label span {
+  color: #284248;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.supportTrainingMetaGrid input,
+.supportTrainingFeedbackGrid textarea {
+  width: 100%;
+  border: 1px solid #d5e1e1;
+  border-radius: 16px;
+  background: #fcfefd;
+  color: #18353d;
+  font: inherit;
+}
+
+.supportTrainingMetaGrid input {
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+.supportTrainingFeedbackGrid textarea {
+  min-height: 110px;
+  padding: 14px 15px;
+  resize: vertical;
+}
+
+.supportTrainingMetaGrid input:focus,
+.supportTrainingFeedbackGrid textarea:focus,
+.supportTrainingItemNote:focus {
+  outline: none;
+  border-color: #14786f;
+  box-shadow: 0 0 0 4px rgba(20, 120, 111, 0.1);
+}
+
+.supportTrainingSwitch {
+  align-content: start;
+  padding: 14px 15px;
+  border: 1px solid #d5e1e1;
+  border-radius: 18px;
+  background: #f8fcfb;
+}
+
+.supportTrainingSwitch input {
+  width: 18px;
+  height: 18px;
+  margin: 0 0 2px;
+}
+
+.supportTrainingSwitch small {
+  color: #6b7f85;
+  line-height: 1.5;
+}
+
 .supportTrainingChecklist {
   display: grid;
   gap: 11px;
@@ -11054,23 +11122,28 @@ a:hover {
 
 .supportTrainingItem {
   display: grid;
-  gap: 6px;
+  gap: 10px;
   padding: 15px 16px;
   border: 1px solid #d6e3e3;
   border-radius: 18px;
   background: #fbfdfd;
-  cursor: pointer;
 }
 
-.supportTrainingItem.checked {
-  border-color: #8bc8b7;
-  background: #f0faf7;
+.supportTrainingItem.na {
+  border-color: #e3ded0;
+  background: #f7f4ec;
 }
 
-.supportTrainingItem input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
+.supportTrainingItemHead {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.supportTrainingItemHead > div {
+  display: grid;
+  gap: 6px;
 }
 
 .supportTrainingItem strong {
@@ -11084,6 +11157,58 @@ a:hover {
   font-size: 0.82rem;
 }
 
+.supportTrainingNaToggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: #5f6d72;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.supportTrainingNaToggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.supportTrainingScoreRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.supportTrainingScoreButton {
+  min-width: 42px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #cadada;
+  border-radius: 12px;
+  color: #2f454b;
+  background: #ffffff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.supportTrainingScoreButton:hover {
+  border-color: #9cc8be;
+  transform: translateY(-1px);
+}
+
+.supportTrainingScoreButton.active {
+  border-color: #14786f;
+  color: #ffffff;
+  background: linear-gradient(135deg, #14786f 0%, #0f5f59 100%);
+}
+
+.supportTrainingScoreButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.supportTrainingItemNote,
 .supportTrainingNotes {
   width: 100%;
   min-height: 120px;
@@ -11096,10 +11221,8 @@ a:hover {
   background: #fcfefd;
 }
 
-.supportTrainingNotes:focus {
-  outline: none;
-  border-color: #14786f;
-  box-shadow: 0 0 0 4px rgba(20, 120, 111, 0.1);
+.supportTrainingItemNote {
+  min-height: 88px;
 }
 
 @media (max-width: 980px) {
@@ -11110,6 +11233,11 @@ a:hover {
   .supportTrainingSidebar {
     position: relative;
     top: auto;
+  }
+
+  .supportTrainingMetaGrid,
+  .supportTrainingFeedbackGrid {
+    grid-template-columns: 1fr;
   }
 }
 

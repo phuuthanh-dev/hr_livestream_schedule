@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
 import {
   canAccessSupportTraining,
+  createEmptySupportTrainingProfile,
   getSupportTrainingProfile,
-  saveSupportTrainingProfile
+  saveSupportTrainingProfile,
+  SUPPORT_TRAINING_CHECKLIST
 } from "@/lib/supportTraining";
-import { SUPPORT_TRAINING_CHECKLIST } from "@/lib/supportTrainingConfig";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const profile = await getSupportTrainingProfile(employeeId);
+    const profile = await getSupportTrainingProfile(employeeId)
+      || createEmptySupportTrainingProfile(employeeId, searchParams.get("employeeName")?.trim() || employeeId);
     return NextResponse.json({
       success: true,
       checklist: SUPPORT_TRAINING_CHECKLIST,
@@ -47,7 +49,14 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const body = await request.json() as { employeeId?: string; answers?: unknown; notes?: unknown };
+    const body = await request.json() as {
+      employeeId?: string;
+      entries?: unknown;
+      answers?: unknown;
+      meta?: unknown;
+      feedback?: unknown;
+      notes?: unknown;
+    };
     const employeeId = body.employeeId?.trim()
       || (session.accountType === "employee" && session.role === "support" ? session.employeeId : "");
     if (!employeeId) {
@@ -59,7 +68,10 @@ export async function PUT(request: Request) {
 
     const profile = await saveSupportTrainingProfile({
       employeeId,
+      entries: body.entries,
       answers: body.answers,
+      meta: body.meta,
+      feedback: body.feedback,
       notes: body.notes,
       actorAccountKey: session.accountKey
     });
@@ -67,7 +79,7 @@ export async function PUT(request: Request) {
       success: true,
       profile,
       checklist: SUPPORT_TRAINING_CHECKLIST,
-      message: `Đã lưu checklist training. Rating ${profile.evaluation.rating} · Cash Offer ${profile.evaluation.cashOffer}.`
+      message: `Đã lưu đánh giá training. ${profile.evaluation.classification} · Rating ${profile.evaluation.rating} · Cash Offer ${profile.evaluation.cashOffer}.`
     });
   } catch (error) {
     return NextResponse.json(
