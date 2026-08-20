@@ -417,7 +417,7 @@ export default function AvailabilityBoard({
           </div>
         )}
         onLogout={logout}
-        onOpenAccount={() => setAccountPanelOpen(true)}
+        onOpenAccount={() => isAdmin ? setAccountPanelOpen(true) : window.location.assign("/profile#security")}
         rightContent={isAdmin ? <a className="todayButton availabilitySummaryShortcut" href={`/availability/summary?role=${selectedRole}&weekStartKey=${weekStartKey}`}><Icon name="chart" size={17} /><span>Tổng hợp</span></a> : null}
         title="Lịch Rảnh"
         username={username}
@@ -699,7 +699,7 @@ export default function AvailabilityBoard({
         ) : null}
       </div> : null}
 
-      {accountPanelOpen ? (
+      {isAdmin && accountPanelOpen ? (
         <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
       ) : null}
     </main>

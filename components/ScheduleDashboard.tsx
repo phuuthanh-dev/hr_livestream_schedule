@@ -769,7 +769,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           </div>
         )}
         onLogout={logout}
-        onOpenAccount={() => setAccountPanelOpen(true)}
+        onOpenAccount={() => isAdmin ? setAccountPanelOpen(true) : window.location.assign("/profile#security")}
         rightContent={<>{isAdmin ? renderAdminActions("desktop") : null}{!isAdmin ? <a className="todayButton employeeProfileShortcut" href="/profile"><Icon name="account" size={17} /><span>Hồ sơ</span></a> : null}{!isAdmin ? <a className="todayButton availabilityShortcut" href="/availability"><Icon name="calendar" size={17} /><span>Lịch rảnh</span></a> : null}{!isAdmin ? <a className="todayButton" href="/contract"><Icon name="contract" size={17} /><span>Hợp đồng</span></a> : null}</>}
         title="Live Calendar"
         username={username}
@@ -1415,7 +1415,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
           </aside>
         </>
       ) : null}
-      {accountPanelOpen ? (
+      {isAdmin && accountPanelOpen ? (
         <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
       ) : null}
       <AlertDialog.Root open={Boolean(cancelIntent)} onOpenChange={(open) => !open && setCancelIntent(null)}>

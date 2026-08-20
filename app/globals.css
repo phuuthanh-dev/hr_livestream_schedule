@@ -11118,11 +11118,18 @@ a:hover {
 }
 
 .selfProfilePortraitCard,
-.selfProfileForm {
+.selfProfileForm,
+.selfProfileSecurity {
   border: 1px solid rgba(42, 100, 96, 0.14);
   border-radius: 25px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 18px 45px rgba(32, 74, 72, 0.09);
+}
+
+.selfProfileContent {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
 }
 
 .selfProfilePortraitCard {
@@ -11276,6 +11283,117 @@ a:hover {
 
 .selfProfileForm {
   padding: 32px;
+}
+
+.selfProfileSecurity {
+  overflow: hidden;
+  scroll-margin-top: 100px;
+}
+
+.selfProfileSecurity > summary {
+  display: flex;
+  padding: 22px 26px;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  cursor: pointer;
+}
+
+.selfProfileSecurity > summary::-webkit-details-marker {
+  display: none;
+}
+
+.selfProfileSecurity > summary > i {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d1dfdd;
+  border-radius: 11px;
+  color: #15776f;
+  background: #f3f9f7;
+  place-items: center;
+  font-size: 1rem;
+  font-style: normal;
+  transition: transform 160ms ease;
+}
+
+.selfProfileSecurity[open] > summary > i {
+  transform: rotate(180deg);
+}
+
+.selfProfilePasswordForm {
+  display: grid;
+  padding: 0 26px 26px;
+  border-top: 1px solid #e0e9e7;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.selfProfilePasswordForm label {
+  display: grid;
+  padding-top: 22px;
+  color: #496467;
+  font-size: 0.61rem;
+  font-weight: 850;
+  gap: 7px;
+}
+
+.selfProfilePasswordForm label:first-child {
+  grid-column: 1 / -1;
+}
+
+.selfProfilePasswordForm input {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid #d1dfdd;
+  border-radius: 13px;
+  color: #213f42;
+  background: #fbfdfc;
+  outline: none;
+  font-size: 0.71rem;
+  font-weight: 650;
+}
+
+.selfProfilePasswordForm input:focus {
+  border-color: #48a99f;
+  box-shadow: 0 0 0 4px rgba(38, 146, 135, 0.11);
+}
+
+.selfProfilePasswordForm > div {
+  display: flex;
+  padding-top: 4px;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.selfProfilePasswordForm > div small {
+  max-width: 470px;
+  color: #748688;
+  font-size: 0.57rem;
+  line-height: 1.5;
+}
+
+.selfProfilePasswordForm button {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #0f766e, #0a6570);
+  box-shadow: 0 10px 23px rgba(15, 118, 110, 0.2);
+  font-size: 0.64rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.selfProfilePasswordForm button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .selfProfileSectionHeading {
@@ -11523,6 +11641,29 @@ a:hover {
 
   .selfProfileForm {
     padding: 20px 16px;
+  }
+
+  .selfProfileSecurity > summary {
+    padding: 18px 16px;
+  }
+
+  .selfProfilePasswordForm {
+    padding: 0 16px 18px;
+    grid-template-columns: 1fr;
+  }
+
+  .selfProfilePasswordForm label:first-child {
+    grid-column: auto;
+  }
+
+  .selfProfilePasswordForm > div {
+    grid-column: auto;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .selfProfilePasswordForm button {
+    width: 100%;
   }
 
   .selfProfileFormGrid {

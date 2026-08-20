@@ -3,7 +3,6 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useState } from "react";
-import AccountPanel from "@/components/AccountPanel";
 import AppShellHeader from "@/components/AppShellHeader";
 import type { EmployeeAdminPayload, SchedulePerson } from "@/lib/types";
 
@@ -40,7 +39,11 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
   const [saving, setSaving] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [deleteAvatarOpen, setDeleteAvatarOpen] = useState(false);
-  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -61,6 +64,12 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
   }
 
   useEffect(() => { void loadProfile(); }, []);
+
+  useEffect(() => {
+    if (window.location.hash !== "#security") return;
+    setSecurityOpen(true);
+    window.requestAnimationFrame(() => document.getElementById("security")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, []);
 
   useEffect(() => {
     if (!avatarFile) {
@@ -186,6 +195,36 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
     }
   }
 
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setChangingPassword(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/account/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+      });
+      const payload = await response.json() as { success?: boolean; message?: string };
+      if (!response.ok || !payload.success) throw new Error(payload.message || "Không đổi được mật khẩu.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setMessage(payload.message || "Đã đổi mật khẩu.");
+    } catch (changeError) {
+      setError(changeError instanceof Error ? changeError.message : "Không đổi được mật khẩu.");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  function openSecurity() {
+    setSecurityOpen(true);
+    window.history.replaceState(null, "", "#security");
+    window.requestAnimationFrame(() => document.getElementById("security")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }
+
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     window.location.href = "/login";
@@ -199,7 +238,7 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
         className="selfProfileHeader"
         middleContent={<nav className="selfProfileNav"><a href="/">Lịch chính</a><a href="/availability">Lịch rảnh</a><a href="/contract">Hợp đồng</a></nav>}
         onLogout={logout}
-        onOpenAccount={() => setAccountPanelOpen(true)}
+        onOpenAccount={openSecurity}
         title="Hồ sơ của tôi"
         username={employee?.name || username}
       />
@@ -230,32 +269,46 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
               </div>
             </aside>
 
-            <form className="selfProfileForm" onSubmit={saveProfile}>
-              <div className="selfProfileSectionHeading"><b>01</b><span><strong>Thông tin cá nhân</strong><small>Nhập thông tin đang sử dụng để HR và vận hành liên hệ chính xác.</small></span></div>
-              <div className="selfProfileFormGrid">
-                <label className="wide"><span>Họ và tên *</span><input autoComplete="name" maxLength={180} required value={form.name} onChange={(event) => updateField("name", event.target.value)} /></label>
-                <label><span>Tên gọi khác</span><input maxLength={120} value={form.aliasName} onChange={(event) => updateField("aliasName", event.target.value)} placeholder="Tên thường dùng / nickname" /></label>
-                <label><span>Số điện thoại</span><input autoComplete="tel" inputMode="tel" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} placeholder="0901 234 567" /></label>
-                <label className="wide"><span>Email</span><input autoComplete="email" maxLength={180} type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} placeholder="tenban@example.com" /></label>
-              </div>
-
-              <div className="selfProfileReadonlyBlock">
-                <div className="selfProfileSectionHeading"><b>02</b><span><strong>Thông tin hệ thống</strong><small>Các trường này do HR quản lý và không thể sửa tại đây.</small></span></div>
-                <div className="selfProfileReadonlyGrid">
-                  <article><small>Mã nhân viên</small><strong>{employee.id}</strong></article>
-                  <article><small>Vai trò</small><strong>{employee.role === "host" ? "Host" : "Support Live"}</strong></article>
-                  <article><small>Level / Grade</small><strong>{employee.level || "Chưa cập nhật"}</strong></article>
-                  <article><small>Trạng thái</small><strong>{employee.active === false ? "Tạm ngưng" : "Đang hoạt động"}</strong></article>
+            <div className="selfProfileContent">
+              <form className="selfProfileForm" onSubmit={saveProfile}>
+                <div className="selfProfileSectionHeading"><b>01</b><span><strong>Thông tin cá nhân</strong><small>Nhập thông tin đang sử dụng để HR và vận hành liên hệ chính xác.</small></span></div>
+                <div className="selfProfileFormGrid">
+                  <label className="wide"><span>Họ và tên *</span><input autoComplete="name" maxLength={180} required value={form.name} onChange={(event) => updateField("name", event.target.value)} /></label>
+                  <label><span>Tên gọi khác</span><input maxLength={120} value={form.aliasName} onChange={(event) => updateField("aliasName", event.target.value)} placeholder="Tên thường dùng / nickname" /></label>
+                  <label><span>Số điện thoại</span><input autoComplete="tel" inputMode="tel" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} placeholder="0901 234 567" /></label>
+                  <label className="wide"><span>Email</span><input autoComplete="email" maxLength={180} type="email" value={form.email} onChange={(event) => updateField("email", event.target.value)} placeholder="tenban@example.com" /></label>
                 </div>
-              </div>
 
-              <footer><span><ProfileIcon name="shield" /> Thông tin được lưu vào hồ sơ nhân sự trên ứng dụng.</span><button disabled={saving} type="submit">{saving ? "Đang lưu..." : "Lưu thay đổi"}</button></footer>
-            </form>
+                <div className="selfProfileReadonlyBlock">
+                  <div className="selfProfileSectionHeading"><b>02</b><span><strong>Thông tin hệ thống</strong><small>Các trường này do HR quản lý và không thể sửa tại đây.</small></span></div>
+                  <div className="selfProfileReadonlyGrid">
+                    <article><small>Mã nhân viên</small><strong>{employee.id}</strong></article>
+                    <article><small>Vai trò</small><strong>{employee.role === "host" ? "Host" : "Support Live"}</strong></article>
+                    <article><small>Level / Grade</small><strong>{employee.level || "Chưa cập nhật"}</strong></article>
+                    <article><small>Trạng thái</small><strong>{employee.active === false ? "Tạm ngưng" : "Đang hoạt động"}</strong></article>
+                  </div>
+                </div>
+
+                <footer><span><ProfileIcon name="shield" /> Thông tin được lưu vào hồ sơ nhân sự trên ứng dụng.</span><button disabled={saving} type="submit">{saving ? "Đang lưu..." : "Lưu thay đổi"}</button></footer>
+              </form>
+
+              <details className="selfProfileSecurity" id="security" open={securityOpen} onToggle={(event) => setSecurityOpen(event.currentTarget.open)}>
+                <summary>
+                  <span className="selfProfileSectionHeading"><b>03</b><span><strong>Bảo mật & mật khẩu</strong><small>Đổi mật khẩu đăng nhập và thu hồi các phiên cũ.</small></span></span>
+                  <i aria-hidden="true">⌄</i>
+                </summary>
+                <form className="selfProfilePasswordForm" onSubmit={changePassword}>
+                  <label><span>Mật khẩu hiện tại *</span><input autoComplete="current-password" required type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+                  <label><span>Mật khẩu mới *</span><input autoComplete="new-password" required type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+                  <label><span>Nhập lại mật khẩu mới *</span><input autoComplete="new-password" required type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
+                  <div><small>Sau khi đổi mật khẩu, các phiên đăng nhập cũ sẽ bị thu hồi để bảo vệ tài khoản.</small><button disabled={changingPassword} type="submit">{changingPassword ? "Đang đổi..." : "Đổi mật khẩu"}</button></div>
+                </form>
+              </details>
+            </div>
           </div>
         ) : null}
       </section>
 
-      {accountPanelOpen ? <AccountPanel isAdmin={false} username={employee?.name || username} onClose={() => setAccountPanelOpen(false)} /> : null}
       <AlertDialog.Root open={deleteAvatarOpen} onOpenChange={(open) => !avatarBusy && setDeleteAvatarOpen(open)}>
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="employeeDeleteOverlay" />

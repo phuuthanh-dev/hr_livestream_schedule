@@ -313,7 +313,7 @@ export default function EmployeeContractForm({
           await fetch("/api/logout", { method: "POST" });
           window.location.href = "/login";
         }}
-        onOpenAccount={() => setAccountPanelOpen(true)}
+        onOpenAccount={() => isAdmin ? setAccountPanelOpen(true) : window.location.assign("/profile#security")}
         rightContent={<div className="contractHeaderIdentity"><strong>{employeeName}</strong><span>{identity}</span></div>}
         title="Hồ sơ hợp đồng"
         username={username}
@@ -396,7 +396,7 @@ export default function EmployeeContractForm({
         </section>
       </section>
 
-      {accountPanelOpen ? (
+      {isAdmin && accountPanelOpen ? (
         <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
       ) : null}
     </main>
