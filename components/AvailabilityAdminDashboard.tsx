@@ -451,12 +451,12 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   }
 
   const confirmTitle = confirmAction === "refresh_unconfirmed"
-    ? "Chạy lại ca đang mở"
+    ? "Chạy lại ca đang trống"
     : confirmAction === "force_pull"
       ? "Force pull từ Sheet"
       : "";
   const confirmDescription = confirmAction === "refresh_unconfirmed"
-    ? `Làm sạch toàn bộ ca tương lai đang mở trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại. Ca đã có người và ngày quá khứ sẽ được giữ nguyên.`
+    ? `Làm sạch toàn bộ ca tương lai đang trống trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại. Ca đã có người và ngày quá khứ sẽ được giữ nguyên.`
     : confirmAction === "force_pull"
       ? `Kéo tuần ${formatWeekRange(weekStartKey)} từ Sheet về Website và cho phép sheet ghi đè dữ liệu lịch rảnh hiện có trên website.`
       : "";
@@ -593,8 +593,8 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
             >
               <span className="availabilitySummaryGenerateIcon"><Icon name="refresh" size={20} /></span>
               <span>
-                <strong>{refreshingUnconfirmedSchedule ? "Đang chạy lại ca đang mở..." : "Chạy lại ca đang mở"}</strong>
-                <small>Reset ca tương lai đang mở rồi chạy lại tuần</small>
+                <strong>{refreshingUnconfirmedSchedule ? "Đang chạy lại ca đang trống..." : "Chạy lại ca đang trống"}</strong>
+                <small>Reset ca tương lai đang trống rồi chạy lại tuần</small>
               </span>
               <em>{formatWeekRange(weekStartKey)}</em>
             </button>
