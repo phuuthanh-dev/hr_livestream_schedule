@@ -2119,6 +2119,15 @@ a:hover {
   gap: 6px;
 }
 
+.assignmentHostField {
+  grid-column: 1 / 2;
+}
+
+.assignmentLocationField {
+  grid-column: 2 / 3;
+  align-content: start;
+}
+
 .assignmentEditorGrid label > span {
   color: #52605f;
   font-size: 0.58rem;
@@ -2174,6 +2183,154 @@ a:hover {
   font-size: 0.58rem;
   font-style: normal;
   font-weight: 850;
+}
+
+.assignmentPicker {
+  position: relative;
+}
+
+.assignmentPickerTrigger {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #bfd3cf;
+  border-radius: 11px;
+  color: #263c3a;
+  background: #fff;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.assignmentPickerTrigger span {
+  overflow: hidden;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignmentPickerTrigger em {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #e6f4f1;
+  color: #0f766e;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.assignmentPickerTrigger svg {
+  color: #718583;
+  transition: transform 160ms ease;
+}
+
+.assignmentPicker.isOpen .assignmentPickerTrigger {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.assignmentPicker.isOpen .assignmentPickerTrigger svg {
+  transform: rotate(180deg);
+}
+
+.assignmentPickerTrigger:disabled {
+  color: #7b8584;
+  background: #eef3f2;
+  cursor: not-allowed;
+}
+
+.assignmentPickerPanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d7e5e1;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 35px rgba(20, 43, 40, 0.16);
+}
+
+.assignmentPickerList {
+  display: grid;
+  max-height: 238px;
+  overflow: auto;
+}
+
+.assignmentPickerOption {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #223937;
+  text-align: left;
+}
+
+.assignmentPickerOption:hover {
+  background: #f4f8f7;
+}
+
+.assignmentPickerOption.isSelected {
+  background: #e8f4f1;
+}
+
+.assignmentPickerOption strong {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.assignmentPickerOption small {
+  color: #6f8280;
+  font-size: 0.61rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.assignmentPickerEmpty {
+  padding: 12px;
+  color: #6f8280;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.assignmentNativeMirror {
+  display: none;
+}
+
+.assignmentLocationCard {
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 11px 12px;
+  border: 1px solid #d7e5e1;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f7fbfa 0%, #eef7f5 100%);
+}
+
+.assignmentLocationCard strong {
+  color: #173c3b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.assignmentLocationCard small {
+  color: #68807c;
+  font-size: 0.59rem;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .assignmentEditorGrid select {
@@ -6040,6 +6197,11 @@ a:hover {
     grid-template-columns: 1fr;
   }
 
+  .assignmentHostField,
+  .assignmentLocationField {
+    grid-column: auto;
+  }
+
   .assignmentSupportField {
     grid-column: auto;
   }
@@ -7438,6 +7600,41 @@ a:hover {
   box-shadow: 0 0 0 3px rgba(153, 246, 228, 0.2);
 }
 
+.availabilitySummarySyncGroup {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.availabilitySummarySyncLegend {
+  display: grid;
+  gap: 3px;
+}
+
+.availabilitySummarySyncLegend strong {
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
+.availabilitySummarySyncLegend small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.availabilitySummarySyncButtons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .availabilitySummaryRefresh {
   display: inline-flex;
   min-height: 44px;
@@ -7454,6 +7651,15 @@ a:hover {
 
 .availabilitySummaryRefresh:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.24);
+}
+
+.availabilitySummaryRefreshDanger {
+  color: #fff2f2;
+  background: rgba(220, 38, 38, 0.2);
+}
+
+.availabilitySummaryRefreshDanger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.28);
 }
 
 .availabilitySummaryGenerate {
@@ -8177,6 +8383,10 @@ a:hover {
 
   .availabilitySummaryFilters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .availabilitySummarySyncButtons {
+    grid-template-columns: 1fr;
   }
 
   .availabilitySummaryRefresh {

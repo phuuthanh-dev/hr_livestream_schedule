@@ -24,7 +24,7 @@ type ScheduleDashboardProps = {
 };
 
 type FilterMode = "all" | "mine" | "warnings" | "pending";
-type IconName = "account" | "calendar" | "check" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "sync" | "users" | "warning";
+type IconName = "account" | "calendar" | "check" | "chevronDown" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "sync" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -69,6 +69,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   }
   if (name === "chevronRight") {
     return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>;
+  }
+  if (name === "chevronDown") {
+    return <svg {...common}><path d="m6 9 6 6 6-6" /></svg>;
   }
   if (name === "close") {
     return <svg {...common}><path d="M18 6 6 18M6 6l12 12" /></svg>;
@@ -330,6 +333,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [assignmentError, setAssignmentError] = useState("");
   const [hostPickerQuery, setHostPickerQuery] = useState("");
   const [supportPickerQuery, setSupportPickerQuery] = useState("");
+  const [assignmentPickerOpen, setAssignmentPickerOpen] = useState<"host" | "support" | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [syncMasterBusy, setSyncMasterBusy] = useState(false);
@@ -621,6 +625,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     setAssignmentError("");
     setHostPickerQuery("");
     setSupportPickerQuery("");
+    setAssignmentPickerOpen(null);
     setDeleteConfirmOpen(false);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -958,20 +963,77 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   {selectedSession.manualOverride ? <em>Admin chỉnh</em> : null}
                 </div>
                 <div className="assignmentEditorGrid">
-                  <label>
+                  <label className="assignmentHostField">
                     <span>Host</span>
-                    <div className="assignmentSearchField">
-                      <Icon name="search" size={15} />
-                      <input
-                        value={hostPickerQuery}
+                    <div className={`assignmentPicker ${assignmentPickerOpen === "host" ? "isOpen" : ""}`}>
+                      <button
+                        className="assignmentPickerTrigger"
                         disabled={peopleLoading || Boolean(assignmentBusy)}
-                        onChange={(event) => setHostPickerQuery(event.target.value)}
-                        placeholder="Tìm tên, mã, level..."
-                      />
-                      <em>{visibleHostOptions.length}</em>
+                        onClick={() => setAssignmentPickerOpen((current) => current === "host" ? null : "host")}
+                        type="button"
+                      >
+                        <span>{selectedSession.hostId ? getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Chưa chọn Host") : "Chưa chọn Host"}</span>
+                        <em>{visibleHostOptions.length}</em>
+                        <Icon name="chevronDown" size={16} />
+                      </button>
+                      {assignmentPickerOpen === "host" ? (
+                        <div className="assignmentPickerPanel">
+                          <div className="assignmentSearchField">
+                            <Icon name="search" size={15} />
+                            <input
+                              autoFocus
+                              value={hostPickerQuery}
+                              disabled={peopleLoading || Boolean(assignmentBusy)}
+                              onChange={(event) => setHostPickerQuery(event.target.value)}
+                              placeholder="Tìm tên, mã, level..."
+                            />
+                          </div>
+                          <div className="assignmentPickerList" role="listbox" aria-label="Danh sách Host">
+                            <button
+                              className={`assignmentPickerOption ${!selectedSession.hostId ? "isSelected" : ""}`}
+                              onClick={() => {
+                                setAssignmentPickerOpen(null);
+                                void updateSelectedSession({ hostId: "" }, "host");
+                              }}
+                              type="button"
+                            >
+                              <strong>Chưa chọn Host</strong>
+                              <small>Giữ ca mở để chọn host sau</small>
+                            </button>
+                            {selectedSession.hostId && !selectedHostProfile ? (
+                              <button
+                                className="assignmentPickerOption isSelected"
+                                onClick={() => setAssignmentPickerOpen(null)}
+                                type="button"
+                              >
+                                <strong>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host hiện tại")}</strong>
+                                <small>Host hiện tại không còn trong danh sách đang lọc</small>
+                              </button>
+                            ) : null}
+                            {visibleHostOptions.map((host) => (
+                              <button
+                                className={`assignmentPickerOption ${selectedSession.hostId === host.id ? "isSelected" : ""}`}
+                                key={host.id}
+                                onClick={() => {
+                                  setAssignmentPickerOpen(null);
+                                  void updateSelectedSession({ hostId: host.id }, "host");
+                                }}
+                                type="button"
+                              >
+                                <strong>{host.name}</strong>
+                                <small>{getAssignmentPersonOptionLabel(host)}</small>
+                              </button>
+                            ))}
+                            {visibleHostOptions.length === 0 ? (
+                              <div className="assignmentPickerEmpty">Không tìm thấy Host phù hợp.</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     <select
                       value={selectedSession.hostId}
+                      className="assignmentNativeMirror"
                       disabled={peopleLoading || Boolean(assignmentBusy)}
                       onChange={(event) => void updateSelectedSession({ hostId: event.target.value }, "host")}
                     >
@@ -986,8 +1048,18 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                       ))}
                     </select>
                   </label>
-                  <label>
+                  <label className="assignmentLocationField">
                     <span>Địa điểm</span>
+                    <div className="assignmentLocationCard">
+                      <strong>{selectedLocationMode === "home" ? "Home" : "Studio"}</strong>
+                      <small>
+                        {selectedHostCanUseHome && selectedHostCanUseStudio
+                          ? "Host này có thể đổi giữa Home và Studio."
+                          : selectedHostCanUseHome
+                            ? "Host này chỉ có thể live tại Home."
+                            : "Host này chỉ có thể live tại Studio."}
+                      </small>
+                    </div>
                     <select
                       value={selectedLocationMode}
                       disabled={Boolean(assignmentBusy) || (!selectedHostCanUseHome && !selectedHostCanUseStudio)}
@@ -1003,18 +1075,75 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   </label>
                   <label className="assignmentSupportField">
                     <span>Support Live</span>
-                    <div className="assignmentSearchField">
-                      <Icon name="search" size={15} />
-                      <input
-                        value={supportPickerQuery}
+                    <div className={`assignmentPicker ${assignmentPickerOpen === "support" ? "isOpen" : ""}`}>
+                      <button
+                        className="assignmentPickerTrigger"
                         disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
-                        onChange={(event) => setSupportPickerQuery(event.target.value)}
-                        placeholder="Tìm tên, mã, cấp độ..."
-                      />
-                      <em>{visibleSupportOptions.length}</em>
+                        onClick={() => setAssignmentPickerOpen((current) => current === "support" ? null : "support")}
+                        type="button"
+                      >
+                        <span>{selectedSession.supportId ? getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Chưa chọn Support") : "Chưa chọn Support"}</span>
+                        <em>{visibleSupportOptions.length}</em>
+                        <Icon name="chevronDown" size={16} />
+                      </button>
+                      {assignmentPickerOpen === "support" ? (
+                        <div className="assignmentPickerPanel">
+                          <div className="assignmentSearchField">
+                            <Icon name="search" size={15} />
+                            <input
+                              autoFocus
+                              value={supportPickerQuery}
+                              disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
+                              onChange={(event) => setSupportPickerQuery(event.target.value)}
+                              placeholder="Tìm tên, mã, cấp độ..."
+                            />
+                          </div>
+                          <div className="assignmentPickerList" role="listbox" aria-label="Danh sách Support">
+                            <button
+                              className={`assignmentPickerOption ${!selectedSession.supportId ? "isSelected" : ""}`}
+                              onClick={() => {
+                                setAssignmentPickerOpen(null);
+                                void updateSelectedSession({ supportId: "" }, "support");
+                              }}
+                              type="button"
+                            >
+                              <strong>Chưa chọn Support</strong>
+                              <small>Giữ trống để chọn support sau</small>
+                            </button>
+                            {selectedSession.supportId && !selectedSupportProfile ? (
+                              <button
+                                className="assignmentPickerOption isSelected"
+                                onClick={() => setAssignmentPickerOpen(null)}
+                                type="button"
+                              >
+                                <strong>{getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support hiện tại")}</strong>
+                                <small>Support hiện tại không còn trong danh sách đang lọc</small>
+                              </button>
+                            ) : null}
+                            {visibleSupportOptions.map((support) => (
+                              <button
+                                className={`assignmentPickerOption ${selectedSession.supportId === support.id ? "isSelected" : ""}`}
+                                key={support.id}
+                                onClick={() => {
+                                  setAssignmentPickerOpen(null);
+                                  void updateSelectedSession({ supportId: support.id }, "support");
+                                }}
+                                type="button"
+                              >
+                                <strong>{support.name}</strong>
+                                <small>{getAssignmentPersonOptionLabel(support)}</small>
+                              </button>
+                            ))}
+                            {visibleSupportOptions.length === 0 ? (
+                              <div className="assignmentPickerEmpty">Không tìm thấy Support phù hợp.</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     <select
                       value={selectedSession.supportId}
+                      className="assignmentNativeMirror"
                       disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
                       onChange={(event) => void updateSelectedSession({ supportId: event.target.value }, "support")}
                     >

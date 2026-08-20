@@ -428,33 +428,41 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <Icon name="refresh" size={18} />
               <span>{loading ? "Đang tải" : "Làm mới"}</span>
             </button>
-            <button
-              className="availabilitySummaryRefresh"
-              disabled={loading || importingSheet}
-              onClick={() => void importAvailabilityFromSheet()}
-              type="button"
-            >
-              <Icon name="users" size={18} />
-              <span>{importingSheet ? "Đang import" : "Kéo từ Sheet"}</span>
-            </button>
-            <button
-              className="availabilitySummaryRefresh"
-              disabled={loading || importingSheet || syncingSheet}
-              onClick={() => void importAvailabilityFromSheet(true)}
-              type="button"
-            >
-              <Icon name="warning" size={18} />
-              <span>{importingSheet ? "Đang force pull" : "Force pull Sheet"}</span>
-            </button>
-            <button
-              className="availabilitySummaryRefresh"
-              disabled={loading || syncingSheet || importingSheet}
-              onClick={syncAvailabilityToSheet}
-              type="button"
-            >
-              <Icon name="refresh" size={18} />
-              <span>{syncingSheet ? "Đang đẩy" : "Đẩy xuống Sheet"}</span>
-            </button>
+            <div className="availabilitySummarySyncGroup">
+              <div className="availabilitySummarySyncLegend">
+                <strong>Đồng bộ Sheet</strong>
+                <small>Pull an toàn chỉ nạp dữ liệu mới. Force pull cho phép sheet ghi đè dữ liệu web của tuần đang xem.</small>
+              </div>
+              <div className="availabilitySummarySyncButtons">
+                <button
+                  className="availabilitySummaryRefresh"
+                  disabled={loading || importingSheet}
+                  onClick={() => void importAvailabilityFromSheet()}
+                  type="button"
+                >
+                  <Icon name="users" size={18} />
+                  <span>{importingSheet ? "Đang pull" : "Pull từ Sheet"}</span>
+                </button>
+                <button
+                  className="availabilitySummaryRefresh availabilitySummaryRefreshDanger"
+                  disabled={loading || importingSheet || syncingSheet}
+                  onClick={() => void importAvailabilityFromSheet(true)}
+                  type="button"
+                >
+                  <Icon name="warning" size={18} />
+                  <span>{importingSheet ? "Đang force pull" : "Force pull ghi đè"}</span>
+                </button>
+                <button
+                  className="availabilitySummaryRefresh"
+                  disabled={loading || syncingSheet || importingSheet}
+                  onClick={syncAvailabilityToSheet}
+                  type="button"
+                >
+                  <Icon name="refresh" size={18} />
+                  <span>{syncingSheet ? "Đang đẩy" : "Đẩy xuống Sheet"}</span>
+                </button>
+              </div>
+            </div>
             <button
               className="availabilitySummaryGenerate"
               disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
