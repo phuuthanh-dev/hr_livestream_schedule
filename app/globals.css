@@ -11482,7 +11482,7 @@ a:hover {
 
 .selfProfileReadonlyGrid article {
   display: grid;
-  min-height: 85px;
+  min-height: 60px;
   padding: 14px;
   border: 1px solid #e0e9e7;
   border-radius: 14px;
