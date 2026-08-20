@@ -10035,6 +10035,38 @@ a:hover {
   border-right: 1px solid #e8eeee;
 }
 
+.recruitmentCapabilityGroup {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dbe7e8;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(251, 255, 255, 0.98), rgba(243, 251, 250, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.recruitmentCapabilityHeader {
+  display: grid;
+  gap: 3px;
+}
+
+.recruitmentCapabilityHeader strong {
+  color: #214c51;
+  font-size: 0.88rem;
+}
+
+.recruitmentCapabilityHeader small {
+  color: #6d7c80;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.recruitmentBooleanGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .recruitmentLogTable td,
 .recruitmentConflictTable td {
   vertical-align: top;
@@ -10836,6 +10868,10 @@ a:hover {
   }
 
   .employeeFormGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .recruitmentBooleanGrid {
     grid-template-columns: 1fr;
   }
 

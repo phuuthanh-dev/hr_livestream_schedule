@@ -725,12 +725,28 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
 
               {editorForm.role === "host" ? (
                 <fieldset><legend>Khả năng live của Host</legend><div className="employeeFormGrid">
-                  <label><span>Ưu tiên nơi live</span><select value={editorForm.liveLocationPreference} onChange={(event) => setEditorForm((current) => current ? { ...current, liveLocationPreference: event.target.value as RecruitmentEditorForm["liveLocationPreference"] } : current)}><option value="">Chưa chọn</option><option value="home">Home</option><option value="studio">Studio</option></select></label>
-                  <label><span>Ưu tiên tài khoản</span><select value={editorForm.liveAccountPreference} onChange={(event) => setEditorForm((current) => current ? { ...current, liveAccountPreference: event.target.value as RecruitmentEditorForm["liveAccountPreference"] } : current)}><option value="">Chưa chọn</option><option value="personal">Personal</option><option value="company">Company</option></select></label>
-                  <label className="recruitmentBooleanField"><input checked={editorForm.canLiveHome} onChange={(event) => setEditorForm((current) => current ? { ...current, canLiveHome: event.target.checked } : current)} type="checkbox" /><span>Có thể live tại nhà</span></label>
-                  <label className="recruitmentBooleanField"><input checked={editorForm.canLiveStudio} onChange={(event) => setEditorForm((current) => current ? { ...current, canLiveStudio: event.target.checked } : current)} type="checkbox" /><span>Có thể live tại Studio</span></label>
-                  <label className="recruitmentBooleanField"><input checked={editorForm.canUsePersonalAccount} onChange={(event) => setEditorForm((current) => current ? { ...current, canUsePersonalAccount: event.target.checked } : current)} type="checkbox" /><span>Dùng được tài khoản cá nhân</span></label>
-                  <label className="recruitmentBooleanField"><input checked={editorForm.canUseCompanyAccount} onChange={(event) => setEditorForm((current) => current ? { ...current, canUseCompanyAccount: event.target.checked } : current)} type="checkbox" /><span>Dùng được tài khoản công ty</span></label>
+                  <div className="recruitmentCapabilityGroup">
+                    <div className="recruitmentCapabilityHeader">
+                      <strong>Địa điểm live</strong>
+                      <small>Ưu tiên và phạm vi nơi Host có thể nhận ca.</small>
+                    </div>
+                    <label><span>Ưu tiên xếp địa điểm</span><select value={editorForm.liveLocationPreference} onChange={(event) => setEditorForm((current) => current ? { ...current, liveLocationPreference: event.target.value as RecruitmentEditorForm["liveLocationPreference"] } : current)}><option value="">Chưa chọn</option><option value="home">Home</option><option value="studio">Studio</option></select></label>
+                    <div className="recruitmentBooleanGrid">
+                      <label className="recruitmentBooleanField"><input checked={editorForm.canLiveHome} onChange={(event) => setEditorForm((current) => current ? { ...current, canLiveHome: event.target.checked } : current)} type="checkbox" /><span>Có thể live tại nhà</span></label>
+                      <label className="recruitmentBooleanField"><input checked={editorForm.canLiveStudio} onChange={(event) => setEditorForm((current) => current ? { ...current, canLiveStudio: event.target.checked } : current)} type="checkbox" /><span>Có thể live tại Studio</span></label>
+                    </div>
+                  </div>
+                  <div className="recruitmentCapabilityGroup">
+                    <div className="recruitmentCapabilityHeader">
+                      <strong>Tài khoản live</strong>
+                      <small>Ưu tiên và loại tài khoản Host có thể sử dụng khi lên ca.</small>
+                    </div>
+                    <label><span>Ưu tiên xếp tài khoản</span><select value={editorForm.liveAccountPreference} onChange={(event) => setEditorForm((current) => current ? { ...current, liveAccountPreference: event.target.value as RecruitmentEditorForm["liveAccountPreference"] } : current)}><option value="">Chưa chọn</option><option value="personal">Personal</option><option value="company">Company</option></select></label>
+                    <div className="recruitmentBooleanGrid">
+                      <label className="recruitmentBooleanField"><input checked={editorForm.canUsePersonalAccount} onChange={(event) => setEditorForm((current) => current ? { ...current, canUsePersonalAccount: event.target.checked } : current)} type="checkbox" /><span>Dùng được tài khoản cá nhân</span></label>
+                      <label className="recruitmentBooleanField"><input checked={editorForm.canUseCompanyAccount} onChange={(event) => setEditorForm((current) => current ? { ...current, canUseCompanyAccount: event.target.checked } : current)} type="checkbox" /><span>Dùng được tài khoản công ty</span></label>
+                    </div>
+                  </div>
                   <label className="wide"><span>Link video</span><input value={editorForm.introVideoUrl} onChange={(event) => setEditorForm((current) => current ? { ...current, introVideoUrl: event.target.value } : current)} /></label>
                   <label className="wide"><span>Link TikTok</span><input value={editorForm.tiktokUrl} onChange={(event) => setEditorForm((current) => current ? { ...current, tiktokUrl: event.target.value } : current)} /></label>
                 </div></fieldset>

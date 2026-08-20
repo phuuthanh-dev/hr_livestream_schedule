@@ -194,14 +194,14 @@ async function assertNoScheduleAssignmentConflict(
 
   for (const row of rows) {
     const candidate = toScheduleSession(row);
+    if (getScheduleSessionLane(candidate) === input.lane) {
+      throw new Error(`Khung giờ ${candidate.slot} ngày ${candidate.dateLabel} đã có ca ${input.lane === "home" ? "Home" : "Studio"}.`);
+    }
     if (hostId && cleanText(candidate.hostId).toLowerCase() === hostId.toLowerCase()) {
       throw new Error(`Host ${candidate.hostName || candidate.hostId} đã được gán ở ca ${candidate.slot} ngày ${candidate.dateLabel}.`);
     }
     if (supportId && cleanText(candidate.supportId).toLowerCase() === supportId.toLowerCase()) {
       throw new Error(`Support ${candidate.supportName || candidate.supportId} đã được gán ở ca ${candidate.slot} ngày ${candidate.dateLabel}.`);
-    }
-    if (!hostId && !supportId && getScheduleSessionLane(candidate) === input.lane && !candidate.hostId && !candidate.supportId) {
-      throw new Error(`Đã có một ca trống ${input.lane === "home" ? "Home" : "Studio"} ở ${candidate.slot} ngày ${candidate.dateLabel}.`);
     }
   }
 }
