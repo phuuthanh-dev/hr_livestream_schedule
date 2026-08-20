@@ -1425,7 +1425,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             <AlertDialog.Title>Xác nhận hủy tham gia ca</AlertDialog.Title>
             <AlertDialog.Description>
               {cancelIntent
-                ? `Bạn sắp hủy vai trò ${cancelIntent.role === "host" ? "Host" : "Support"} ở ca ${cancelIntent.session.slot} ngày ${cancelIntent.session.dateLabel}. Sau khi xác nhận, ca sẽ được cập nhật ngay trên app và đồng bộ xuống sheet master.`
+                ? `Bạn sắp hủy vai trò ${cancelIntent.role === "host" ? "Host" : "Support"} ở ca ${cancelIntent.session.slot} ngày ${cancelIntent.session.dateLabel}. Sau khi xác nhận, ca sẽ được cập nhật ngay trên app.`
                 : ""}
             </AlertDialog.Description>
             <div className="availabilityConfirmActions">

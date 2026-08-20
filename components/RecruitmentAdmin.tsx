@@ -545,9 +545,6 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
                             <strong>{role === "host"
                               ? `${profile?.canLiveHome ? "Home" : ""}${profile?.canLiveHome && profile?.canLiveStudio ? " + " : ""}${profile?.canLiveStudio ? "Studio" : ""}` || "-"
                               : "Support vận hành"}</strong>
-                            <small>{role === "host"
-                              ? `${profile?.canUsePersonalAccount ? "Personal" : ""}${profile?.canUsePersonalAccount && profile?.canUseCompanyAccount ? " + " : ""}${profile?.canUseCompanyAccount ? "Company" : ""}` || "-"
-                              : profile?.evaluationSummary || app?.experience?.slice(0, 60) || "-"}</small>
                           </span>
                         </td>
                         <td data-label="Offer">

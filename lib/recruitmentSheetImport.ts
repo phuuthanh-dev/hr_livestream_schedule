@@ -187,6 +187,29 @@ function buildIndexMap(header: string[]) {
   return new Map(header.map((cell, index) => [normalizeHeader(cell), index] as const));
 }
 
+function assertRecruitmentImportSheet(input: {
+  role: EmployeeRole;
+  tabName: string;
+  values: string[][];
+}) {
+  const header = input.values[0] || [];
+  const indexMap = buildIndexMap(header);
+  if (header.length === 0) {
+    throw new Error(`Tab ${input.tabName} đang trống header. Dừng sync để tránh khóa nhầm toàn bộ nhân sự.`);
+  }
+
+  if (!indexMap.has("mã nhân viên")) {
+    throw new Error(`Tab ${input.tabName} thiếu cột Mã nhân viên. Dừng sync để tránh khóa nhầm toàn bộ nhân sự.`);
+  }
+
+  const hasNameColumn = input.role === "host"
+    ? indexMap.has("họ và tên đầy đủ") || indexMap.has("tên gọi khác")
+    : indexMap.has("tên");
+  if (!hasNameColumn) {
+    throw new Error(`Tab ${input.tabName} thiếu cột tên nhân sự hợp lệ. Dừng sync để tránh khóa nhầm toàn bộ nhân sự.`);
+  }
+}
+
 async function readSheet(tabName: string): Promise<SheetReadResult> {
   const sheets = createGoogleSheetsClient();
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
@@ -447,7 +470,7 @@ function buildHostEmployeeMutation(input: {
       fallback: input.existing?.liveAccountType
     }),
     liveChannelId: getColumn(input.row, input.indexMap, "live_channel_id") || input.existing?.liveChannelId || "",
-    active: input.existing?.active !== false,
+    active: true,
     source: "Google Sheet recruitment sync"
   };
 }
@@ -471,7 +494,7 @@ function buildSupportEmployeeMutation(input: {
       ? "Đã training"
       : input.existing?.trainingStatus || "Chưa training",
     notes: getColumn(input.row, input.indexMap, "kết quả đánh giá") || input.existing?.notes || "",
-    active: input.existing?.active !== false,
+    active: true,
     source: "Google Sheet recruitment sync"
   };
 }
@@ -746,6 +769,8 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
       readSheet(HOST_TAB_NAME),
       readSheet(SUPPORT_TAB_NAME)
     ]);
+    assertRecruitmentImportSheet({ role: "host", tabName: HOST_TAB_NAME, values: hostValues });
+    assertRecruitmentImportSheet({ role: "support", tabName: SUPPORT_TAB_NAME, values: supportValues });
 
     let processedRows = 0;
     let updatedProfiles = 0;
@@ -1022,6 +1047,12 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
     await importSupportRows();
 
     if (!dryRun) {
+      if (seenHostEmployeeIds.size === 0) {
+        throw new Error(`Tab ${HOST_TAB_NAME} không có mã nhân viên hợp lệ. Đã dừng sync để tránh khóa nhầm toàn bộ host.`);
+      }
+      if (seenSupportEmployeeIds.size === 0) {
+        throw new Error(`Tab ${SUPPORT_TAB_NAME} không có mã nhân viên hợp lệ. Đã dừng sync để tránh khóa nhầm toàn bộ support.`);
+      }
       const [hostDeactivation, supportDeactivation] = await Promise.all([
         deactivateSchedulePeopleMissingFromSheet({
           role: "host",
