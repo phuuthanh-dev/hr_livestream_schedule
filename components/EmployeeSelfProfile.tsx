@@ -12,9 +12,10 @@ type ProfilePayload = EmployeeAdminPayload & { sheetSynced?: boolean };
 
 const EMPTY_FORM: ProfileForm = { name: "", aliasName: "", phone: "", email: "" };
 
-function ProfileIcon({ name }: { name: "calendar" | "contract" | "image" | "profile" | "shield" }) {
+function ProfileIcon({ name }: { name: "calendar" | "chevronDown" | "contract" | "image" | "profile" | "shield" }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
   if (name === "calendar") return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /></svg>;
+  if (name === "chevronDown") return <svg {...common}><path d="m6 9 6 6 6-6" /></svg>;
   if (name === "contract") return <svg {...common}><path d="M6 2h9l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></svg>;
   if (name === "image") return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="2" /><path d="m21 15-5-5L5 20" /></svg>;
   if (name === "shield") return <svg {...common}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></svg>;
@@ -295,7 +296,7 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
               <details className="selfProfileSecurity" id="security" open={securityOpen} onToggle={(event) => setSecurityOpen(event.currentTarget.open)}>
                 <summary>
                   <span className="selfProfileSectionHeading"><b>03</b><span><strong>Bảo mật & mật khẩu</strong><small>Đổi mật khẩu đăng nhập và thu hồi các phiên cũ.</small></span></span>
-                  <i aria-hidden="true">⌄</i>
+                  <i aria-hidden="true"><ProfileIcon name="chevronDown" /></i>
                 </summary>
                 <form className="selfProfilePasswordForm" onSubmit={changePassword}>
                   <label><span>Mật khẩu hiện tại *</span><input autoComplete="current-password" required type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>

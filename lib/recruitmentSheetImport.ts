@@ -82,6 +82,11 @@ type SheetRowLookup = {
   duplicates: Map<string, SheetRowMatch[]>;
 };
 
+type SheetCellMapping = {
+  aliases: string[];
+  value: string;
+};
+
 const SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES = [
   "cash offer (reality) lần ii",
   "cash offer (reality) lần 2",
@@ -143,6 +148,14 @@ function getColumn(row: string[], indexMap: Map<string, number>, ...names: strin
 
 function getColumnAlias(row: string[], indexMap: Map<string, number>, aliases: string[]) {
   return getColumn(row, indexMap, ...aliases);
+}
+
+function firstExistingIndex(indexMap: Map<string, number>, aliases: string[]) {
+  for (const alias of aliases) {
+    const index = indexMap.get(alias);
+    if (index !== undefined) return index;
+  }
+  return -1;
 }
 
 function setCellAlias(row: string[], indexMap: Map<string, number>, aliases: string[], value: string) {
@@ -405,6 +418,42 @@ function compareAndTrackOverwrite(input: {
   });
 }
 
+function buildRowFromMappings(input: {
+  header: string[];
+  currentRow?: string[];
+  mappings: SheetCellMapping[];
+}) {
+  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
+  const indexMap = buildIndexMap(input.header);
+  for (const mapping of input.mappings) {
+    setCellAlias(row, indexMap, mapping.aliases, mapping.value);
+  }
+  return row;
+}
+
+function buildCellUpdates(input: {
+  tabName: string;
+  rowNumber: number;
+  currentRow: string[];
+  indexMap: Map<string, number>;
+  mappings: SheetCellMapping[];
+}) {
+  const updates: Array<{ range: string; values: string[][] }> = [];
+  for (const mapping of input.mappings) {
+    const index = firstExistingIndex(input.indexMap, mapping.aliases);
+    if (index < 0) continue;
+    const currentValue = normalizeText(input.currentRow[index]);
+    const nextValue = normalizeText(mapping.value);
+    if (currentValue === nextValue) continue;
+    const columnLetter = columnLetterFromIndex(index);
+    updates.push({
+      range: `'${input.tabName}'!${columnLetter}${input.rowNumber}:${columnLetter}${input.rowNumber}`,
+      values: [[mapping.value]]
+    });
+  }
+  return updates;
+}
+
 function setCell(row: string[], indexMap: Map<string, number>, columnName: string, value: string) {
   const index = indexMap.get(columnName);
   if (index === undefined) return;
@@ -541,42 +590,11 @@ function buildHostSheetRow(input: {
   profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
   contract?: Awaited<ReturnType<typeof listEmployeeContractProfiles>>[number];
 }) {
-  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
-  const indexMap = buildIndexMap(input.header);
-  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || input.contract?.contractCode || "");
-  setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
-  setCell(row, indexMap, "họ và tên đầy đủ", input.profile.fullName);
-  setCell(row, indexMap, "tên gọi khác", input.profile.aliasName);
-  setCell(row, indexMap, "sđt", input.profile.phone);
-  setCell(row, indexMap, "lương mong muốn", input.profile.expectedSalary);
-  setCell(row, indexMap, "lương thỏa thuận", input.profile.salaryOffered || "");
-  setCell(row, indexMap, "phản hồi về lương thỏa thuận", input.profile.salaryOfferFeedback || "");
-  setCell(row, indexMap, "tham gia zalo", formatBooleanCell(input.profile.zaloJoined));
-  setCell(row, indexMap, "kinh nghiệm", input.profile.experience);
-  setCell(row, indexMap, "đánh giá level", input.profile.level);
-  setCell(row, indexMap, "thành tích", input.profile.achievements);
-  setCell(row, indexMap, "cv", input.profile.cvUrl);
-  setCell(row, indexMap, "link", input.profile.introVideoUrl);
-  setCell(row, indexMap, "live tk cá nhân", formatBooleanCell(input.profile.canUsePersonalAccount));
-  setCell(row, indexMap, "live tk công ty", formatBooleanCell(input.profile.canUseCompanyAccount));
-  setCell(row, indexMap, "link tiktok", input.profile.tiktokUrl);
-  setCell(row, indexMap, "lượt follow", input.profile.followerCount || "");
-  setCell(row, indexMap, "rating", input.profile.rating);
-  setCell(row, indexMap, "live tại nhà", formatBooleanCell(input.profile.canLiveHome));
-  setCell(row, indexMap, "live tại studio", formatBooleanCell(input.profile.canLiveStudio));
-  setCell(row, indexMap, "đã tham gia training", formatBooleanCell(input.profile.trainingJoined));
-  setCell(row, indexMap, "note", input.profile.notes);
-  setCell(row, indexMap, "live_channel_id", input.profile.liveChannelId);
-  setCell(row, indexMap, "gmail", input.contract?.gmail || input.profile.email || "");
-  setCell(row, indexMap, "ngày sinh", input.contract?.dateOfBirth || "");
-  setCell(row, indexMap, "cccd", input.contract?.citizenId || "");
-  setCell(row, indexMap, "ngày cấp", input.contract?.citizenIdIssuedDate || "");
-  setCell(row, indexMap, "nơi cấp", input.contract?.citizenIdIssuedPlace || "");
-  setCell(row, indexMap, "thường trú", input.contract?.permanentAddress || "");
-  setCell(row, indexMap, "tạm trú", input.contract?.temporaryAddress || "");
-  setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
-  setCell(row, indexMap, "bank", input.contract?.bankName || "");
-  return row;
+  return buildRowFromMappings({
+    header: input.header,
+    currentRow: input.currentRow,
+    mappings: buildHostSheetMappings(input.profile, input.contract)
+  });
 }
 
 function buildSupportSheetRow(input: {
@@ -585,27 +603,11 @@ function buildSupportSheetRow(input: {
   profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
   contract?: Awaited<ReturnType<typeof listEmployeeContractProfiles>>[number];
 }) {
-  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
-  const indexMap = buildIndexMap(input.header);
-  setCell(row, indexMap, "mã hđ", input.profile.sheetContractCode || input.contract?.contractCode || "");
-  setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
-  setCell(row, indexMap, "tên", input.profile.fullName);
-  setCell(row, indexMap, "sđt", input.profile.phone);
-  setCell(row, indexMap, "level", input.profile.level);
-  setCell(row, indexMap, "lương mong muốn theo giờ", input.profile.expectedSalary);
-  setCell(row, indexMap, "kinh nghiệm", input.profile.experience);
-  setCell(row, indexMap, "cv", input.profile.cvUrl);
-  setCell(row, indexMap, "đã tham gia training", formatBooleanCell(input.profile.trainingJoined));
-  setCell(row, indexMap, "kết quả đánh giá", input.profile.evaluationSummary || "");
-  setCell(row, indexMap, "cash offer (by gem)", input.profile.supportGemOffer || "");
-  setCell(row, indexMap, "cash offer (reality) lần i", input.profile.cashOfferReality || "");
-  setCell(row, indexMap, "deal cast lần i", input.profile.dealStatus || "");
-  setCellAlias(row, indexMap, SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES, input.profile.cashOfferRealityRoundTwo || "");
-  setCellAlias(row, indexMap, SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES, input.profile.dealStatusRoundTwo || "");
-  setCell(row, indexMap, "support chính mức offer", input.profile.supportMainOfferNote || "");
-  setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
-  setCell(row, indexMap, "bank", input.contract?.bankName || "");
-  return row;
+  return buildRowFromMappings({
+    header: input.header,
+    currentRow: input.currentRow,
+    mappings: buildSupportSheetMappings(input.profile, input.contract)
+  });
 }
 
 function buildPortfolioMasterRow(input: {
@@ -613,35 +615,11 @@ function buildPortfolioMasterRow(input: {
   currentRow?: string[];
   profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
 }) {
-  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
-  const indexMap = buildIndexMap(input.header);
-  const compensation = resolveEmployeeCompensation("host", {
-    rating: input.profile.rating,
-    level: input.profile.level,
-    cashOffer: input.profile.salaryOffered
+  return buildRowFromMappings({
+    header: input.header,
+    currentRow: input.currentRow,
+    mappings: buildPortfolioMasterMappings(input.profile)
   });
-  const liveAccountType = input.profile.canUsePersonalAccount && input.profile.canUseCompanyAccount
-    ? "Cá nhân + Công ty"
-    : input.profile.canUseCompanyAccount
-      ? "Công ty"
-      : input.profile.canUsePersonalAccount
-        ? "Cá nhân"
-        : "";
-  const trainingStatus = input.profile.trainingJoined ? "Rồi" : "Chưa";
-  setCell(row, indexMap, "streamer_id", input.profile.employeeId);
-  setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
-  setCell(row, indexMap, "full_name", input.profile.fullName);
-  setCell(row, indexMap, "họ và tên", input.profile.fullName);
-  setCell(row, indexMap, "entry_grade", compensation.level || input.profile.level || input.profile.rating || "");
-  setCell(row, indexMap, "grade", compensation.level || input.profile.level || input.profile.rating || "");
-  setCell(row, indexMap, "cash_offer", compensation.cashOffer || "");
-  setCell(row, indexMap, "experience", input.profile.experience);
-  setCell(row, indexMap, "achievements", input.profile.achievements);
-  setCell(row, indexMap, "live_account_type", liveAccountType);
-  setCell(row, indexMap, "training_status", trainingStatus);
-  setCell(row, indexMap, "live_channel_id", input.profile.liveChannelId);
-  setCell(row, indexMap, "notes", input.profile.notes);
-  return row;
 }
 
 function buildSupportMasterRow(input: {
@@ -649,28 +627,127 @@ function buildSupportMasterRow(input: {
   currentRow?: string[];
   profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
 }) {
-  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
-  const indexMap = buildIndexMap(input.header);
-  const compensation = resolveEmployeeCompensation("support", {
-    rating: input.profile.rating,
-    level: input.profile.level,
-    cashOffer: input.profile.supportGemOffer
+  return buildRowFromMappings({
+    header: input.header,
+    currentRow: input.currentRow,
+    mappings: buildSupportMasterMappings(input.profile)
   });
-  setCell(row, indexMap, "mã support (support_id)", input.profile.employeeId);
-  setCell(row, indexMap, "support_id", input.profile.employeeId);
-  setCell(row, indexMap, "mã support", input.profile.employeeId);
-  setCell(row, indexMap, "họ và tên", input.profile.fullName);
-  setCell(row, indexMap, "họ và tên đầy đủ", input.profile.fullName);
-  setCell(row, indexMap, "full_name", input.profile.fullName);
-  setCell(row, indexMap, "cấp độ / level", compensation.level || input.profile.level || "");
-  setCell(row, indexMap, "level", compensation.level || input.profile.level || "");
-  setCell(row, indexMap, "cấp độ", compensation.level || input.profile.level || "");
-  setCell(row, indexMap, "cash offer", compensation.cashOffer || "");
-  setCell(row, indexMap, "cash_offer", compensation.cashOffer || "");
-  setCell(row, indexMap, "experience", input.profile.experience);
-  setCell(row, indexMap, "training_status", input.profile.trainingJoined ? "Rồi" : "Chưa");
-  setCell(row, indexMap, "notes", input.profile.evaluationSummary || input.profile.notes || "");
-  return row;
+}
+
+function buildHostSheetMappings(
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number],
+  contract?: Awaited<ReturnType<typeof listEmployeeContractProfiles>>[number]
+): SheetCellMapping[] {
+  return [
+    { aliases: ["mã hđ"], value: profile.sheetContractCode || contract?.contractCode || "" },
+    { aliases: ["mã nhân viên"], value: profile.employeeId },
+    { aliases: ["họ và tên đầy đủ"], value: profile.fullName },
+    { aliases: ["tên gọi khác"], value: profile.aliasName },
+    { aliases: ["sđt"], value: profile.phone },
+    { aliases: ["lương mong muốn"], value: profile.expectedSalary },
+    { aliases: ["lương thỏa thuận"], value: profile.salaryOffered || "" },
+    { aliases: ["phản hồi về lương thỏa thuận"], value: profile.salaryOfferFeedback || "" },
+    { aliases: ["tham gia zalo"], value: formatBooleanCell(profile.zaloJoined) },
+    { aliases: ["kinh nghiệm"], value: profile.experience },
+    { aliases: ["đánh giá level"], value: profile.level },
+    { aliases: ["thành tích"], value: profile.achievements },
+    { aliases: ["cv"], value: profile.cvUrl },
+    { aliases: ["link"], value: profile.introVideoUrl },
+    { aliases: ["live tk cá nhân"], value: formatBooleanCell(profile.canUsePersonalAccount) },
+    { aliases: ["live tk công ty"], value: formatBooleanCell(profile.canUseCompanyAccount) },
+    { aliases: ["link tiktok"], value: profile.tiktokUrl },
+    { aliases: ["lượt follow"], value: profile.followerCount || "" },
+    { aliases: ["rating"], value: profile.rating },
+    { aliases: ["live tại nhà"], value: formatBooleanCell(profile.canLiveHome) },
+    { aliases: ["live tại studio"], value: formatBooleanCell(profile.canLiveStudio) },
+    { aliases: ["đã tham gia training"], value: formatBooleanCell(profile.trainingJoined) },
+    { aliases: ["note"], value: profile.notes },
+    { aliases: ["live_channel_id"], value: profile.liveChannelId },
+    { aliases: ["gmail", "email"], value: contract?.gmail || profile.email || "" },
+    { aliases: ["ngày sinh"], value: contract?.dateOfBirth || "" },
+    { aliases: ["cccd"], value: contract?.citizenId || "" },
+    { aliases: ["ngày cấp"], value: contract?.citizenIdIssuedDate || "" },
+    { aliases: ["nơi cấp"], value: contract?.citizenIdIssuedPlace || "" },
+    { aliases: ["thường trú"], value: contract?.permanentAddress || "" },
+    { aliases: ["tạm trú"], value: contract?.temporaryAddress || "" },
+    { aliases: ["stk"], value: contract?.bankAccountNumber || "" },
+    { aliases: ["bank"], value: contract?.bankName || "" }
+  ];
+}
+
+function buildSupportSheetMappings(
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number],
+  contract?: Awaited<ReturnType<typeof listEmployeeContractProfiles>>[number]
+): SheetCellMapping[] {
+  return [
+    { aliases: ["mã hđ"], value: profile.sheetContractCode || contract?.contractCode || "" },
+    { aliases: ["mã nhân viên"], value: profile.employeeId },
+    { aliases: ["tên"], value: profile.fullName },
+    { aliases: ["sđt"], value: profile.phone },
+    { aliases: ["level"], value: profile.level },
+    { aliases: ["lương mong muốn theo giờ"], value: profile.expectedSalary },
+    { aliases: ["kinh nghiệm"], value: profile.experience },
+    { aliases: ["cv"], value: profile.cvUrl },
+    { aliases: ["đã tham gia training"], value: formatBooleanCell(profile.trainingJoined) },
+    { aliases: ["kết quả đánh giá"], value: profile.evaluationSummary || "" },
+    { aliases: ["cash offer (by gem)"], value: profile.supportGemOffer || "" },
+    { aliases: ["cash offer (reality) lần i"], value: profile.cashOfferReality || "" },
+    { aliases: ["deal cast lần i"], value: profile.dealStatus || "" },
+    { aliases: SUPPORT_CASH_OFFER_ROUND_TWO_ALIASES, value: profile.cashOfferRealityRoundTwo || "" },
+    { aliases: SUPPORT_DEAL_STATUS_ROUND_TWO_ALIASES, value: profile.dealStatusRoundTwo || "" },
+    { aliases: ["support chính mức offer"], value: profile.supportMainOfferNote || "" },
+    { aliases: ["stk"], value: contract?.bankAccountNumber || "" },
+    { aliases: ["bank"], value: contract?.bankName || "" }
+  ];
+}
+
+function buildPortfolioMasterMappings(
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number]
+): SheetCellMapping[] {
+  const compensation = resolveEmployeeCompensation("host", {
+    rating: profile.rating,
+    level: profile.level,
+    cashOffer: profile.salaryOffered
+  });
+  const liveAccountType = profile.canUsePersonalAccount && profile.canUseCompanyAccount
+    ? "Cá nhân + Công ty"
+    : profile.canUseCompanyAccount
+      ? "Công ty"
+      : profile.canUsePersonalAccount
+        ? "Cá nhân"
+        : "";
+  const trainingStatus = profile.trainingJoined ? "Rồi" : "Chưa";
+  return [
+    { aliases: ["streamer_id", "mã nhân viên"], value: profile.employeeId },
+    { aliases: ["full_name", "họ và tên"], value: profile.fullName },
+    { aliases: ["entry_grade", "grade"], value: compensation.level || profile.level || profile.rating || "" },
+    { aliases: ["cash_offer"], value: compensation.cashOffer || "" },
+    { aliases: ["experience"], value: profile.experience },
+    { aliases: ["achievements"], value: profile.achievements },
+    { aliases: ["live_account_type"], value: liveAccountType },
+    { aliases: ["training_status"], value: trainingStatus },
+    { aliases: ["live_channel_id"], value: profile.liveChannelId },
+    { aliases: ["notes"], value: profile.notes }
+  ];
+}
+
+function buildSupportMasterMappings(
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number]
+): SheetCellMapping[] {
+  const compensation = resolveEmployeeCompensation("support", {
+    rating: profile.rating,
+    level: profile.level,
+    cashOffer: profile.supportGemOffer
+  });
+  return [
+    { aliases: ["mã support (support_id)", "support_id", "mã support"], value: profile.employeeId },
+    { aliases: ["họ và tên", "họ và tên đầy đủ", "full_name"], value: profile.fullName },
+    { aliases: ["cấp độ / level", "level", "cấp độ"], value: compensation.level || profile.level || "" },
+    { aliases: ["cash offer", "cash_offer"], value: compensation.cashOffer || "" },
+    { aliases: ["experience"], value: profile.experience },
+    { aliases: ["training_status"], value: profile.trainingJoined ? "Rồi" : "Chưa" },
+    { aliases: ["notes"], value: profile.evaluationSummary || profile.notes || "" }
+  ];
 }
 
 async function applySheetUpdates(spreadsheetId: string, updates: Array<{ range: string; values: string[][] }>) {
@@ -1279,6 +1356,7 @@ export async function syncRecruitmentProfilesToSheets(
       }
 
       if (profile.role === "host") {
+        const sheetMappings = buildHostSheetMappings(profile, contract);
         const nextRow = buildHostSheetRow({ header, currentRow: existingRow?.values, profile, contract });
         if (existingRow) {
           compareAndTrackOverwrite({
@@ -1318,10 +1396,13 @@ export async function syncRecruitmentProfilesToSheets(
             rowNumber: existingRow.rowNumber,
             conflicts
           });
-          updatePayloads.push({
-            range: `'${tabName}'!A${existingRow.rowNumber}:AZ${existingRow.rowNumber}`,
-            values: [nextRow]
-          });
+          updatePayloads.push(...buildCellUpdates({
+            tabName,
+            rowNumber: existingRow.rowNumber,
+            currentRow: existingRow.values,
+            indexMap,
+            mappings: sheetMappings
+          }));
           updatedSheetRows += 1;
         } else {
           appendHostRows.push(nextRow);
@@ -1337,6 +1418,7 @@ export async function syncRecruitmentProfilesToSheets(
 
         if (!duplicatePortfolioIds.has(profile.employeeId.toUpperCase())) {
           const existingMasterRow = portfolioRows.get(profile.employeeId.toUpperCase());
+          const masterMappings = buildPortfolioMasterMappings(profile);
           const nextMasterRow = buildPortfolioMasterRow({
             header: portfolioMasterHeader,
             currentRow: existingMasterRow?.values,
@@ -1367,10 +1449,13 @@ export async function syncRecruitmentProfilesToSheets(
               rowNumber: existingMasterRow.rowNumber,
               conflicts
             });
-            masterUpdatePayloads.push({
-              range: `'${PORTFOLIO_MASTER_TAB_NAME}'!A${existingMasterRow.rowNumber}:AZ${existingMasterRow.rowNumber}`,
-              values: [nextMasterRow]
-            });
+            masterUpdatePayloads.push(...buildCellUpdates({
+              tabName: PORTFOLIO_MASTER_TAB_NAME,
+              rowNumber: existingMasterRow.rowNumber,
+              currentRow: existingMasterRow.values,
+              indexMap: portfolioMasterIndexMap,
+              mappings: masterMappings
+            }));
             updatedMasterRows += 1;
           } else {
             appendPortfolioMasterRows.push(nextMasterRow);
@@ -1387,6 +1472,7 @@ export async function syncRecruitmentProfilesToSheets(
           skippedRows += 1;
         }
       } else {
+        const sheetMappings = buildSupportSheetMappings(profile, contract);
         const nextRow = buildSupportSheetRow({ header, currentRow: existingRow?.values, profile, contract });
         if (existingRow) {
           compareAndTrackOverwrite({
@@ -1418,10 +1504,13 @@ export async function syncRecruitmentProfilesToSheets(
             rowNumber: existingRow.rowNumber,
             conflicts
           });
-          updatePayloads.push({
-            range: `'${tabName}'!A${existingRow.rowNumber}:AZ${existingRow.rowNumber}`,
-            values: [nextRow]
-          });
+          updatePayloads.push(...buildCellUpdates({
+            tabName,
+            rowNumber: existingRow.rowNumber,
+            currentRow: existingRow.values,
+            indexMap,
+            mappings: sheetMappings
+          }));
           updatedSheetRows += 1;
         } else {
           appendSupportRows.push(nextRow);
@@ -1437,6 +1526,7 @@ export async function syncRecruitmentProfilesToSheets(
 
         if (!duplicateSupportMasterIds.has(profile.employeeId.toUpperCase())) {
           const existingMasterRow = supportMasterRows.get(profile.employeeId.toUpperCase());
+          const masterMappings = buildSupportMasterMappings(profile);
           const nextMasterRow = buildSupportMasterRow({
             header: supportMasterHeader,
             currentRow: existingMasterRow?.values,
@@ -1469,10 +1559,13 @@ export async function syncRecruitmentProfilesToSheets(
               rowNumber: existingMasterRow.rowNumber,
               conflicts
             });
-            masterUpdatePayloads.push({
-              range: `'${SUPPORT_MASTER_TAB_NAME}'!A${existingMasterRow.rowNumber}:AZ${existingMasterRow.rowNumber}`,
-              values: [nextMasterRow]
-            });
+            masterUpdatePayloads.push(...buildCellUpdates({
+              tabName: SUPPORT_MASTER_TAB_NAME,
+              rowNumber: existingMasterRow.rowNumber,
+              currentRow: existingMasterRow.values,
+              indexMap: supportMasterIndexMap,
+              mappings: masterMappings
+            }));
             updatedMasterRows += 1;
           } else {
             appendSupportMasterRows.push(nextMasterRow);

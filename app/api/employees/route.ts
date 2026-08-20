@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
 import { employeeContractPersonKey, listEmployeeContractSummaries } from "@/lib/employeeContract";
+import { syncRecruitmentProfilesToSheets } from "@/lib/recruitmentSheetImport";
 import { listSupportTrainingSummaries } from "@/lib/supportTraining";
 import {
   hardDeleteSchedulePerson,
@@ -97,10 +98,20 @@ export async function PUT(request: Request) {
   try {
     const input = (await request.json()) as SchedulePersonMutation;
     const employee = await updateSchedulePerson(input, session.accountKey);
+    let sheetSynced = true;
+    let sheetMessage = "";
+    try {
+      await syncRecruitmentProfilesToSheets(session.accountKey, { role: employee.role, employeeId: employee.id });
+    } catch (error) {
+      sheetSynced = false;
+      sheetMessage = error instanceof Error ? error.message : "Không đồng bộ được Google Sheet.";
+    }
     return NextResponse.json<EmployeeAdminPayload>({
       success: true,
       employee,
-      message: `Đã cập nhật hồ sơ ${employee.name}.`
+      message: sheetSynced
+        ? `Đã cập nhật hồ sơ ${employee.name} và đồng bộ Google Sheet.`
+        : `Đã cập nhật hồ sơ ${employee.name}; Google Sheet chưa đồng bộ: ${sheetMessage}`
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không cập nhật được nhân viên.";
