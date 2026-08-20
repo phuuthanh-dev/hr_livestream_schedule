@@ -142,7 +142,8 @@ export async function upsertRecruitmentProfileFromApplication(input: {
   const collection = await getCollection();
   const now = new Date();
   const existing = await collection.findOne({ personKey: personKey(input.application.role, input.employeeId) });
-  const defaultHostGrade = input.application.role === "host" ? "Thử việc" : "";
+  const defaultLevel = input.application.role === "host" ? "Thử việc" : "Cấp 1";
+  const defaultRating = input.application.role === "host" ? "Thử việc" : "D";
   const document = await collection.findOneAndUpdate(
     { personKey: personKey(input.application.role, input.employeeId) },
     {
@@ -163,8 +164,8 @@ export async function upsertRecruitmentProfileFromApplication(input: {
         tiktokUrl: input.application.tiktokUrl,
         followerCount: existing?.followerCount || "",
         zaloJoined: existing?.zaloJoined || false,
-        level: existing?.level || defaultHostGrade,
-        rating: existing?.rating || defaultHostGrade,
+        level: existing?.level || defaultLevel,
+        rating: existing?.rating || defaultRating,
         trainingJoined: existing?.trainingJoined || false,
         liveChannelId: existing?.liveChannelId || "",
         canLiveHome: input.application.canLiveHome,
@@ -197,6 +198,11 @@ export async function upsertRecruitmentProfileFromApplication(input: {
   );
   if (!document) throw new Error("Không lưu được hồ sơ tuyển dụng.");
   return toProfile(document);
+}
+
+export async function deleteRecruitmentProfile(role: EmployeeRole, employeeId: string) {
+  const collection = await getCollection();
+  await collection.deleteOne({ personKey: personKey(role, employeeId) });
 }
 
 export async function upsertRecruitmentProfile(input: {

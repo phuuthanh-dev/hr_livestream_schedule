@@ -88,7 +88,7 @@ export function buildEmployeeMutationFromApplication(
     return {
       id: employeeId,
       role: "host",
-      name: input.aliasName || input.fullName,
+      name: input.fullName,
       rating: "Thử việc",
       level: "Thử việc",
       workLocation,
@@ -108,7 +108,8 @@ export function buildEmployeeMutationFromApplication(
     id: employeeId,
     role: "support",
     name: input.fullName,
-    level: "Thử việc",
+    rating: "D",
+    level: "Cấp 1",
     phone: normalizePhone(input.phone),
     cvReference: input.cvUrl,
     experience: input.experience,

@@ -10,7 +10,7 @@ import {
 } from "@/lib/employeeRoster";
 import { buildEmployeeMutationFromApplication } from "@/lib/applicationAutomation";
 import { getMongoDatabase } from "@/lib/mongodb";
-import { upsertRecruitmentProfileFromApplication } from "@/lib/recruitmentProfile";
+import { deleteRecruitmentProfile, upsertRecruitmentProfileFromApplication } from "@/lib/recruitmentProfile";
 import { syncRecruitmentProfilesToSheets } from "@/lib/recruitmentSheetImport";
 import type { EmployeeRole } from "@/lib/types";
 
@@ -303,6 +303,16 @@ async function syncApplicationToGoogleSheet(application: PeopleApplication & { e
   });
 }
 
+async function rollbackNewEmployeeProvision(role: EmployeeRole, employeeId: string) {
+  const database = await getMongoDatabase();
+  const personKey = `${role}:${employeeId.trim().toLowerCase()}`;
+  await Promise.all([
+    database.collection("schedule_people").deleteOne({ personKey }),
+    database.collection("schedule_users").deleteOne({ accountKey: `employee:${role}:${employeeId.trim().toLowerCase()}` }),
+    deleteRecruitmentProfile(role, employeeId)
+  ]);
+}
+
 async function getApplicationsCollection(): Promise<Collection<PeopleApplicationDocument>> {
   const database = await getMongoDatabase();
   const collection = database.collection<PeopleApplicationDocument>(APPLICATIONS_COLLECTION);
@@ -359,13 +369,16 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
     await syncApplicationToGoogleSheet({ ...application, employeeId: employee.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không đồng bộ được dữ liệu sang Google Sheet.";
+    if (created) {
+      await rollbackNewEmployeeProvision(application.role, employee.id).catch(() => undefined);
+    }
     const failedStatus = existing
       ? await collection.findOneAndUpdate(
         { applicationId: existing.applicationId },
         {
           $set: {
             ...normalized,
-            employeeId: employee.id,
+            employeeId: created ? "" : employee.id,
             status: "accepted",
             updatedAt: now,
             resubmittedAt: now,
@@ -383,7 +396,7 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
             ...normalized,
             applicationId: baseDocument.applicationId,
             normalizedPhone: normalized.normalizedPhone,
-            employeeId: employee.id,
+            employeeId: created ? "" : employee.id,
             status: "accepted",
             updatedAt: now,
             sheetSyncStatus: "failed",

@@ -417,8 +417,8 @@ function buildHostEmployeeMutation(input: {
   return {
     id: input.employeeId,
     role: "host",
-    name: getColumn(input.row, input.indexMap, "tên gọi khác")
-      || getColumn(input.row, input.indexMap, "họ và tên đầy đủ")
+    name: getColumn(input.row, input.indexMap, "họ và tên đầy đủ")
+      || getColumn(input.row, input.indexMap, "tên gọi khác")
       || input.existing?.name
       || input.employeeId,
     phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
@@ -461,7 +461,8 @@ function buildSupportEmployeeMutation(input: {
     role: "support",
     name: getColumn(input.row, input.indexMap, "tên") || input.existing?.name || input.employeeId,
     phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
-    level: getColumn(input.row, input.indexMap, "level") || input.existing?.level || "Thử việc",
+    level: getColumn(input.row, input.indexMap, "level") || input.existing?.level || "Cấp 1",
+    rating: input.existing?.rating || "D",
     cvReference: getColumn(input.row, input.indexMap, "cv") || input.existing?.cvReference || "",
     experience: getColumn(input.row, input.indexMap, "kinh nghiệm") || input.existing?.experience || "",
     trainingStatus: parseBooleanCell(getColumn(input.row, input.indexMap, "đã tham gia training"))
