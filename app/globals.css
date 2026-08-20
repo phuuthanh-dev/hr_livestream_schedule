@@ -250,12 +250,14 @@ a:hover {
   padding: 0;
   border: 0;
   border-radius: 0;
-  box-shadow: none;
+  outline: none;
+  box-shadow: none !important;
   background: transparent;
 }
 
 .loginEmployeePickerSearch input:focus {
-  box-shadow: none;
+  outline: none;
+  box-shadow: none !important;
 }
 
 .loginEmployeePickerList {
