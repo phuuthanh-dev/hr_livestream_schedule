@@ -588,7 +588,7 @@ function buildPortfolioMasterRow(input: {
   const compensation = resolveEmployeeCompensation("host", {
     rating: input.profile.rating,
     level: input.profile.level,
-    cashOffer: input.profile.salaryOffered || input.profile.expectedSalary
+    cashOffer: input.profile.salaryOffered
   });
   const liveAccountType = input.profile.canUsePersonalAccount && input.profile.canUseCompanyAccount
     ? "Cá nhân + Công ty"
@@ -624,7 +624,7 @@ function buildSupportMasterRow(input: {
   const compensation = resolveEmployeeCompensation("support", {
     rating: input.profile.rating,
     level: input.profile.level,
-    cashOffer: input.profile.supportGemOffer || input.profile.expectedSalary
+    cashOffer: input.profile.supportGemOffer
   });
   setCell(row, indexMap, "mã support (support_id)", input.profile.employeeId);
   setCell(row, indexMap, "support_id", input.profile.employeeId);
