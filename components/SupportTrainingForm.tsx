@@ -69,6 +69,7 @@ type Payload = {
 };
 
 const SCORE_OPTIONS = [0, 1, 2, 3, 4] as const;
+const SCORE_LABELS = ["Chưa đạt", "Yếu", "Đạt một phần", "Tốt", "Rất tốt"] as const;
 const END_OF_DAY_ITEM_IDS = new Set(["final_shift_report", "final_shift_shutdown"]);
 
 function buildEmptyEntry(notApplicable = false): TrainingEntry {
@@ -235,22 +236,29 @@ export default function SupportTrainingForm({
           <span className="brandName">Training Support Live</span>
         </div>
         <div className="supportTrainingIdentity">
-          <strong>{employeeName}</strong>
-          <span>{employeeId}{isAdmin ? " · Admin view" : ""}</span>
+          <span className="supportTrainingAvatar" aria-hidden="true">{employeeName.trim().charAt(0).toUpperCase() || "S"}</span>
+          <span className="supportTrainingIdentityText">
+            <strong>{employeeName}</strong>
+            <small>{employeeId}{isAdmin ? " · Chế độ quản trị" : " · Support Live"}</small>
+          </span>
         </div>
         <a className="todayButton" href={isAdmin ? "/employees" : "/"}>Quay lại</a>
       </header>
 
       <section className="supportTrainingWorkspace">
         <aside className="supportTrainingSidebar">
-          <span className="contractEyebrow">SCORECARD · PDF SOP</span>
-          <h1>Đánh giá Support Live theo thang điểm 0 - 4.</h1>
-          <p>Form này bám theo mẫu PDF đánh giá Support Live: chấm từng tiêu chí, có N/A cho ca cuối ngày và tự suy ra level cùng cash offer.</p>
+          <div className="supportTrainingIntro">
+            <span className="contractEyebrow">CHECKLIST ĐÁNH GIÁ</span>
+            <h1>Training Support Live</h1>
+            <p>Chấm lần lượt từng nhóm tiêu chí. Kết quả level và mức lương được hệ thống tính tự động sau khi lưu.</p>
+          </div>
           <div className="supportTrainingProgressCard">
-            <span>Tổng điểm hiện tại</span>
-            <strong>{totals.achievedScore}/{totals.maxScore || 0}</strong>
+            <div className="supportTrainingProgressHeading">
+              <span>Tiến độ đánh giá</span>
+              <strong>{totals.percent}%</strong>
+            </div>
             <i><b style={{ width: `${totals.percent}%` }} /></i>
-            <small>{totals.percent}% · {totals.applicableItems}/{totals.totalItems} tiêu chí đang được tính</small>
+            <small>{totals.achievedScore}/{totals.maxScore || 0} điểm · {totals.applicableItems}/{totals.totalItems} tiêu chí được tính</small>
           </div>
           {profile ? (
             <div className={`supportTrainingResultCard ${profile.evaluation.passed ? "pass" : "fail"}`}>
@@ -260,6 +268,20 @@ export default function SupportTrainingForm({
               <small>{profile.evaluation.trainingStatus} · {profile.evaluation.scorePercent}% · loại trừ {profile.evaluation.excludedItems} tiêu chí</small>
             </div>
           ) : null}
+          <div className="supportTrainingGuide">
+            <strong>Cách chấm điểm</strong>
+            <ol>
+              <li>Điền thông tin ca được đánh giá.</li>
+              <li>Chọn điểm 0 - 4 cho từng tiêu chí.</li>
+              <li>Ghi chú các lỗi hoặc tình huống cần theo dõi.</li>
+              <li>Kiểm tra tổng kết và lưu kết quả.</li>
+            </ol>
+          </div>
+          <div className="supportTrainingScale" aria-label="Chú giải thang điểm">
+            {SCORE_LABELS.map((label, score) => (
+              <span key={label}><b>{score}</b>{label}</span>
+            ))}
+          </div>
         </aside>
 
         <section className="supportTrainingSurface">
@@ -267,12 +289,12 @@ export default function SupportTrainingForm({
           {message ? <div className="notice successNotice">{message}</div> : null}
           {loading ? <div className="contractLoading">Đang tải form đánh giá support live...</div> : (
             <form className="supportTrainingForm" onSubmit={saveForm}>
-              <section className="contractSection">
+              <section className="contractSection supportTrainingSection supportTrainingContextSection">
                 <header>
-                  <span>Thông tin đánh giá</span>
+                  <span>01</span>
                   <div>
-                    <strong>Bối cảnh chấm điểm</strong>
-                    <p>Điền ca được đánh giá, người chấm và đánh dấu nếu đây không phải ca cuối ngày.</p>
+                    <strong>Thông tin ca được đánh giá</strong>
+                    <p>Ghi nhận đúng ca, địa điểm và người phụ trách đánh giá.</p>
                   </div>
                 </header>
                 <div className="supportTrainingMetaGrid">
@@ -312,19 +334,20 @@ export default function SupportTrainingForm({
                 </div>
               </section>
 
-              {checklist.map((section) => {
+              {checklist.map((section, sectionIndex) => {
                 const sectionItems = section.items;
                 const sectionApplicable = sectionItems.filter((item) => !entries[item.id]?.notApplicable);
                 const sectionScore = sectionApplicable.reduce((total, item) => total + (entries[item.id]?.score || 0), 0);
                 const sectionMax = sectionApplicable.length * 4;
                 return (
-                  <section className="contractSection" key={section.id}>
+                  <section className="contractSection supportTrainingSection" key={section.id}>
                     <header>
-                      <span>{section.title}</span>
+                      <span>{String(sectionIndex + 2).padStart(2, "0")}</span>
                       <div>
-                        <strong>{sectionScore}/{sectionMax || 0}</strong>
-                        <p>Chấm từng tiêu chí theo thang 0 - 4, thêm ghi chú nếu cần.</p>
+                        <strong>{section.title}</strong>
+                        <p>{sectionItems.length} tiêu chí · Điểm hiện tại {sectionScore}/{sectionMax || 0}</p>
                       </div>
+                      <span className="supportTrainingSectionScore">{sectionMax ? Math.round((sectionScore / sectionMax) * 100) : 0}%</span>
                     </header>
                     <div className="supportTrainingChecklist">
                       {section.items.map((item, index) => {
@@ -360,8 +383,10 @@ export default function SupportTrainingForm({
                                   key={score}
                                   onClick={() => updateEntry(item.id, { score, notApplicable: false })}
                                   type="button"
+                                  title={`${score} - ${SCORE_LABELS[score]}`}
                                 >
-                                  {score}
+                                  <b>{score}</b>
+                                  <small>{SCORE_LABELS[score]}</small>
                                 </button>
                               ))}
                             </div>
@@ -380,11 +405,11 @@ export default function SupportTrainingForm({
                 );
               })}
 
-              <section className="contractSection">
+              <section className="contractSection supportTrainingSection supportTrainingFeedbackSection">
                 <header>
-                  <span>Nhận xét và hướng xử lý</span>
+                  <span>{String(checklist.length + 2).padStart(2, "0")}</span>
                   <div>
-                    <strong>Tổng kết theo mẫu PDF</strong>
+                    <strong>Nhận xét và hướng xử lý</strong>
                     <p>Ghi rõ điểm mạnh, điểm cần cải thiện, lỗi phát sinh và đề xuất đào tạo.</p>
                   </div>
                 </header>
@@ -441,8 +466,11 @@ export default function SupportTrainingForm({
                 </div>
               </section>
 
-              <footer className="contractFormFooter">
-                <span>{profile?.updatedAt ? `Cập nhật gần nhất: ${new Date(profile.updatedAt).toLocaleString("vi-VN")}` : "Chưa lưu đánh giá lần nào"}</span>
+              <footer className="contractFormFooter supportTrainingFooter">
+                <div>
+                  <strong>{totals.percent}% · {totals.achievedScore}/{totals.maxScore || 0} điểm</strong>
+                  <span>{profile?.updatedAt ? `Cập nhật gần nhất: ${new Date(profile.updatedAt).toLocaleString("vi-VN")}` : "Chưa lưu đánh giá lần nào"}</span>
+                </div>
                 <button disabled={saving} type="submit">{saving ? "Đang lưu đánh giá..." : "Lưu kết quả training"}</button>
               </footer>
             </form>
