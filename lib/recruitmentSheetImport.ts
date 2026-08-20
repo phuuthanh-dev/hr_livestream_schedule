@@ -33,6 +33,8 @@ const PORTFOLIO_MASTER_TAB_NAME = "Portfolio_Master";
 const SUPPORT_MASTER_TAB_NAME = "Support_Master";
 const SYNC_RUNS_COLLECTION = "recruitment_sheet_sync_runs";
 const SYNC_CONFLICTS_COLLECTION = "recruitment_sheet_sync_conflicts";
+const SYNC_LOCKS_COLLECTION = "recruitment_sheet_sync_locks";
+const RECRUITMENT_SYNC_LOCK_KEY = "recruitment_sheet_sync";
 
 type ImportSummary = {
   success: boolean;
@@ -219,8 +221,57 @@ async function ensureSyncIndexes() {
     database.collection(SYNC_RUNS_COLLECTION).createIndex({ finishedAt: -1 }),
     database.collection(SYNC_RUNS_COLLECTION).createIndex({ direction: 1, finishedAt: -1 }),
     database.collection(SYNC_CONFLICTS_COLLECTION).createIndex({ runId: 1, createdAt: -1 }),
-    database.collection(SYNC_CONFLICTS_COLLECTION).createIndex({ createdAt: -1 })
+    database.collection(SYNC_CONFLICTS_COLLECTION).createIndex({ createdAt: -1 }),
+    database.collection(SYNC_LOCKS_COLLECTION).createIndex({ key: 1 }, { unique: true }),
+    database.collection(SYNC_LOCKS_COLLECTION).createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 })
   ]);
+}
+
+async function acquireRecruitmentSyncLock(actorAccountKey: string, runId: string) {
+  await ensureSyncIndexes();
+  const database = await getMongoDatabase();
+  const collection = database.collection(SYNC_LOCKS_COLLECTION);
+  const maxAttempts = 15;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 60_000);
+    const result = await collection.findOneAndUpdate(
+      {
+        key: RECRUITMENT_SYNC_LOCK_KEY,
+        $or: [
+          { expiresAt: { $lte: now } },
+          { expiresAt: { $exists: false } }
+        ]
+      },
+      {
+        $set: {
+          key: RECRUITMENT_SYNC_LOCK_KEY,
+          actorAccountKey,
+          runId,
+          acquiredAt: now,
+          expiresAt
+        }
+      },
+      {
+        upsert: true,
+        returnDocument: "after"
+      }
+    ).catch(async (error) => {
+      if (!(error instanceof Error) || !/duplicate key/i.test(error.message)) throw error;
+      return null;
+    });
+
+    if (result && result.runId === runId) {
+      return async () => {
+        await collection.deleteOne({ key: RECRUITMENT_SYNC_LOCK_KEY, runId });
+      };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  throw new Error("Luồng sync tuyển dụng đang bận. Vui lòng thử lại sau vài giây.");
 }
 
 async function persistSyncRun(input: {
@@ -1029,6 +1080,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
   const runId = randomUUID();
   const startedAt = new Date();
   const conflicts: RecruitmentSheetSyncConflict[] = [];
+  const releaseLock = await acquireRecruitmentSyncLock(actorAccountKey, runId);
 
   try {
     const masterSpreadsheetId = getGoogleHrMasterSpreadsheetId();
@@ -1423,6 +1475,8 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
       conflicts
     });
     throw error;
+  } finally {
+    await releaseLock().catch(() => undefined);
   }
 }
 
