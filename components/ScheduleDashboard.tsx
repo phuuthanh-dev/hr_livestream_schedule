@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import AccountPanel from "@/components/AccountPanel";
 import AppShellHeader from "@/components/AppShellHeader";
@@ -25,6 +26,10 @@ type ScheduleDashboardProps = {
 
 type FilterMode = "all" | "mine" | "warnings" | "open";
 type IconName = "account" | "calendar" | "check" | "chevronDown" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "sync" | "users" | "warning";
+type CancelIntent = {
+  session: ScheduleSession;
+  role: "host" | "support";
+} | null;
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
 const MINI_DAY_NAMES = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -318,6 +323,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [filter, setFilter] = useState<FilterMode>(() => isAdmin ? "all" : "mine");
   const [busyConfirm, setBusyConfirm] = useState("");
   const [busyCancel, setBusyCancel] = useState("");
+  const [cancelIntent, setCancelIntent] = useState<CancelIntent>(null);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
@@ -1378,9 +1384,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 <>
                   {canConfirmSelectedHost ? (
                     <button
-                      className="confirmAction"
+                      className="confirmAction danger"
                       disabled={busyCancel === `${selectedSession.sessionId}:host:cancel`}
-                      onClick={() => cancelParticipation(selectedSession, "host")}
+                      onClick={() => setCancelIntent({ session: selectedSession, role: "host" })}
                       type="button"
                     >
                       <span><Icon name="close" /></span>
@@ -1389,9 +1395,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   ) : null}
                   {canConfirmSelectedSupport ? (
                     <button
-                      className="confirmAction"
+                      className="confirmAction danger"
                       disabled={busyCancel === `${selectedSession.sessionId}:support:cancel`}
-                      onClick={() => cancelParticipation(selectedSession, "support")}
+                      onClick={() => setCancelIntent({ session: selectedSession, role: "support" })}
                       type="button"
                     >
                       <span><Icon name="close" /></span>
@@ -1412,6 +1418,41 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       {accountPanelOpen ? (
         <AccountPanel isAdmin={isAdmin} username={username} onClose={() => setAccountPanelOpen(false)} />
       ) : null}
+      <AlertDialog.Root open={Boolean(cancelIntent)} onOpenChange={(open) => !open && setCancelIntent(null)}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="availabilityConfirmOverlay" />
+          <AlertDialog.Content className="availabilityConfirmDialog">
+            <AlertDialog.Title>Xác nhận hủy tham gia ca</AlertDialog.Title>
+            <AlertDialog.Description>
+              {cancelIntent
+                ? `Bạn sắp hủy vai trò ${cancelIntent.role === "host" ? "Host" : "Support"} ở ca ${cancelIntent.session.slot} ngày ${cancelIntent.session.dateLabel}. Sau khi xác nhận, ca sẽ được cập nhật ngay trên app và đồng bộ xuống sheet master.`
+                : ""}
+            </AlertDialog.Description>
+            <div className="availabilityConfirmActions">
+              <AlertDialog.Cancel asChild>
+                <button type="button">Giữ lại ca</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  className="danger"
+                  disabled={cancelIntent ? busyCancel === `${cancelIntent.session.sessionId}:${cancelIntent.role}:cancel` : false}
+                  onClick={() => {
+                    if (!cancelIntent) return;
+                    const nextIntent = cancelIntent;
+                    setCancelIntent(null);
+                    void cancelParticipation(nextIntent.session, nextIntent.role);
+                  }}
+                  type="button"
+                >
+                  {cancelIntent && busyCancel === `${cancelIntent.session.sessionId}:${cancelIntent.role}:cancel`
+                    ? "Đang hủy..."
+                    : "Xác nhận hủy ca"}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </main>
   );
 }

@@ -2361,6 +2361,7 @@ a:hover {
   border-radius: 10px;
   color: #223937;
   text-align: left;
+  margin-bottom: 6px;
 }
 
 .assignmentPickerOption:hover {
@@ -2672,6 +2673,27 @@ a:hover {
   color: #fff;
   border-color: var(--green);
   background: var(--green);
+}
+
+.confirmAction.danger {
+  border-color: #f3c4bc;
+  color: #8a2f24;
+  background: linear-gradient(180deg, #fff7f5 0%, #fff1ee 100%);
+}
+
+.confirmAction.danger:hover {
+  border-color: #e59f93;
+  background: linear-gradient(180deg, #fff0ec 0%, #ffe4df 100%);
+}
+
+.confirmAction.danger > span {
+  color: #c6523d;
+  border-color: #efb8ad;
+  background: #fff;
+}
+
+.confirmAction.danger small {
+  color: #9b5a51;
 }
 
 .confirmRestriction {
