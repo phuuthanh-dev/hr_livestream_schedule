@@ -12,6 +12,7 @@ import {
 } from "@/lib/employeeContract";
 import {
   createSchedulePerson,
+  deactivateSchedulePeopleMissingFromSheet,
   findSchedulePerson,
   type SchedulePersonMutation,
   updateSchedulePerson
@@ -44,6 +45,7 @@ type ImportSummary = {
   updatedProfiles: number;
   updatedEmployees: number;
   createdEmployees: number;
+  deactivatedEmployees: number;
   updatedContracts: number;
   skippedRows: number;
   message: string;
@@ -749,8 +751,11 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
     let updatedProfiles = 0;
     let updatedEmployees = 0;
     let createdEmployees = 0;
+    let deactivatedEmployees = 0;
     let updatedContracts = 0;
     let skippedRows = 0;
+    const seenHostEmployeeIds = new Set<string>();
+    const seenSupportEmployeeIds = new Set<string>();
 
     async function importHostRows() {
       const header = hostValues[0] || [];
@@ -759,6 +764,7 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
         const rowNumber = index + 2;
         const employeeId = getColumn(row, indexMap, "mã nhân viên");
         if (!employeeId) continue;
+        seenHostEmployeeIds.add(employeeId);
         processedRows += 1;
         let person = await findSchedulePerson("host", employeeId);
         if (!person) {
@@ -891,6 +897,7 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
         const rowNumber = index + 2;
         const employeeId = getColumn(row, indexMap, "mã nhân viên");
         if (!employeeId) continue;
+        seenSupportEmployeeIds.add(employeeId);
         processedRows += 1;
         let person = await findSchedulePerson("support", employeeId);
         if (!person) {
@@ -1014,6 +1021,22 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
     await importHostRows();
     await importSupportRows();
 
+    if (!dryRun) {
+      const [hostDeactivation, supportDeactivation] = await Promise.all([
+        deactivateSchedulePeopleMissingFromSheet({
+          role: "host",
+          keepEmployeeIds: seenHostEmployeeIds,
+          actorAccountKey
+        }),
+        deactivateSchedulePeopleMissingFromSheet({
+          role: "support",
+          keepEmployeeIds: seenSupportEmployeeIds,
+          actorAccountKey
+        })
+      ]);
+      deactivatedEmployees = hostDeactivation.deactivated + supportDeactivation.deactivated;
+    }
+
     const result = {
       success: true,
       spreadsheetId,
@@ -1022,11 +1045,12 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
       updatedProfiles,
       updatedEmployees,
       createdEmployees,
+      deactivatedEmployees,
       updatedContracts,
       skippedRows,
       message: dryRun
         ? `Dry run: sẽ sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
-        : `Đã sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới từ 2 tab nguồn.`
+        : `Đã sync ${updatedProfiles} hồ sơ tuyển dụng, ${updatedEmployees} nhân viên cập nhật, ${createdEmployees} nhân viên tạo mới và ${deactivatedEmployees} nhân viên mất khỏi sheet đã bị khóa từ 2 tab nguồn.`
     };
 
     await persistSyncRun({
@@ -1043,6 +1067,7 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
         updatedProfiles,
         updatedEmployees,
         createdEmployees,
+        deactivatedEmployees,
         updatedContracts,
         skippedRows,
         conflictCount: conflicts.length,
@@ -1068,6 +1093,7 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
           updatedProfiles: 0,
           updatedEmployees: 0,
           createdEmployees: 0,
+          deactivatedEmployees: 0,
           updatedContracts: 0,
           skippedRows: 0,
           conflictCount: conflicts.length,

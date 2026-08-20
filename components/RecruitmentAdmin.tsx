@@ -101,6 +101,7 @@ type RecruitmentSyncRun = {
   updatedProfiles?: number;
   updatedEmployees?: number;
   createdEmployees?: number;
+  deactivatedEmployees?: number;
   updatedContracts?: number;
   updatedSheetRows?: number;
   appendedSheetRows?: number;
@@ -322,12 +323,13 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
         updatedProfiles?: number;
         updatedEmployees?: number;
         createdEmployees?: number;
+        deactivatedEmployees?: number;
         updatedContracts?: number;
         skippedRows?: number;
       };
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không import được dữ liệu từ sheet nguồn.");
       setMessage(
-        `${payload.message || "Đã sync từ sheet nguồn."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
+        `${payload.message || "Đã sync từ sheet nguồn."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · ${payload.deactivatedEmployees || 0} deactivate · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
       );
       await loadData();
       await loadLogs();
@@ -352,12 +354,13 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
         updatedProfiles?: number;
         updatedEmployees?: number;
         createdEmployees?: number;
+        deactivatedEmployees?: number;
         updatedContracts?: number;
         skippedRows?: number;
       };
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không dry run được dữ liệu từ sheet nguồn.");
       setMessage(
-        `${payload.message || "Dry run sync thành công."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
+        `${payload.message || "Dry run sync thành công."} Roster ${payload.updatedEmployees || 0} update · ${payload.createdEmployees || 0} create · ${payload.deactivatedEmployees || 0} deactivate · Contract ${payload.updatedContracts || 0} · Bỏ qua ${payload.skippedRows || 0} dòng.`
       );
       await loadLogs();
     } catch (importError) {
@@ -628,7 +631,7 @@ export default function RecruitmentAdmin({ username }: RecruitmentAdminProps) {
                           <span className="employeeStackValue">
                             <strong>
                               {run.direction === "sheet_to_website"
-                                ? `${run.updatedProfiles || 0} profile · ${run.updatedEmployees || 0} roster update · ${run.createdEmployees || 0} roster create · ${run.updatedContracts || 0} contract`
+                                ? `${run.updatedProfiles || 0} profile · ${run.updatedEmployees || 0} roster update · ${run.createdEmployees || 0} roster create · ${run.deactivatedEmployees || 0} roster deactivate · ${run.updatedContracts || 0} contract`
                                 : `${run.updatedSheetRows || 0} update · ${run.appendedSheetRows || 0} append`}
                             </strong>
                             <small>{run.conflictCount} conflict · {run.skippedRows || 0} bỏ qua</small>

@@ -209,6 +209,33 @@ export async function listSchedulePeopleForAdmin() {
   return documents.map(toSchedulePerson).sort(sortPeople);
 }
 
+export async function deactivateSchedulePeopleMissingFromSheet(input: {
+  role: EmployeeRole;
+  keepEmployeeIds: Iterable<string>;
+  actorAccountKey: string;
+}) {
+  const keepIds = new Set(
+    Array.from(input.keepEmployeeIds, (employeeId) => normalizeEmployeeId(String(employeeId))).filter(Boolean)
+  );
+  const collection = await getRosterCollection();
+  const documents = await collection.find({ role: input.role, active: true }).toArray();
+  let deactivated = 0;
+
+  for (const document of documents) {
+    if (keepIds.has(document.normalizedEmployeeId)) continue;
+    await updateSchedulePerson({
+      ...toSchedulePerson(document),
+      id: document.employeeId,
+      role: document.role,
+      active: false,
+      source: document.source || "Google Sheet recruitment sync"
+    }, input.actorAccountKey);
+    deactivated += 1;
+  }
+
+  return { deactivated };
+}
+
 export async function findActiveSchedulePerson(role: EmployeeRole, employeeId: string): Promise<SchedulePerson | null> {
   const collection = await getRosterCollection();
   const document = await collection.findOne({ personKey: buildPersonKey(role, employeeId), active: true });
