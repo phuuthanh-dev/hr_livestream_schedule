@@ -3,7 +3,13 @@ import { getGoogleSheetsSpreadsheetId, createGoogleSheetsClient } from "@/lib/go
 import { listSchedulePeopleForAdmin } from "@/lib/employeeRoster";
 import { getMongoDatabase } from "@/lib/mongodb";
 import { DEFAULT_SCHEDULE_SLOTS } from "@/lib/scheduleConfig";
-import { addDaysToScheduleDateKey, getScheduleWeekStartKey, isValidScheduleDateKey } from "@/lib/scheduleDate";
+import {
+  addDaysToScheduleDateKey,
+  getScheduleWeekDateKeys,
+  getScheduleWeekStartKey,
+  isValidScheduleDateKey,
+  parseScheduleDateKey
+} from "@/lib/scheduleDate";
 import type {
   AvailabilityLocationPreference,
   AvailabilitySheetSyncConflict,
@@ -86,6 +92,13 @@ function parseDateCell(value: unknown) {
 function formatSheetDate(dateKey: string) {
   const [year, month, day] = dateKey.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function formatSheetWeekday(dateKey: string) {
+  const date = parseScheduleDateKey(dateKey);
+  if (!date) return "";
+  const weekdays = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+  return weekdays[date.getDay()] || "";
 }
 
 function parseEmployeeIds(value: unknown) {
@@ -172,6 +185,48 @@ async function readSheetDateRows(tabName: string) {
     }
   });
   return rows;
+}
+
+async function ensureWeekRowsExist(
+  tabName: string,
+  weekStartKey: string,
+  runId: string,
+  conflicts: AvailabilitySheetSyncConflict[]
+) {
+  const spreadsheetId = getGoogleSheetsSpreadsheetId();
+  const sheets = createGoogleSheetsClient();
+  const rowMap = await readSheetDateRows(tabName);
+  const missingDateKeys = getScheduleWeekDateKeys(weekStartKey).filter((dateKey) => !rowMap.has(dateKey));
+
+  if (missingDateKeys.length === 0) {
+    return { createdRows: 0 };
+  }
+
+  const rows = missingDateKeys.map((dateKey) => ([
+    formatSheetWeekday(dateKey),
+    formatSheetDate(dateKey),
+    ...DEFAULT_SCHEDULE_SLOTS.map(() => "")
+  ]));
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `'${tabName}'!A:K`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: rows }
+  });
+
+  missingDateKeys.forEach((dateKey) => {
+    conflicts.push(buildConflict(
+      runId,
+      "website_to_sheet",
+      "missing_sheet_row",
+      `Tự tạo dòng ngày ${formatSheetDate(dateKey)} trong tab ${tabName} trước khi sync lịch rảnh.`,
+      { weekStartKey, dateKey, tabName }
+    ));
+  });
+
+  return { createdRows: missingDateKeys.length };
 }
 
 async function readSheetWeekRows(tabName: string, weekStartKey: string) {
@@ -297,6 +352,7 @@ async function updateCollectTabWeek(
 ) {
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
   const sheets = createGoogleSheetsClient();
+  await ensureWeekRowsExist(tabName, weekStartKey, runId, conflicts);
   const rowMap = await readSheetWeekRows(tabName, weekStartKey);
   const data = matrix.map((row) => {
     const sheetRow = rowMap.get(row.dateKey);

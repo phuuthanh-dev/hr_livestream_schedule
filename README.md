@@ -62,7 +62,7 @@ Nếu không còn slot rảnh hợp lệ trong phần còn lại của tuần, A
 3. Tự tạo hoặc cập nhật nhân sự trong `schedule_people`
 4. Tự sinh mã `HRLT..` hoặc `HRSL..` nếu chưa có
 5. Lưu / cập nhật `recruitment_profiles`
-6. Đồng bộ xuống sheet nguồn bằng Apps Script nếu cấu hình
+6. Đồng bộ thẳng xuống sheet nguồn bằng Google Sheets API
 
 ### 2. Nhân sự → Lịch rảnh
 
@@ -148,17 +148,22 @@ MONGODB_URI=mongodb+srv://USER:PASSWORD@HOST/
 MONGODB_DB=hr_streaming
 ADMIN_BOOTSTRAP_PASSWORD=your-initial-admin-password
 CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
-GOOGLE_APPS_SCRIPT_API_URL=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
-GOOGLE_APPS_SCRIPT_API_TOKEN=copy-from-generateScheduleWebToken
-GOOGLE_SOURCE_APPS_SCRIPT_API_URL=https://script.google.com/macros/s/SOURCE_DEPLOYMENT_ID/exec
-GOOGLE_SOURCE_APPS_SCRIPT_API_TOKEN=copy-from-generateSourceWebToken
+GOOGLE_SHEETS_SPREADSHEET_ID=12WU5jM-KC9EngkA_xBS3U82KYnO-8RMwGwk9fwcGe3o
+GOOGLE_HR_MASTER_SPREADSHEET_ID=1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC4gKGbgclw
+GOOGLE_LIVE_SESSION_MASTER_SHEET_NAME=Live_Session_Master_Web
+GOOGLE_TIKTOK_SALES_IMPORT_SHEET_NAME=TikTok_Sales_Import
+GOOGLE_PAYROLL_SHEET_NAME=Payroll_Sheet
+GOOGLE_PAYROLL_SUMMARY_SHEET_NAME=Payroll_Summary_Raw
+GOOGLE_CONTRACT_TEMPLATE_DOC_ID=1NjjgR1rsqVSZH-H4do6JK8BnZPqw2pkplTpC32igzoA
+GOOGLE_SHEETS_CLIENT_EMAIL=service-account@project-id.iam.gserviceaccount.com
+GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
 Ghi chú:
 
 - `ADMIN_BOOTSTRAP_PASSWORD` chỉ dùng khi khởi tạo admin đầu tiên
 - `CLOUDINARY_URL` chỉ dùng ở server để ký upload ảnh CCCD chế độ `authenticated`
-- recruitment sheet sync sẽ ưu tiên cặp biến `GOOGLE_SOURCE_*`
+- toàn bộ sync sheet hiện đi trực tiếp qua `Google Sheets API`, không còn phụ thuộc Apps Script
 
 ## Local Programs
 

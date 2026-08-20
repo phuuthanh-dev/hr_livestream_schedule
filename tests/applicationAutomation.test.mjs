@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildAppsScriptApplicationPayload,
   buildEmployeeId,
   buildEmployeeMutationFromApplication,
   nextEmployeeIdForRole
@@ -85,53 +84,3 @@ test("maps a Support application into an employee draft", () => {
   });
 });
 
-test("builds the Apps Script payload for a Host application", () => {
-  const payload = buildAppsScriptApplicationPayload({
-    applicationId: "app_123",
-    submittedAt: "2026-08-13T08:00:00.000Z",
-    employeeId: "HRLT25",
-    role: "host",
-    fullName: "Nguyen Minh Anh",
-    aliasName: "Minh Anh",
-    phone: "0901234567",
-    email: "minhanh@gmail.com",
-    cvUrl: "https://drive.google.com/file/d/cv",
-    experience: "2 nam livestream",
-    achievements: "Top 3 doanh so",
-    expectedSalary: "150.000/giờ",
-    canLiveHome: true,
-    canLiveStudio: true,
-    canUsePersonalAccount: true,
-    canUseCompanyAccount: true,
-    liveLocationPreference: "studio",
-    liveAccountPreference: "personal",
-    introVideoUrl: "https://youtu.be/demo",
-    tiktokUrl: "https://tiktok.com/@demo",
-    notes: "Có thể bắt đầu ngay"
-  });
-
-  assert.deepEqual(payload, {
-    action: "submit_application",
-    applicationId: "app_123",
-    submittedAt: "2026-08-13T08:00:00.000Z",
-    employeeId: "HRLT25",
-    role: "host",
-    fullName: "Nguyen Minh Anh",
-    aliasName: "Minh Anh",
-    phone: "0901234567",
-    email: "minhanh@gmail.com",
-    cvUrl: "https://drive.google.com/file/d/cv",
-    experience: "2 nam livestream",
-    achievements: "Top 3 doanh so",
-    expectedSalary: "150.000/giờ",
-    canLiveHome: true,
-    canLiveStudio: true,
-    canUsePersonalAccount: true,
-    canUseCompanyAccount: true,
-    liveLocationPreference: "studio",
-    liveAccountPreference: "personal",
-    introVideoUrl: "https://youtu.be/demo",
-    tiktokUrl: "https://tiktok.com/@demo",
-    notes: "Có thể bắt đầu ngay"
-  });
-});

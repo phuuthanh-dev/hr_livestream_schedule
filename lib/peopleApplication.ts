@@ -8,10 +8,10 @@ import {
   updateSchedulePerson,
   type SchedulePersonMutation
 } from "@/lib/employeeRoster";
-import { buildAppsScriptApplicationPayload, buildEmployeeMutationFromApplication } from "@/lib/applicationAutomation";
-import { postToAppScript } from "@/lib/appScriptSync";
+import { buildEmployeeMutationFromApplication } from "@/lib/applicationAutomation";
 import { getMongoDatabase } from "@/lib/mongodb";
 import { upsertRecruitmentProfileFromApplication } from "@/lib/recruitmentProfile";
+import { syncRecruitmentProfilesToSheets } from "@/lib/recruitmentSheetImport";
 import type { EmployeeRole } from "@/lib/types";
 
 const APPLICATIONS_COLLECTION = "people_applications";
@@ -297,29 +297,8 @@ async function upsertEmployeeFromApplication(application: PeopleApplication) {
 }
 
 async function syncApplicationToGoogleSheet(application: PeopleApplication & { employeeId: string }) {
-  return postToAppScript(buildAppsScriptApplicationPayload({
-    applicationId: application.applicationId,
-    submittedAt: application.submittedAt,
-    employeeId: application.employeeId,
-    role: application.role,
-    fullName: application.fullName,
-    aliasName: application.aliasName,
-    phone: application.phone,
-    email: application.email,
-    cvUrl: application.cvUrl,
-    experience: application.experience,
-    achievements: application.achievements,
-    expectedSalary: application.expectedSalary,
-    canLiveHome: application.canLiveHome,
-    canLiveStudio: application.canLiveStudio,
-    canUsePersonalAccount: application.canUsePersonalAccount,
-    canUseCompanyAccount: application.canUseCompanyAccount,
-    liveLocationPreference: application.liveLocationPreference || "",
-    liveAccountPreference: application.liveAccountPreference || "",
-    introVideoUrl: application.introVideoUrl,
-    tiktokUrl: application.tiktokUrl,
-    notes: application.notes
-  }));
+  void application;
+  return syncRecruitmentProfilesToSheets("application:auto");
 }
 
 async function getApplicationsCollection(): Promise<Collection<PeopleApplicationDocument>> {

@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { createGoogleSheetsClient, getGoogleSheetsSpreadsheetId } from "@/lib/googleSheets";
+import {
+  createGoogleSheetsClient,
+  getGoogleHrMasterSpreadsheetId,
+  getGoogleSheetsSpreadsheetId
+} from "@/lib/googleSheets";
+import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import {
   employeeContractPersonKey,
   listEmployeeContractProfiles,
@@ -12,7 +17,6 @@ import {
   updateSchedulePerson
 } from "@/lib/employeeRoster";
 import { getMongoDatabase } from "@/lib/mongodb";
-import { listPeopleApplications } from "@/lib/peopleApplication";
 import { listRecruitmentProfiles, upsertRecruitmentProfile } from "@/lib/recruitmentProfile";
 import type {
   EmployeeRole,
@@ -25,6 +29,8 @@ import type {
 
 const HOST_TAB_NAME = "Thông tin Mẫu Live";
 const SUPPORT_TAB_NAME = "Thông tin Support Live";
+const PORTFOLIO_MASTER_TAB_NAME = "Portfolio_Master";
+const SUPPORT_MASTER_TAB_NAME = "Support_Master";
 const SYNC_RUNS_COLLECTION = "recruitment_sheet_sync_runs";
 const SYNC_CONFLICTS_COLLECTION = "recruitment_sheet_sync_conflicts";
 
@@ -46,6 +52,8 @@ export type RecruitmentSheetPushSummary = {
   spreadsheetId: string;
   updatedSheetRows: number;
   appendedSheetRows: number;
+  updatedMasterRows?: number;
+  appendedMasterRows?: number;
   skippedRows: number;
   message: string;
 };
@@ -173,6 +181,11 @@ function buildIndexMap(header: string[]) {
 async function readSheet(tabName: string): Promise<SheetReadResult> {
   const sheets = createGoogleSheetsClient();
   const spreadsheetId = getGoogleSheetsSpreadsheetId();
+  return readSheetFromSpreadsheet(spreadsheetId, tabName);
+}
+
+async function readSheetFromSpreadsheet(spreadsheetId: string, tabName: string): Promise<SheetReadResult> {
+  const sheets = createGoogleSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `'${tabName}'!A:AZ`
@@ -227,6 +240,41 @@ function rowMatchByEmployeeId(values: string[][], indexMap: Map<string, number>)
   const duplicates = new Map<string, SheetRowMatch[]>();
   values.slice(1).forEach((row, index) => {
     const employeeId = getColumn(row, indexMap, "mã nhân viên").toUpperCase();
+    if (!employeeId) return;
+    const match = {
+      rowNumber: index + 2,
+      values: [...row]
+    };
+    const existing = rows.get(employeeId);
+    if (existing) {
+      duplicates.set(employeeId, [...(duplicates.get(employeeId) || [existing]), match]);
+      return;
+    }
+    rows.set(employeeId, match);
+  });
+  return { rows, duplicates };
+}
+
+function getFirstColumnName(indexMap: Map<string, number>, names: string[]) {
+  for (const name of names) {
+    if (indexMap.has(name)) return name;
+  }
+  return "";
+}
+
+function rowMatchByAliases(values: string[][], indexMap: Map<string, number>, names: string[]): SheetRowLookup {
+  const keyName = getFirstColumnName(indexMap, names);
+  if (!keyName) {
+    return {
+      rows: new Map<string, SheetRowMatch>(),
+      duplicates: new Map<string, SheetRowMatch[]>()
+    };
+  }
+
+  const rows = new Map<string, SheetRowMatch>();
+  const duplicates = new Map<string, SheetRowMatch[]>();
+  values.slice(1).forEach((row, index) => {
+    const employeeId = getColumn(row, indexMap, keyName).toUpperCase();
     if (!employeeId) return;
     const match = {
       rowNumber: index + 2,
@@ -471,6 +519,71 @@ function buildSupportSheetRow(input: {
   setCell(row, indexMap, "support chính mức offer", input.profile.supportMainOfferNote || "");
   setCell(row, indexMap, "stk", input.contract?.bankAccountNumber || "");
   setCell(row, indexMap, "bank", input.contract?.bankName || "");
+  return row;
+}
+
+function buildPortfolioMasterRow(input: {
+  header: string[];
+  currentRow?: string[];
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
+}) {
+  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
+  const indexMap = buildIndexMap(input.header);
+  const compensation = resolveEmployeeCompensation("host", {
+    rating: input.profile.rating,
+    level: input.profile.level,
+    cashOffer: input.profile.salaryOffered || input.profile.expectedSalary
+  });
+  const liveAccountType = input.profile.canUsePersonalAccount && input.profile.canUseCompanyAccount
+    ? "Cá nhân + Công ty"
+    : input.profile.canUseCompanyAccount
+      ? "Công ty"
+      : input.profile.canUsePersonalAccount
+        ? "Cá nhân"
+        : "";
+  const trainingStatus = input.profile.trainingJoined ? "Rồi" : "Chưa";
+  setCell(row, indexMap, "streamer_id", input.profile.employeeId);
+  setCell(row, indexMap, "mã nhân viên", input.profile.employeeId);
+  setCell(row, indexMap, "full_name", input.profile.fullName);
+  setCell(row, indexMap, "họ và tên", input.profile.fullName);
+  setCell(row, indexMap, "entry_grade", compensation.level || input.profile.level || input.profile.rating || "");
+  setCell(row, indexMap, "grade", compensation.level || input.profile.level || input.profile.rating || "");
+  setCell(row, indexMap, "cash_offer", compensation.cashOffer || "");
+  setCell(row, indexMap, "experience", input.profile.experience);
+  setCell(row, indexMap, "achievements", input.profile.achievements);
+  setCell(row, indexMap, "live_account_type", liveAccountType);
+  setCell(row, indexMap, "training_status", trainingStatus);
+  setCell(row, indexMap, "live_channel_id", input.profile.liveChannelId);
+  setCell(row, indexMap, "notes", input.profile.notes);
+  return row;
+}
+
+function buildSupportMasterRow(input: {
+  header: string[];
+  currentRow?: string[];
+  profile: Awaited<ReturnType<typeof listRecruitmentProfiles>>[number];
+}) {
+  const row = input.currentRow ? [...input.currentRow] : new Array(input.header.length).fill("");
+  const indexMap = buildIndexMap(input.header);
+  const compensation = resolveEmployeeCompensation("support", {
+    rating: input.profile.rating,
+    level: input.profile.level,
+    cashOffer: input.profile.supportGemOffer || input.profile.expectedSalary
+  });
+  setCell(row, indexMap, "mã support (support_id)", input.profile.employeeId);
+  setCell(row, indexMap, "support_id", input.profile.employeeId);
+  setCell(row, indexMap, "mã support", input.profile.employeeId);
+  setCell(row, indexMap, "họ và tên", input.profile.fullName);
+  setCell(row, indexMap, "họ và tên đầy đủ", input.profile.fullName);
+  setCell(row, indexMap, "full_name", input.profile.fullName);
+  setCell(row, indexMap, "cấp độ / level", compensation.level || input.profile.level || "");
+  setCell(row, indexMap, "level", compensation.level || input.profile.level || "");
+  setCell(row, indexMap, "cấp độ", compensation.level || input.profile.level || "");
+  setCell(row, indexMap, "cash offer", compensation.cashOffer || "");
+  setCell(row, indexMap, "cash_offer", compensation.cashOffer || "");
+  setCell(row, indexMap, "experience", input.profile.experience);
+  setCell(row, indexMap, "training_status", input.profile.trainingJoined ? "Rồi" : "Chưa");
+  setCell(row, indexMap, "notes", input.profile.evaluationSummary || input.profile.notes || "");
   return row;
 }
 
@@ -918,19 +1031,25 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
   const conflicts: RecruitmentSheetSyncConflict[] = [];
 
   try {
-    const [{ spreadsheetId, values: hostValues }, { values: supportValues }, profiles, contractProfiles, applications] = await Promise.all([
+    const masterSpreadsheetId = getGoogleHrMasterSpreadsheetId();
+    const [
+      { spreadsheetId, values: hostValues },
+      { values: supportValues },
+      { values: portfolioMasterValues },
+      { values: supportMasterValues },
+      profiles,
+      contractProfiles
+    ] = await Promise.all([
       readSheet(HOST_TAB_NAME),
       readSheet(SUPPORT_TAB_NAME),
+      readSheetFromSpreadsheet(masterSpreadsheetId, PORTFOLIO_MASTER_TAB_NAME),
+      readSheetFromSpreadsheet(masterSpreadsheetId, SUPPORT_MASTER_TAB_NAME),
       listRecruitmentProfiles(),
-      listEmployeeContractProfiles(),
-      listPeopleApplications()
+      listEmployeeContractProfiles()
     ]);
 
     const contractByKey = new Map(
       contractProfiles.map((item) => [item.personKey, item] as const)
-    );
-    const appByKey = new Map(
-      applications.map((item) => [`${item.role}:${item.employeeId || ""}`.toLowerCase(), item] as const)
     );
 
     const hostHeader = hostValues[0] || [];
@@ -943,6 +1062,16 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
     const supportRows = supportLookup.rows;
     const duplicateHostIds = new Set(hostLookup.duplicates.keys());
     const duplicateSupportIds = new Set(supportLookup.duplicates.keys());
+    const portfolioMasterHeader = portfolioMasterValues[0] || [];
+    const supportMasterHeader = supportMasterValues[0] || [];
+    const portfolioMasterIndexMap = buildIndexMap(portfolioMasterHeader);
+    const supportMasterIndexMap = buildIndexMap(supportMasterHeader);
+    const portfolioLookup = rowMatchByAliases(portfolioMasterValues, portfolioMasterIndexMap, ["streamer_id", "mã nhân viên"]);
+    const supportMasterLookup = rowMatchByAliases(supportMasterValues, supportMasterIndexMap, ["mã support (support_id)", "support_id", "mã support"]);
+    const portfolioRows = portfolioLookup.rows;
+    const supportMasterRows = supportMasterLookup.rows;
+    const duplicatePortfolioIds = new Set(portfolioLookup.duplicates.keys());
+    const duplicateSupportMasterIds = new Set(supportMasterLookup.duplicates.keys());
 
     hostLookup.duplicates.forEach((matches, employeeId) => {
       conflicts.push(buildConflict(
@@ -964,17 +1093,41 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
       ));
     });
 
+    portfolioLookup.duplicates.forEach((matches, employeeId) => {
+      conflicts.push(buildConflict(
+        runId,
+        "website_to_sheet",
+        "invalid_row",
+        `Tab ${PORTFOLIO_MASTER_TAB_NAME} đang có trùng mã nhân viên ${employeeId} ở các dòng ${matches.map((item) => item.rowNumber).join(", ")}. Bỏ qua sync master cho hồ sơ này để tránh ghi đè sai dòng.`,
+        { role: "host", employeeId, tabName: PORTFOLIO_MASTER_TAB_NAME, rowNumber: matches[0]?.rowNumber }
+      ));
+    });
+
+    supportMasterLookup.duplicates.forEach((matches, employeeId) => {
+      conflicts.push(buildConflict(
+        runId,
+        "website_to_sheet",
+        "invalid_row",
+        `Tab ${SUPPORT_MASTER_TAB_NAME} đang có trùng mã nhân viên ${employeeId} ở các dòng ${matches.map((item) => item.rowNumber).join(", ")}. Bỏ qua sync master cho hồ sơ này để tránh ghi đè sai dòng.`,
+        { role: "support", employeeId, tabName: SUPPORT_MASTER_TAB_NAME, rowNumber: matches[0]?.rowNumber }
+      ));
+    });
+
     const updatePayloads: Array<{ range: string; values: string[][] }> = [];
     const appendHostRows: string[][] = [];
     const appendSupportRows: string[][] = [];
+    const masterUpdatePayloads: Array<{ range: string; values: string[][] }> = [];
+    const appendPortfolioMasterRows: string[][] = [];
+    const appendSupportMasterRows: string[][] = [];
     let updatedSheetRows = 0;
     let appendedSheetRows = 0;
+    let updatedMasterRows = 0;
+    let appendedMasterRows = 0;
     let skippedRows = 0;
 
     profiles.forEach((profile) => {
       const key = employeeContractPersonKey(profile.role, profile.employeeId);
       const contract = contractByKey.get(key);
-      const application = appByKey.get(`${profile.role}:${profile.employeeId}`.toLowerCase());
       const tabName = profile.role === "host" ? HOST_TAB_NAME : SUPPORT_TAB_NAME;
       const rowMap = profile.role === "host" ? hostRows : supportRows;
       const header = profile.role === "host" ? hostHeader : supportHeader;
@@ -1053,6 +1206,58 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             { role: profile.role, employeeId: profile.employeeId, tabName }
           ));
         }
+
+        if (!duplicatePortfolioIds.has(profile.employeeId.toUpperCase())) {
+          const existingMasterRow = portfolioRows.get(profile.employeeId.toUpperCase());
+          const nextMasterRow = buildPortfolioMasterRow({
+            header: portfolioMasterHeader,
+            currentRow: existingMasterRow?.values,
+            profile
+          });
+          if (existingMasterRow) {
+            compareAndTrackOverwrite({
+              nextRow: nextMasterRow,
+              currentRow: existingMasterRow.values,
+              indexMap: portfolioMasterIndexMap,
+              columns: [
+                "streamer_id",
+                "full_name",
+                "entry_grade",
+                "cash_offer",
+                "experience",
+                "achievements",
+                "live_account_type",
+                "training_status",
+                "live_channel_id",
+                "notes"
+              ],
+              runId,
+              role: "host",
+              employeeId: profile.employeeId,
+              direction: "website_to_sheet",
+              tabName: PORTFOLIO_MASTER_TAB_NAME,
+              rowNumber: existingMasterRow.rowNumber,
+              conflicts
+            });
+            masterUpdatePayloads.push({
+              range: `'${PORTFOLIO_MASTER_TAB_NAME}'!A${existingMasterRow.rowNumber}:AZ${existingMasterRow.rowNumber}`,
+              values: [nextMasterRow]
+            });
+            updatedMasterRows += 1;
+          } else {
+            appendPortfolioMasterRows.push(nextMasterRow);
+            appendedMasterRows += 1;
+            conflicts.push(buildConflict(
+              runId,
+              "website_to_sheet",
+              "sheet_row_created",
+              `Không thấy dòng ${PORTFOLIO_MASTER_TAB_NAME} của host ${profile.employeeId}; đã tạo mới từ website master.`,
+              { role: "host", employeeId: profile.employeeId, tabName: PORTFOLIO_MASTER_TAB_NAME }
+            ));
+          }
+        } else {
+          skippedRows += 1;
+        }
       } else {
         const nextRow = buildSupportSheetRow({ header, currentRow: existingRow?.values, profile, contract });
         if (existingRow) {
@@ -1101,15 +1306,70 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
             { role: profile.role, employeeId: profile.employeeId, tabName }
           ));
         }
-      }
 
-      void application;
+        if (!duplicateSupportMasterIds.has(profile.employeeId.toUpperCase())) {
+          const existingMasterRow = supportMasterRows.get(profile.employeeId.toUpperCase());
+          const nextMasterRow = buildSupportMasterRow({
+            header: supportMasterHeader,
+            currentRow: existingMasterRow?.values,
+            profile
+          });
+          if (existingMasterRow) {
+            compareAndTrackOverwrite({
+              nextRow: nextMasterRow,
+              currentRow: existingMasterRow.values,
+              indexMap: supportMasterIndexMap,
+              columns: [
+                "mã support (support_id)",
+                "support_id",
+                "mã support",
+                "họ và tên",
+                "full_name",
+                "cấp độ / level",
+                "level",
+                "cash offer",
+                "cash_offer",
+                "experience",
+                "training_status",
+                "notes"
+              ],
+              runId,
+              role: "support",
+              employeeId: profile.employeeId,
+              direction: "website_to_sheet",
+              tabName: SUPPORT_MASTER_TAB_NAME,
+              rowNumber: existingMasterRow.rowNumber,
+              conflicts
+            });
+            masterUpdatePayloads.push({
+              range: `'${SUPPORT_MASTER_TAB_NAME}'!A${existingMasterRow.rowNumber}:AZ${existingMasterRow.rowNumber}`,
+              values: [nextMasterRow]
+            });
+            updatedMasterRows += 1;
+          } else {
+            appendSupportMasterRows.push(nextMasterRow);
+            appendedMasterRows += 1;
+            conflicts.push(buildConflict(
+              runId,
+              "website_to_sheet",
+              "sheet_row_created",
+              `Không thấy dòng ${SUPPORT_MASTER_TAB_NAME} của support ${profile.employeeId}; đã tạo mới từ website master.`,
+              { role: "support", employeeId: profile.employeeId, tabName: SUPPORT_MASTER_TAB_NAME }
+            ));
+          }
+        } else {
+          skippedRows += 1;
+        }
+      }
     });
 
     await applySheetUpdates(spreadsheetId, updatePayloads);
+    await applySheetUpdates(masterSpreadsheetId, masterUpdatePayloads);
     await Promise.all([
       appendSheetRows(HOST_TAB_NAME, spreadsheetId, appendHostRows),
-      appendSheetRows(SUPPORT_TAB_NAME, spreadsheetId, appendSupportRows)
+      appendSheetRows(SUPPORT_TAB_NAME, spreadsheetId, appendSupportRows),
+      appendSheetRows(PORTFOLIO_MASTER_TAB_NAME, masterSpreadsheetId, appendPortfolioMasterRows),
+      appendSheetRows(SUPPORT_MASTER_TAB_NAME, masterSpreadsheetId, appendSupportMasterRows)
     ]);
 
     const result = {
@@ -1117,10 +1377,10 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
       spreadsheetId,
       updatedSheetRows,
       appendedSheetRows,
+      updatedMasterRows,
+      appendedMasterRows,
       skippedRows,
-      message: appendedSheetRows > 0
-        ? `Đã đẩy ${updatedSheetRows} dòng và tạo mới ${appendedSheetRows} dòng tuyển dụng lên sheet nguồn.`
-        : `Đã đẩy ${updatedSheetRows} dòng tuyển dụng lên sheet nguồn.`
+      message: `Đã sync tuyển dụng: nguồn ${updatedSheetRows} cập nhật / ${appendedSheetRows} tạo mới; master ${updatedMasterRows} cập nhật / ${appendedMasterRows} tạo mới.`
     };
 
     await persistSyncRun({

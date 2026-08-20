@@ -117,33 +117,3 @@ export function buildEmployeeMutationFromApplication(
   };
 }
 
-export function buildAppsScriptApplicationPayload(input: ApplicationAutomationInput & {
-  applicationId: string;
-  submittedAt: string;
-  employeeId: string;
-}) {
-  return {
-    action: "submit_application",
-    applicationId: input.applicationId,
-    submittedAt: input.submittedAt,
-    employeeId: input.employeeId,
-    role: input.role,
-    fullName: input.fullName,
-    aliasName: input.aliasName || "",
-    phone: normalizePhone(input.phone),
-    email: input.email,
-    cvUrl: input.cvUrl,
-    experience: input.experience,
-    achievements: input.achievements,
-    expectedSalary: input.expectedSalary,
-    canLiveHome: Boolean(input.canLiveHome),
-    canLiveStudio: Boolean(input.canLiveStudio),
-    canUsePersonalAccount: Boolean(input.canUsePersonalAccount),
-    canUseCompanyAccount: Boolean(input.canUseCompanyAccount),
-    liveLocationPreference: input.liveLocationPreference || "",
-    liveAccountPreference: input.liveAccountPreference || "",
-    introVideoUrl: input.introVideoUrl || "",
-    tiktokUrl: input.tiktokUrl || "",
-    notes: input.notes
-  };
-}
