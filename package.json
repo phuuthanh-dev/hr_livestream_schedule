@@ -20,6 +20,7 @@
     "sync:contracts:drive": "node local_programs/contract_drive_sync/sync-contracts.mjs",
     "sync:contracts:drive:watch": "node local_programs/contract_drive_sync/sync-contracts.mjs --watch",
     "sync:contracts:drive:install-agent": "node local_programs/contract_drive_sync/install-macos-launch-agent.mjs",
+    "migrate:cloudinary:folders": "node scripts/migrate-cloudinary-project-folders.mjs",
     "eval:host-grade": "python3 local_programs/livestream_host_grade_review/host_grade_review.py analyze",
     "sync:grade-review": "python3 local_programs/grade_review_sync/sync_grade_review.py"
   },

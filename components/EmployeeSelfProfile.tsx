@@ -117,7 +117,7 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
       const signaturePayload = await signatureResponse.json() as {
         success?: boolean;
         message?: string;
-        upload?: { uploadUrl: string; apiKey: string; allowedFormats: string; publicId: string; timestamp: number; signature: string; deliveryType: string };
+        upload?: { uploadUrl: string; apiKey: string; allowedFormats: string; assetFolder: string; publicId: string; timestamp: number; signature: string; deliveryType: string };
       };
       if (!signatureResponse.ok || !signaturePayload.success || !signaturePayload.upload) {
         throw new Error(signaturePayload.message || "Không tạo được phiên tải avatar.");
@@ -127,6 +127,7 @@ export default function EmployeeSelfProfile({ username }: EmployeeSelfProfilePro
       body.set("file", avatarFile);
       body.set("api_key", upload.apiKey);
       body.set("allowed_formats", upload.allowedFormats);
+      body.set("asset_folder", upload.assetFolder);
       body.set("public_id", upload.publicId);
       body.set("timestamp", String(upload.timestamp));
       body.set("signature", upload.signature);

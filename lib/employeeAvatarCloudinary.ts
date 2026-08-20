@@ -34,8 +34,12 @@ function safePathSegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "employee";
 }
 
+function avatarAssetFolder(role: EmployeeRole, employeeId: string) {
+  return `root-rotation-livestream/avatars/${role}/${safePathSegment(employeeId)}`;
+}
+
 function avatarPrefix(role: EmployeeRole, employeeId: string) {
-  return `hr-avatars/${role}/${safePathSegment(employeeId)}/avatar-`;
+  return `${avatarAssetFolder(role, employeeId)}/avatar-`;
 }
 
 function contentTypeForFormat(format: string) {
@@ -64,9 +68,11 @@ export function createEmployeeAvatarUploadSignature(input: {
   const config = getCloudinaryConfiguration();
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `${avatarPrefix(input.role, input.employeeId)}${randomUUID()}`;
+  const assetFolder = avatarAssetFolder(input.role, input.employeeId);
   const allowedFormats = "jpg,jpeg,png,webp";
   const signature = cloudinary.utils.api_sign_request({
     allowed_formats: allowedFormats,
+    asset_folder: assetFolder,
     public_id: publicId,
     timestamp,
     type: "upload"
@@ -76,6 +82,7 @@ export function createEmployeeAvatarUploadSignature(input: {
     uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
     apiKey: config.apiKey,
     allowedFormats,
+    assetFolder,
     publicId,
     timestamp,
     signature,

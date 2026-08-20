@@ -29,8 +29,12 @@ function safePathSegment(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "employee";
 }
 
+function contractAssetFolder(role: EmployeeRole, employeeId: string) {
+  return `root-rotation-livestream/contracts/${role}/${safePathSegment(employeeId)}`;
+}
+
 function contractImagePrefix(role: EmployeeRole, employeeId: string, side: EmployeeContractDocumentSide) {
-  return `hr-contracts/${role}/${safePathSegment(employeeId)}/${side}-`;
+  return `${contractAssetFolder(role, employeeId)}/${side}-`;
 }
 
 function contentTypeForFormat(format: string) {
@@ -51,9 +55,11 @@ export function createContractUploadSignature(input: {
   const config = getCloudinaryConfiguration();
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `${contractImagePrefix(input.role, input.employeeId, input.side)}${randomUUID()}`;
+  const assetFolder = contractAssetFolder(input.role, input.employeeId);
   const allowedFormats = "jpg,jpeg,png,webp";
   const signature = cloudinary.utils.api_sign_request({
     allowed_formats: allowedFormats,
+    asset_folder: assetFolder,
     public_id: publicId,
     timestamp,
     type: "authenticated"
@@ -64,6 +70,7 @@ export function createContractUploadSignature(input: {
     cloudName: config.cloudName,
     apiKey: config.apiKey,
     allowedFormats,
+    assetFolder,
     publicId,
     timestamp,
     signature,

@@ -38,6 +38,7 @@ type ContractUploadPayload = ContractPayload & {
     uploadUrl: string;
     apiKey: string;
     allowedFormats: string;
+    assetFolder: string;
     publicId: string;
     timestamp: number;
     signature: string;
@@ -203,6 +204,7 @@ export default function EmployeeContractForm({
     cloudinaryBody.set("file", file);
     cloudinaryBody.set("api_key", upload.apiKey);
     cloudinaryBody.set("allowed_formats", upload.allowedFormats);
+    cloudinaryBody.set("asset_folder", upload.assetFolder);
     cloudinaryBody.set("public_id", upload.publicId);
     cloudinaryBody.set("timestamp", String(upload.timestamp));
     cloudinaryBody.set("signature", upload.signature);
@@ -378,11 +380,13 @@ export default function EmployeeContractForm({
                 <div className="contractUploadGrid">
                   {(["front", "back"] as const).map((side) => {
                     const uploaded = side === "front" ? profile?.citizenIdFront : profile?.citizenIdBack;
+                    const persistedPreviewUrl = uploaded ? `${documentUrl(side)}&preview=1` : "";
+                    const previewUrl = previewUrls[side] || persistedPreviewUrl;
                     return <label className={`contractUploadCard ${uploaded ? "uploaded" : ""}${employeeLocked ? " locked" : ""}`} key={side}>
                       <FileIcon />
                       <strong>{side === "front" ? "Mặt trước CCCD" : "Mặt sau CCCD"}</strong>
                       <span>{files[side]?.name || (uploaded ? "Đã lưu an toàn" : "Chọn ảnh để tải lên")}</span>
-                      {previewUrls[side] ? <img alt={side === "front" ? "Preview mặt trước CCCD" : "Preview mặt sau CCCD"} className="contractUploadPreview" src={previewUrls[side]} /> : null}
+                      {previewUrl ? <img alt={side === "front" ? "Preview mặt trước CCCD" : "Preview mặt sau CCCD"} className="contractUploadPreview" loading="lazy" src={previewUrl} /> : null}
                       <input accept="image/jpeg,image/png,image/webp" disabled={employeeLocked} onChange={(event) => selectFile(side, event)} type="file" />
                       {uploaded ? <a href={documentUrl(side)} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">Xem ảnh đã lưu</a> : null}
                     </label>;
