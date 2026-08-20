@@ -170,6 +170,11 @@ function isCriticalHostDemand(slot: string, lane: ScheduleLane) {
   return start >= 18 * 60;
 }
 
+function maxHostSessionsPerDay(lane: ScheduleLane) {
+  // Home có thể nhận hơn 2 ca/ngày vì không cần support studio đi kèm.
+  return lane === "home" ? 3 : 2;
+}
+
 function buildHostSelectionScore(
   person: SchedulePerson,
   lane: ScheduleLane,
@@ -526,7 +531,7 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
     const eligible = demand.candidates
       .filter(({ person }) => {
         const key = personKey("host", person.id);
-        return getCount(hostDayCounts, `${key}__${demand.dateKey}`) < 2
+        return getCount(hostDayCounts, `${key}__${demand.dateKey}`) < maxHostSessionsPerDay(demand.lane)
           && !occupiedHosts.has(`${key}__${demand.dateKey}__${demand.slot}`);
       })
       .sort((left, right) => {
