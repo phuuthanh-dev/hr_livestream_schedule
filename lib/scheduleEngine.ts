@@ -268,11 +268,14 @@ function removeCount(map: Map<string, number>, key: string) {
 }
 
 function partitionStudioRun(length: number, weekend: boolean) {
-  if (!weekend) return Array.from({ length: Math.floor(length / 2) }, () => 2);
-  if (length < 2) return [];
-  if (length % 2 === 0) return Array.from({ length: length / 2 }, () => 2);
-  if (length === 3) return [3];
-  return [3, ...Array.from({ length: (length - 3) / 2 }, () => 2)];
+  if (!weekend) return length >= 2 ? [2] : [];
+  // Legacy note:
+  // Weekend từng ưu tiên block 3 slot (6 giờ) để ép Support _6H ôm trọn ca dài.
+  // Rule đó đã bị tắt vì vận hành mới yêu cầu mọi Support _6H, kể cả cuối tuần,
+  // chỉ được xếp tối đa 2 slot liên tiếp (4 giờ). Nếu sau này cần bật lại logic cũ,
+  // có thể đổi về thứ tự ưu tiên [3, 2, 1] và khôi phục requireSixHour cho block 3.
+  if (length <= 1) return [1];
+  return length >= 3 ? [2, 1] : [2];
 }
 
 function buildSupportCandidates(options: SupportSelectionOptions) {
@@ -596,16 +599,14 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
       let offset = 0;
       while (offset < run.length) {
         const remaining = run.length - offset;
-        const preferredBlockSizes = weekend
-          ? [3, 2, 1].filter((size) => size <= remaining)
-          : [2].filter((size) => size <= remaining);
+        const preferredBlockSizes = partitionStudioRun(remaining, weekend);
         const blockHasHostDemand = (block: GeneratedItem[]) => block.every((item) => Boolean(item.row.hostId));
 
         let assigned = false;
         preferredBlockSizes.forEach((blockSize) => {
           if (assigned) return;
           const block = run.slice(offset, offset + blockSize);
-          const requireSixHour = weekend && blockSize === 3;
+          const requireSixHour = false;
           const strictCandidates = buildSupportCandidates({
             block,
             dateKey,
@@ -643,10 +644,6 @@ export function generateSchedule(input: ScheduleEngineInput): ScheduleSession[] 
             assigned = true;
             offset += blockSize;
             return;
-          }
-
-          if (weekend && blockSize === 3) {
-            block.forEach((item) => item.row.warnings.push("OPEN_SUPPORT_6H: Không có Support _6H rảnh trọn block 6 giờ cuối tuần."));
           }
         });
 
