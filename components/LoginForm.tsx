@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeRole, PeoplePayload, SchedulePerson } from "@/lib/types";
 
@@ -44,11 +44,31 @@ function PasswordVisibilityIcon({ visible }: { visible: boolean }) {
   );
 }
 
+function FieldIcon({ name }: { name: "search" | "chevronDown" }) {
+  if (name === "search") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4-4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 export default function LoginForm() {
   const router = useRouter();
+  const employeePickerRef = useRef<HTMLDivElement | null>(null);
   const [loginType, setLoginType] = useState<LoginType>("employee");
   const [role, setRole] = useState<EmployeeRole>("host");
   const [employeeId, setEmployeeId] = useState("");
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
+  const [employeePickerQuery, setEmployeePickerQuery] = useState("");
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
   const [supports, setSupports] = useState<SchedulePerson[]>([]);
   const [peopleLoading, setPeopleLoading] = useState(true);
@@ -63,6 +83,11 @@ export default function LoginForm() {
 
   const people = role === "host" ? hosts : supports;
   const selectedPerson = people.find((person) => person.id === employeeId);
+  const filteredPeople = people.filter((person) => {
+    const query = employeePickerQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [person.name, person.id].filter(Boolean).join(" ").toLowerCase().includes(query);
+  });
   const passwordInputDisabled =
     loginType === "employee" &&
     accountMode !== "login" &&
@@ -103,6 +128,19 @@ export default function LoginForm() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!employeePickerOpen) return;
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!employeePickerRef.current?.contains(event.target as Node)) {
+        setEmployeePickerOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [employeePickerOpen]);
 
   useEffect(() => {
     if (loginType !== "employee" || !employeeId) {
@@ -152,6 +190,8 @@ export default function LoginForm() {
 
   function chooseLoginType(nextType: LoginType) {
     setLoginType(nextType);
+    setEmployeePickerOpen(false);
+    setEmployeePickerQuery("");
     setError("");
     setPassword("");
     setConfirmPassword("");
@@ -163,6 +203,8 @@ export default function LoginForm() {
   function chooseRole(nextRole: EmployeeRole) {
     setRole(nextRole);
     setEmployeeId("");
+    setEmployeePickerOpen(false);
+    setEmployeePickerQuery("");
     setAccountMode("idle");
     setError("");
     setPassword("");
@@ -243,21 +285,58 @@ export default function LoginForm() {
 
           <label>
             Nhân viên
-            <select
-              value={employeeId}
-              onChange={(event) => setEmployeeId(event.target.value)}
-              disabled={peopleLoading}
-              required
-            >
-              <option value="">
-                {peopleLoading ? "Đang tải danh sách..." : `Chọn ${role === "host" ? "host" : "support"}`}
-              </option>
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} · {person.id}
-                </option>
-              ))}
-            </select>
+            <div className={`loginEmployeePicker ${employeePickerOpen ? "isOpen" : ""}`} ref={employeePickerRef}>
+              <button
+                className="loginEmployeePickerTrigger"
+                disabled={peopleLoading}
+                onClick={() => setEmployeePickerOpen((current) => !current)}
+                type="button"
+              >
+                <span>
+                  {selectedPerson
+                    ? `${selectedPerson.name} · ${selectedPerson.id}`
+                    : peopleLoading
+                      ? "Đang tải danh sách..."
+                      : `Chọn ${role === "host" ? "host" : "support"}`}
+                </span>
+                <em>{people.length}</em>
+                <FieldIcon name="chevronDown" />
+              </button>
+
+              {employeePickerOpen ? (
+                <div className="loginEmployeePickerPanel">
+                  <div className="loginEmployeePickerSearch">
+                    <FieldIcon name="search" />
+                    <input
+                      autoFocus
+                      value={employeePickerQuery}
+                      onChange={(event) => setEmployeePickerQuery(event.target.value)}
+                      placeholder="Tìm tên hoặc mã..."
+                    />
+                  </div>
+                  <div className="loginEmployeePickerList" role="listbox" aria-label="Danh sách nhân viên">
+                    {filteredPeople.map((person) => (
+                      <button
+                        className={`loginEmployeePickerOption ${employeeId === person.id ? "isSelected" : ""}`}
+                        key={person.id}
+                        onClick={() => {
+                          setEmployeeId(person.id);
+                          setEmployeePickerOpen(false);
+                          setEmployeePickerQuery("");
+                        }}
+                        type="button"
+                      >
+                        <strong>{person.name}</strong>
+                        <small>{person.id}</small>
+                      </button>
+                    ))}
+                    {filteredPeople.length === 0 ? (
+                      <div className="loginEmployeePickerEmpty">Không tìm thấy nhân viên phù hợp.</div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </label>
 
           {selectedPerson && accountMode !== "checking" ? (

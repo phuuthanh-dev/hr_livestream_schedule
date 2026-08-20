@@ -151,6 +151,159 @@ a:hover {
   outline: none;
 }
 
+.loginEmployeePicker {
+  position: relative;
+}
+
+.loginEmployeePickerTrigger {
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  padding: 0.9rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  color: var(--ink);
+  background: #fff;
+  align-items: center;
+  gap: 0.7rem;
+  text-align: left;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.loginEmployeePickerTrigger span {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loginEmployeePickerTrigger em {
+  display: inline-flex;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #2f6d66;
+  background: #e7f6ef;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.loginEmployeePickerTrigger svg {
+  color: #70807c;
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.loginEmployeePicker.isOpen .loginEmployeePickerTrigger,
+.loginEmployeePickerTrigger:focus-visible {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(11, 87, 208, 0.11);
+}
+
+.loginEmployeePicker.isOpen .loginEmployeePickerTrigger svg {
+  transform: rotate(180deg);
+}
+
+.loginEmployeePickerTrigger:disabled {
+  color: #98a09e;
+  background: #f7f8f6;
+}
+
+.loginEmployeePickerPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: grid;
+  padding: 10px;
+  border: 1px solid #d9dfd8;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 40px rgba(24, 44, 40, 0.12);
+  gap: 10px;
+}
+
+.loginEmployeePickerSearch {
+  display: flex;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d7ddd7;
+  border-radius: 12px;
+  color: #76817d;
+  align-items: center;
+  gap: 8px;
+}
+
+.loginEmployeePickerSearch:focus-within {
+  border-color: #178276;
+  box-shadow: 0 0 0 4px rgba(23, 130, 118, 0.08);
+}
+
+.loginEmployeePickerSearch input {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.loginEmployeePickerSearch input:focus {
+  box-shadow: none;
+}
+
+.loginEmployeePickerList {
+  display: grid;
+  max-height: 280px;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.loginEmployeePickerOption {
+  display: grid;
+  padding: 12px 14px;
+  border: 1px solid #ecefe9;
+  border-radius: 14px;
+  background: #fbfcfa;
+  gap: 3px;
+  text-align: left;
+}
+
+.loginEmployeePickerOption:hover {
+  border-color: #c7d5cf;
+  background: #f4faf7;
+}
+
+.loginEmployeePickerOption.isSelected {
+  border-color: #89cdbf;
+  background: #eefaf5;
+}
+
+.loginEmployeePickerOption strong {
+  color: #203b3c;
+  font-size: 0.84rem;
+}
+
+.loginEmployeePickerOption small {
+  color: #71807d;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.loginEmployeePickerEmpty {
+  padding: 14px 12px;
+  color: #71807d;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .passwordInputWrap {
   position: relative;
   display: block;
@@ -3290,6 +3443,28 @@ a:hover {
   border-color: #d3d8cf;
   border-radius: 12px;
   background-color: rgba(255, 255, 255, 0.86);
+}
+
+.loginAccessPanel .loginEmployeePickerTrigger {
+  min-height: 50px;
+  border-color: #d3d8cf;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.86);
+}
+
+.loginAccessPanel .loginEmployeePicker.isOpen .loginEmployeePickerTrigger,
+.loginAccessPanel .loginEmployeePickerTrigger:focus-visible {
+  border-color: #178276;
+  box-shadow: 0 0 0 4px rgba(23, 130, 118, 0.11);
+}
+
+.loginAccessPanel .loginEmployeePickerPanel {
+  border-color: #d9ddd5;
+}
+
+.loginAccessPanel .loginEmployeePickerSearch:focus-within {
+  border-color: #178276;
+  box-shadow: 0 0 0 4px rgba(23, 130, 118, 0.08);
 }
 
 .loginAccessPanel .loginForm input:focus,
