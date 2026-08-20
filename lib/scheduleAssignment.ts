@@ -136,12 +136,12 @@ export function buildManualScheduleAssignment(input: BuildManualAssignmentInput)
     next.supportCandidatePool = "";
   }
   if (hostNeedsConfirmation) {
-    next.hostConfirm = "Chưa xác nhận";
-    next.isHostConfirmed = false;
+    next.hostConfirm = hostId ? "Đã xác nhận" : "Chưa xác nhận";
+    next.isHostConfirmed = Boolean(hostId);
   }
   if (supportNeedsConfirmation || !supportId) {
-    next.supportConfirm = "Chưa xác nhận";
-    next.isSupportConfirmed = false;
+    next.supportConfirm = supportId ? "Đã xác nhận" : "Chưa xác nhận";
+    next.isSupportConfirmed = Boolean(supportId);
   }
 
   return next;

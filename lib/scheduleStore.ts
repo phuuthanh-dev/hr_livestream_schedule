@@ -135,6 +135,16 @@ export type DeleteScheduleSessionInput = {
   actorAccountKey: string;
 };
 
+export type CancelScheduleParticipationInput = {
+  sessionId: string;
+  role: EmployeeRole;
+  actorAccountKey: string;
+  actorType: AccountType;
+  actorRole?: EmployeeRole;
+  actorEmployeeId?: string;
+  expectedDateKey?: string;
+};
+
 export type CreateScheduleSessionInput = {
   dateKey: string;
   slot: string;
@@ -156,6 +166,20 @@ function cleanNumber(value: unknown): number {
 function buildPersonKey(role: EmployeeRole, employeeId: string): string {
   const normalizedId = cleanText(employeeId).toLowerCase();
   return normalizedId ? `${role}:${normalizedId}` : "";
+}
+
+function buildAutoConfirmationState(input: ScheduleSession) {
+  const lane = getScheduleSessionLane(input);
+  const hostAssigned = Boolean(cleanText(input.hostId));
+  const supportAssigned = lane === "studio" && Boolean(cleanText(input.supportId));
+  return {
+    hostConfirm: hostAssigned ? "Đã xác nhận" : "Chưa xác nhận",
+    supportConfirm: supportAssigned ? "Đã xác nhận" : "Chưa xác nhận",
+    isHostConfirmed: hostAssigned,
+    isSupportConfirmed: supportAssigned,
+    canConfirmHost: hostAssigned,
+    canConfirmSupport: supportAssigned
+  };
 }
 
 function weekdayLabel(dateKey: string) {
@@ -358,6 +382,7 @@ export async function publishGeneratedScheduleWeek(
     if (seenSessionIds.has(row.sessionId)) throw new Error(`Session ID bị trùng: ${row.sessionId}.`);
     seenSessionIds.add(row.sessionId);
     row.sessionCode = getScheduleSessionCode(row);
+    Object.assign(row, buildAutoConfirmationState(row));
   });
 
   const { sessions, syncRuns } = await getCollections();
@@ -701,6 +726,89 @@ export async function createScheduleSession(
   });
 
   return draft;
+}
+
+export async function cancelScheduleParticipation(
+  input: CancelScheduleParticipationInput
+): Promise<ScheduleSession> {
+  const { sessions } = await getCollections();
+  const sessionId = cleanText(input.sessionId);
+  if (!sessionId) throw new Error("Thiếu Session ID cần hủy tham gia.");
+
+  const document = await sessions.findOne({ sessionKey: sessionId, active: true });
+  if (!document) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
+  const current = toScheduleSession(document);
+
+  if (input.actorType === "employee") {
+    if (!input.actorRole || input.actorRole !== input.role || !input.actorEmployeeId) {
+      throw new Error("Vai trò hủy tham gia không khớp với tài khoản nhân viên.");
+    }
+    const assignedEmployeeId = input.role === "host" ? current.hostId : current.supportId;
+    if (cleanText(assignedEmployeeId).toLowerCase() !== cleanText(input.actorEmployeeId).toLowerCase()) {
+      throw new Error("Ca đã đổi người trước khi hủy tham gia được lưu.");
+    }
+    if (input.expectedDateKey && cleanText(current.dateKey) !== cleanText(input.expectedDateKey)) {
+      throw new Error("Ngày của ca đã thay đổi trước khi hủy tham gia được lưu.");
+    }
+  }
+
+  const retainedHostId = input.role === "host" ? "" : current.hostId;
+  const retainedSupportId = input.role === "support" ? "" : current.supportId;
+  const activeHost = retainedHostId ? await findActiveSchedulePerson("host", retainedHostId) : null;
+  const activeSupport = retainedSupportId ? await findActiveSchedulePerson("support", retainedSupportId) : null;
+  const host = activeHost || (retainedHostId ? {
+    id: current.hostId,
+    name: current.hostName || current.hostId,
+    role: "host" as const,
+    workLocation: getSessionLocationMode(current) || "studio",
+    liveChannelId: current.channel
+  } : null);
+  const support = activeSupport || (retainedSupportId ? {
+    id: current.supportId,
+    name: current.supportName || current.supportId,
+    role: "support" as const
+  } : null);
+
+  const updated = buildManualScheduleAssignment({
+    current,
+    host,
+    support,
+    hostWasEdited: input.role === "host",
+    supportWasEdited: input.role === "support",
+    locationMode: getSessionLocationMode(current) || "studio"
+  });
+  const now = new Date();
+  const unsetFields: Record<string, ""> = {};
+  if (input.role === "host") {
+    unsetFields.hostConfirmationUpdatedAt = "";
+    unsetFields.hostConfirmationActorKey = "";
+  }
+  if (input.role === "support") {
+    unsetFields.supportConfirmationUpdatedAt = "";
+    unsetFields.supportConfirmationActorKey = "";
+  }
+
+  const result = await sessions.updateOne(
+    { sessionKey: sessionId, active: true },
+    {
+      $set: {
+        ...updated,
+        hostPersonKey: buildPersonKey("host", updated.hostId),
+        supportPersonKey: buildPersonKey("support", updated.supportId),
+        backupHostPersonKey: buildPersonKey("host", updated.backupHostId),
+        backupSupportPersonKey: buildPersonKey("support", updated.backupSupportId),
+        ...(input.role === "host" ? { hostConfirmationRevision: 0 } : {}),
+        ...(input.role === "support" ? { supportConfirmationRevision: 0 } : {}),
+        manualOverride: true,
+        manualOverrideUpdatedAt: now,
+        manualOverrideUpdatedBy: cleanText(input.actorAccountKey) || "employee",
+        updatedAt: now
+      },
+      ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {})
+    }
+  );
+  if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi hủy tham gia được lưu.");
+  return updated;
 }
 
 export async function deleteScheduleSession(

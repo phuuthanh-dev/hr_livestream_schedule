@@ -23,7 +23,7 @@ type ScheduleDashboardProps = {
   initialWeekStartKey?: string;
 };
 
-type FilterMode = "all" | "mine" | "warnings" | "pending";
+type FilterMode = "all" | "mine" | "warnings" | "open";
 type IconName = "account" | "calendar" | "check" | "chevronDown" | "chevronLeft" | "chevronRight" | "close" | "contract" | "location" | "logout" | "money" | "search" | "sync" | "users" | "warning";
 
 const DAY_NAMES = ["THỨ 2", "THỨ 3", "THỨ 4", "THỨ 5", "THỨ 6", "THỨ 7", "CHỦ NHẬT"];
@@ -205,11 +205,8 @@ function sessionMatchesQuery(session: ScheduleSession, query: string) {
 
 function sessionMatchesFilter(session: ScheduleSession, filter: FilterMode) {
   if (filter === "warnings") return session.warningLevel !== "ok" || session.warnings.length > 0;
-  if (filter === "pending") {
-    return (
-      (session.canConfirmHost && !session.isHostConfirmed) ||
-      (session.canConfirmSupport && !session.isSupportConfirmed)
-    );
+  if (filter === "open") {
+    return session.status === "open";
   }
   return true;
 }
@@ -320,6 +317,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterMode>(() => isAdmin ? "all" : "mine");
   const [busyConfirm, setBusyConfirm] = useState("");
+  const [busyCancel, setBusyCancel] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
@@ -357,7 +355,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const mobileDaySessions = visibleSessions.filter((session) => session.dateKey === mobileDayKey);
   const weekSummary = buildSummary(weekSessions);
   const warningCount = weekSessions.filter((session) => sessionMatchesFilter(session, "warnings")).length;
-  const pendingCount = weekSessions.filter((session) => sessionMatchesFilter(session, "pending")).length;
+  const openCount = weekSessions.filter((session) => sessionMatchesFilter(session, "open")).length;
   const selectedSession = sessions.find((session) => session.sessionId === selectedSessionId);
   const selectedHostProfile = selectedSession
     ? hosts.find((host) => host.id.toLowerCase() === selectedSession.hostId.toLowerCase())
@@ -492,6 +490,46 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       setAssignmentError(updateError instanceof Error ? updateError.message : "Không cập nhật được ca.");
     } finally {
       setAssignmentBusy("");
+    }
+  }
+
+  async function cancelParticipation(session: ScheduleSession, role: "host" | "support") {
+    if (isAdmin) return;
+    if (session.dateKey < todayKey) {
+      setError(`Bạn không thể hủy tham gia ca đã qua ngày (${session.dateLabel}).`);
+      return;
+    }
+
+    const busyKey = `${session.sessionId}:${role}:cancel`;
+    setBusyCancel(busyKey);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          role,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không hủy tham gia được ca.");
+      }
+      applyPayload(payload);
+      const roleLabel = role === "host" ? "Host" : "Support Live";
+      const personLabel = role === "host"
+        ? getPersonLabel(session.hostId, session.hostName, "Host")
+        : getPersonLabel(session.supportId, session.supportName, "Support Live");
+      setMessage(`Đã hủy tham gia ${roleLabel} cho ca ${session.slot} ngày ${session.dateLabel} · ${personLabel}.`);
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Không hủy tham gia được ca.");
+    } finally {
+      setBusyCancel("");
     }
   }
 
@@ -781,8 +819,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             <button className={`filterOption filterWarning ${filter === "warnings" ? "active" : ""}`} onClick={() => setFilter("warnings")} type="button">
               <span className="filterDot" /><span>Cảnh báo</span><strong>{warningCount}</strong>
             </button>
-            <button className={`filterOption filterPending ${filter === "pending" ? "active" : ""}`} onClick={() => setFilter("pending")} type="button">
-              <span className="filterDot" /><span>Chờ confirm</span><strong>{pendingCount}</strong>
+            <button className={`filterOption filterPending ${filter === "open" ? "active" : ""}`} onClick={() => setFilter("open")} type="button">
+              <span className="filterDot" /><span>Ca cần fill</span><strong>{openCount}</strong>
             </button>
           </section>
 
@@ -839,8 +877,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             <div className="weekHealthTitle"><span>Tình trạng tuần</span><strong>{weekSummary.total} ca</strong></div>
             <div className="healthRow danger"><span><Icon name="warning" size={16} /> Thiếu support</span><strong>{weekSummary.missingSupport}</strong></div>
             <div className="healthRow support"><span>Thiếu Host</span><strong>{weekSummary.openHost}</strong></div>
-            <div className="healthRow"><span>Chờ host</span><strong>{weekSummary.pendingHostConfirm}</strong></div>
-            <div className="healthRow"><span>Chờ support</span><strong>{weekSummary.pendingSupportConfirm}</strong></div>
+            <div className="healthRow"><span>Host đã chốt</span><strong>{weekSummary.confirmedHost}</strong></div>
+            <div className="healthRow"><span>Support đã chốt</span><strong>{weekSummary.confirmedSupport}</strong></div>
           </section>
 
           <div className="sourceStatus">
@@ -1307,33 +1345,65 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             </dl>
 
             <div className="confirmPanel">
-              <div className="confirmPanelTitle"><strong>Xác nhận tham gia</strong><span>Cập nhật trực tiếp vào master</span></div>
-              {selectedSession.canConfirmHost && canConfirmSelectedHost ? (
-                <button
-                  className={`confirmAction ${selectedSession.isHostConfirmed ? "confirmed" : ""}`}
-                  disabled={busyConfirm === `${selectedSession.sessionId}:host`}
-                  onClick={() => confirmSession(selectedSession, "host", !selectedSession.isHostConfirmed)}
-                  type="button"
-                >
-                  <span><Icon name="check" /></span>
-                  <div><strong>{selectedSession.isHostConfirmed ? (isAdmin ? "Host đã xác nhận" : "Bạn đã xác nhận ca này") : (isAdmin ? "Xác nhận host" : "Xác nhận ca host của tôi")}</strong><small>{selectedSession.isHostConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
-                </button>
-              ) : null}
-              {selectedSession.canConfirmSupport && canConfirmSelectedSupport ? (
-                <button
-                  className={`confirmAction ${selectedSession.isSupportConfirmed ? "confirmed" : ""}`}
-                  disabled={busyConfirm === `${selectedSession.sessionId}:support`}
-                  onClick={() => confirmSession(selectedSession, "support", !selectedSession.isSupportConfirmed)}
-                  type="button"
-                >
-                  <span><Icon name="check" /></span>
-                  <div><strong>{selectedSession.isSupportConfirmed ? (isAdmin ? "Support đã xác nhận" : "Bạn đã xác nhận ca này") : (isAdmin ? "Xác nhận support" : "Xác nhận ca support của tôi")}</strong><small>{selectedSession.isSupportConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
-                </button>
-              ) : null}
+              <div className="confirmPanelTitle">
+                <strong>{isAdmin ? "Xác nhận tham gia" : "Tham gia ca"}</strong>
+                <span>{isAdmin ? "Cập nhật trực tiếp vào master" : "Bạn có thể nhả ca tương lai của chính mình."}</span>
+              </div>
+              {isAdmin ? (
+                <>
+                  {selectedSession.canConfirmHost && canConfirmSelectedHost ? (
+                    <button
+                      className={`confirmAction ${selectedSession.isHostConfirmed ? "confirmed" : ""}`}
+                      disabled={busyConfirm === `${selectedSession.sessionId}:host`}
+                      onClick={() => confirmSession(selectedSession, "host", !selectedSession.isHostConfirmed)}
+                      type="button"
+                    >
+                      <span><Icon name="check" /></span>
+                      <div><strong>{selectedSession.isHostConfirmed ? "Host đã xác nhận" : "Xác nhận host"}</strong><small>{selectedSession.isHostConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
+                    </button>
+                  ) : null}
+                  {selectedSession.canConfirmSupport && canConfirmSelectedSupport ? (
+                    <button
+                      className={`confirmAction ${selectedSession.isSupportConfirmed ? "confirmed" : ""}`}
+                      disabled={busyConfirm === `${selectedSession.sessionId}:support`}
+                      onClick={() => confirmSession(selectedSession, "support", !selectedSession.isSupportConfirmed)}
+                      type="button"
+                    >
+                      <span><Icon name="check" /></span>
+                      <div><strong>{selectedSession.isSupportConfirmed ? "Support đã xác nhận" : "Xác nhận support"}</strong><small>{selectedSession.isSupportConfirmed ? `Bấm để huỷ xác nhận ca ${selectedSession.slot}` : getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support")}</small></div>
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {canConfirmSelectedHost ? (
+                    <button
+                      className="confirmAction"
+                      disabled={busyCancel === `${selectedSession.sessionId}:host:cancel`}
+                      onClick={() => cancelParticipation(selectedSession, "host")}
+                      type="button"
+                    >
+                      <span><Icon name="close" /></span>
+                      <div><strong>Hủy tham gia ca host của tôi</strong><small>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host")}</small></div>
+                    </button>
+                  ) : null}
+                  {canConfirmSelectedSupport ? (
+                    <button
+                      className="confirmAction"
+                      disabled={busyCancel === `${selectedSession.sessionId}:support:cancel`}
+                      onClick={() => cancelParticipation(selectedSession, "support")}
+                      type="button"
+                    >
+                      <span><Icon name="close" /></span>
+                      <div><strong>Hủy tham gia ca support của tôi</strong><small>{getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support Live")}</small></div>
+                    </button>
+                  ) : null}
+                </>
+              )}
               {!isAdmin && selectedSessionIsPast ? (
-                <p className="confirmRestriction">Ca này đã qua ngày. Bạn chỉ có thể xem lịch sử; chỉ Admin được xác nhận hoặc huỷ xác nhận ca cũ.</p>
+                <p className="confirmRestriction">Ca này đã qua ngày. Bạn chỉ có thể xem lịch sử; chỉ Admin được xử lý lịch sử hoặc điều chỉnh lại phân công.</p>
               ) : !isAdmin && !canConfirmSelectedHost && !canConfirmSelectedSupport ? (
-                <p className="confirmRestriction">Ca này không được phân công cho tài khoản của bạn. Bạn chỉ có thể xác nhận hoặc huỷ xác nhận đúng ca, đúng vai trò và đúng mã nhân viên của mình.</p>
+                <p className="confirmRestriction">Ca này không được phân công cho tài khoản của bạn. Bạn chỉ có thể hủy tham gia đúng ca, đúng vai trò và đúng mã nhân viên của mình.</p>
               ) : null}
             </div>
           </aside>
