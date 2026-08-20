@@ -2309,30 +2309,6 @@ a:hover {
   display: none;
 }
 
-.assignmentLocationCard {
-  display: grid;
-  gap: 4px;
-  min-height: 62px;
-  padding: 11px 12px;
-  border: 1px solid #d7e5e1;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f7fbfa 0%, #eef7f5 100%);
-}
-
-.assignmentLocationCard strong {
-  color: #173c3b;
-  font-size: 0.78rem;
-  font-weight: 850;
-  line-height: 1.1;
-}
-
-.assignmentLocationCard small {
-  color: #68807c;
-  font-size: 0.59rem;
-  font-weight: 650;
-  line-height: 1.45;
-}
-
 .assignmentEditorGrid select {
   width: 100%;
   min-height: 42px;

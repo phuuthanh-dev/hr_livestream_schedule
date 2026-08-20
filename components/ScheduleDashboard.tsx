@@ -243,10 +243,7 @@ function personMatchesAssignmentQuery(person: SchedulePerson, query: string) {
   if (!query.trim()) return true;
   const haystack = [
     person.name,
-    person.id,
-    person.level,
-    person.workLocation,
-    person.liveChannelId
+    person.id
   ].filter(Boolean).join(" ").toLowerCase();
   return haystack.includes(query.trim().toLowerCase());
 }
@@ -985,7 +982,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                               value={hostPickerQuery}
                               disabled={peopleLoading || Boolean(assignmentBusy)}
                               onChange={(event) => setHostPickerQuery(event.target.value)}
-                              placeholder="Tìm tên, mã, level..."
+                              placeholder="Tìm tên, mã..."
                             />
                           </div>
                           <div className="assignmentPickerList" role="listbox" aria-label="Danh sách Host">
@@ -1050,16 +1047,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   </label>
                   <label className="assignmentLocationField">
                     <span>Địa điểm</span>
-                    <div className="assignmentLocationCard">
-                      <strong>{selectedLocationMode === "home" ? "Home" : "Studio"}</strong>
-                      <small>
-                        {selectedHostCanUseHome && selectedHostCanUseStudio
-                          ? "Host này có thể đổi giữa Home và Studio."
-                          : selectedHostCanUseHome
-                            ? "Host này chỉ có thể live tại Home."
-                            : "Host này chỉ có thể live tại Studio."}
-                      </small>
-                    </div>
                     <select
                       value={selectedLocationMode}
                       disabled={Boolean(assignmentBusy) || (!selectedHostCanUseHome && !selectedHostCanUseStudio)}
@@ -1095,7 +1082,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                               value={supportPickerQuery}
                               disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
                               onChange={(event) => setSupportPickerQuery(event.target.value)}
-                              placeholder="Tìm tên, mã, cấp độ..."
+                              placeholder="Tìm tên, mã..."
                             />
                           </div>
                           <div className="assignmentPickerList" role="listbox" aria-label="Danh sách Support">
