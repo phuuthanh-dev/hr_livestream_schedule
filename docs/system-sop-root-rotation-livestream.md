@@ -175,7 +175,7 @@ URL: [https://docs.google.com/spreadsheets/d/1x6nVWbe1v80Px4UVRYciOwFJYNdEF8f6LC
 
 - `Portfolio_Master`
 - `Support_Master`
-- `Live_Session_Master`
+- `Live_Session_Master_Web`
 - `Grade_Review`
 - `Base_Salary_Card`
 
@@ -205,7 +205,7 @@ Code liên quan:
 
 - [calc_livestream_payroll.py](D:/HR_STREAMING/skills/05_payroll/livestream-payroll-rules/scripts/calc_livestream_payroll.py)
 
-#### `Live_Session_Master`
+#### `Live_Session_Master_Web`
 
 Về mặt nghiệp vụ, đây là tab session master chuẩn của file HR master.
 
@@ -216,7 +216,7 @@ Tuy nhiên trong source code website hiện tại:
 
 Điều này có nghĩa:
 
-- tab `Live_Session_Master` hiện là nguồn chuẩn nghiệp vụ ở lớp tài liệu / local program / đối chiếu,
+- tab `Live_Session_Master_Web` hiện là tab sheet mirror chính thức mà admin sync từ ứng dụng ra để vận hành và đối chiếu,
 - nhưng chưa phải runtime source chính của website schedule engine hiện tại.
 
 #### `Grade_Review`
@@ -536,7 +536,7 @@ Code liên quan:
 
 - tab `LIVE STREAM/ SCHEDULE` chưa phải runtime source chính của website
 - tab `Lương + commission` chưa phải nguồn payroll runtime trực tiếp
-- `Live_Session_Master` là schema chuẩn nghiệp vụ nhưng website schedule runtime hiện vẫn đang publish vào Mongo trước
+- `Live_Session_Master_Web` là tab sheet mirror mà website schedule runtime sync ra từ MongoDB
 
 ## 8. Kết luận vận hành
 

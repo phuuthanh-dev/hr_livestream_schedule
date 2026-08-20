@@ -2127,6 +2127,55 @@ a:hover {
   text-transform: uppercase;
 }
 
+.assignmentSearchField {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid #d7e5e1;
+  border-radius: 11px;
+  background: #f7fbfa;
+  color: #5f6f6d;
+}
+
+.assignmentSearchField:focus-within {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  background: #ffffff;
+}
+
+.assignmentSearchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #233a37;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.assignmentSearchField input::placeholder {
+  color: #8ba09d;
+}
+
+.assignmentSearchField em {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #e6f4f1;
+  color: #0f766e;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
 .assignmentEditorGrid select {
   width: 100%;
   min-height: 42px;
@@ -5993,6 +6042,10 @@ a:hover {
 
   .assignmentSupportField {
     grid-column: auto;
+  }
+
+  .assignmentSearchField {
+    min-height: 40px;
   }
 
   .drawerDetails {

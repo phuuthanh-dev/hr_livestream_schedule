@@ -49,13 +49,16 @@ export async function POST(request: Request) {
     }
 
     const result = await submitPeopleApplication(body);
+    const syncSuffix = result.sheetSynced
+      ? ""
+      : ` Hồ sơ đã lưu trên ứng dụng nhưng đồng bộ sheet đang chờ xử lý: ${result.sheetSyncMessage || "Google Sheet tạm thời chưa phản hồi."}`;
     return NextResponse.json({
       success: true,
       applicationId: result.application.applicationId,
       employeeId: result.application.employeeId,
       message: result.updated
-        ? `Hồ sơ trước đó đã được cập nhật. Mã nhân sự hiện tại là ${result.application.employeeId || "đang xử lý"}.`
-        : `Hồ sơ đã được gửi thành công. Mã nhân sự của bạn là ${result.application.employeeId || "đang xử lý"}.`
+        ? `Hồ sơ trước đó đã được cập nhật. Mã nhân sự hiện tại là ${result.application.employeeId || "đang xử lý"}.${syncSuffix}`
+        : `Hồ sơ đã được gửi thành công. Mã nhân sự của bạn là ${result.application.employeeId || "đang xử lý"}.${syncSuffix}`
     }, { status: result.updated ? 200 : 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Không gửi được hồ sơ.";

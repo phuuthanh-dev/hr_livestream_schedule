@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useEffect, useRef, useState } from "react";
 import type {
   PayrollDashboardPayload,
@@ -105,6 +106,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [personHoursOpen, setPersonHoursOpen] = useState(false);
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [payslipRangeOpen, setPayslipRangeOpen] = useState(false);
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
   const [payslipFromDate, setPayslipFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [payslipToDate, setPayslipToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
   const [payslipFromDisplay, setPayslipFromDisplay] = useState(formatDate(initialWeekStartKey || currentWeekStart()));
@@ -169,7 +171,6 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   }
 
   async function runAction(action: "generate" | "lock") {
-    if (action === "lock" && !window.confirm("Khóa bảng lương tuần này? Sau khi khóa sẽ không thể tính lại.")) return;
     setWorking(action);
     setError("");
     setNotice("");
@@ -184,6 +185,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
       setPayload(result);
       setDraftRates(result.rates || []);
       setDraftSettings(result.settings || null);
+      if (action === "lock") setLockConfirmOpen(false);
       setNotice(result.message || (action === "generate" ? "Đã tính lương." : "Đã khóa tuần lương."));
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Thao tác không thành công.");
@@ -389,8 +391,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
           <button className={`payrollActionButton subtle ${payslipRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setPayslipRangeOpen((current) => !current)} type="button"><Icon name="download" />Tạo phiếu lương</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
-          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Sync Payroll_Sheet"}</button>
-          <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => void runAction("lock")} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
+          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Sync Payroll Sheets"}</button>
+          <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => setLockConfirmOpen(true)} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
         </div>
       </section>
 
@@ -622,6 +624,33 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           </div>
         ) : null}
       </section>
+      <AlertDialog.Root open={lockConfirmOpen} onOpenChange={setLockConfirmOpen}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="employeeDeleteOverlay" />
+          <AlertDialog.Content className="employeeDeleteDialog">
+            <AlertDialog.Title>Khóa bảng lương tuần</AlertDialog.Title>
+            <AlertDialog.Description>
+              Bảng lương tuần {formatDate(weekStartKey)} - {formatDate(addDays(weekStartKey, 6))} sẽ bị khóa.
+            </AlertDialog.Description>
+            <p>Sau khi khóa, tuần này không thể tính lại cho đến khi có can thiệp kỹ thuật.</p>
+            <div className="employeeDeleteActions">
+              <AlertDialog.Cancel asChild>
+                <button disabled={Boolean(working)} type="button">Huỷ</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  className="danger"
+                  disabled={Boolean(working)}
+                  onClick={() => void runAction("lock")}
+                  type="button"
+                >
+                  {working === "lock" ? "Đang khóa..." : "Xác nhận khóa"}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </main>
   );
 }

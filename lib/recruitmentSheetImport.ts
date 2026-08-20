@@ -60,6 +60,11 @@ export type RecruitmentSheetPushSummary = {
   message: string;
 };
 
+type RecruitmentSheetPushTarget = {
+  role: EmployeeRole;
+  employeeId: string;
+};
+
 type SheetReadResult = {
   spreadsheetId: string;
   values: string[][];
@@ -1076,7 +1081,10 @@ export async function importRecruitmentProfilesFromSheetsWithMode(
   }
 }
 
-export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): Promise<RecruitmentSheetPushSummary> {
+export async function syncRecruitmentProfilesToSheets(
+  actorAccountKey: string,
+  target?: RecruitmentSheetPushTarget
+): Promise<RecruitmentSheetPushSummary> {
   const runId = randomUUID();
   const startedAt = new Date();
   const conflicts: RecruitmentSheetSyncConflict[] = [];
@@ -1103,6 +1111,12 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
     const contractByKey = new Map(
       contractProfiles.map((item) => [item.personKey, item] as const)
     );
+    const normalizedTargetEmployeeId = target?.employeeId.trim().toUpperCase() || "";
+    const profilesToSync = target
+      ? profiles.filter((profile) =>
+        profile.role === target.role && profile.employeeId.trim().toUpperCase() === normalizedTargetEmployeeId
+      )
+      : profiles;
 
     const hostHeader = hostValues[0] || [];
     const supportHeader = supportValues[0] || [];
@@ -1177,7 +1191,7 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
     let appendedMasterRows = 0;
     let skippedRows = 0;
 
-    profiles.forEach((profile) => {
+    profilesToSync.forEach((profile) => {
       const key = employeeContractPersonKey(profile.role, profile.employeeId);
       const contract = contractByKey.get(key);
       const tabName = profile.role === "host" ? HOST_TAB_NAME : SUPPORT_TAB_NAME;
@@ -1432,7 +1446,9 @@ export async function syncRecruitmentProfilesToSheets(actorAccountKey: string): 
       updatedMasterRows,
       appendedMasterRows,
       skippedRows,
-      message: `Đã sync tuyển dụng: nguồn ${updatedSheetRows} cập nhật / ${appendedSheetRows} tạo mới; master ${updatedMasterRows} cập nhật / ${appendedMasterRows} tạo mới.`
+      message: target
+        ? `Đã sync hồ sơ ${target.employeeId}: nguồn ${updatedSheetRows} cập nhật / ${appendedSheetRows} tạo mới; master ${updatedMasterRows} cập nhật / ${appendedMasterRows} tạo mới.`
+        : `Đã sync tuyển dụng: nguồn ${updatedSheetRows} cập nhật / ${appendedSheetRows} tạo mới; master ${updatedMasterRows} cập nhật / ${appendedMasterRows} tạo mới.`
     };
 
     await persistSyncRun({

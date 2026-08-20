@@ -42,7 +42,7 @@ Ngày cập nhật: `2026-08-16`
 | Identity | Session ID | `SS-YYYYMMDD-SLOT-HOST-SUPPORT` | `AUTO_...` + legacy mixed | Lớn | Chuẩn hóa về 1 format |
 | Repair | Rebuild date/weekday | có | chưa có pipeline riêng | Trung bình | Add maintenance tools trên web |
 | Repair | Rebuild Session_ID | có | chưa có migration đầy đủ | Lớn | Làm migration web-side |
-| Output | Master final schedule | `Live_Session_Master` + `Real_Live_Schedule` | `schedule_sessions` | Khác kiến trúc | Chốt `schedule_sessions` là final |
+| Output | Master final schedule | `Live_Session_Master_Web` + `Real_Live_Schedule` | `schedule_sessions` | Khác kiến trúc | Chốt `schedule_sessions` là final |
 | Downstream | Payroll dependency | sheet-driven | Mongo-driven | Khác | Giữ website/Mongo |
 
 ## Phần nên làm trước

@@ -227,6 +227,27 @@ function getPersonLabel(id: string, name: string, emptyLabel: string) {
   return `${name} · ${id}`;
 }
 
+function getAssignmentPersonOptionLabel(person: SchedulePerson) {
+  return [
+    person.name,
+    person.id,
+    person.level,
+    person.workLocation
+  ].filter(Boolean).join(" · ");
+}
+
+function personMatchesAssignmentQuery(person: SchedulePerson, query: string) {
+  if (!query.trim()) return true;
+  const haystack = [
+    person.name,
+    person.id,
+    person.level,
+    person.workLocation,
+    person.liveChannelId
+  ].filter(Boolean).join(" ").toLowerCase();
+  return haystack.includes(query.trim().toLowerCase());
+}
+
 function getSessionTitle(session: ScheduleSession) {
   return session.channel || session.hostName || session.supportName || "Ca chưa phân công";
 }
@@ -307,6 +328,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [peopleError, setPeopleError] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
+  const [hostPickerQuery, setHostPickerQuery] = useState("");
+  const [supportPickerQuery, setSupportPickerQuery] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [syncMasterBusy, setSyncMasterBusy] = useState(false);
@@ -337,6 +360,14 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const selectedSupportProfile = selectedSession
     ? supports.find((support) => support.id.toLowerCase() === selectedSession.supportId.toLowerCase())
     : undefined;
+  const filteredHosts = hosts.filter((host) => personMatchesAssignmentQuery(host, hostPickerQuery));
+  const filteredSupports = supports.filter((support) => personMatchesAssignmentQuery(support, supportPickerQuery));
+  const visibleHostOptions = selectedHostProfile && !filteredHosts.some((host) => host.id === selectedHostProfile.id)
+    ? [selectedHostProfile, ...filteredHosts]
+    : filteredHosts;
+  const visibleSupportOptions = selectedSupportProfile && !filteredSupports.some((support) => support.id === selectedSupportProfile.id)
+    ? [selectedSupportProfile, ...filteredSupports]
+    : filteredSupports;
   const selectedLocationMode = selectedSession ? getSessionLocationMode(selectedSession) : "";
   const selectedHostLocation = selectedHostProfile?.workLocation?.trim().toLowerCase() || "";
   const selectedHostCanUseHome = selectedHostProfile
@@ -588,6 +619,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   useEffect(() => {
     if (!selectedSessionId) return;
     setAssignmentError("");
+    setHostPickerQuery("");
+    setSupportPickerQuery("");
     setDeleteConfirmOpen(false);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -927,6 +960,16 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 <div className="assignmentEditorGrid">
                   <label>
                     <span>Host</span>
+                    <div className="assignmentSearchField">
+                      <Icon name="search" size={15} />
+                      <input
+                        value={hostPickerQuery}
+                        disabled={peopleLoading || Boolean(assignmentBusy)}
+                        onChange={(event) => setHostPickerQuery(event.target.value)}
+                        placeholder="Tìm tên, mã, level..."
+                      />
+                      <em>{visibleHostOptions.length}</em>
+                    </div>
                     <select
                       value={selectedSession.hostId}
                       disabled={peopleLoading || Boolean(assignmentBusy)}
@@ -936,9 +979,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                       {selectedSession.hostId && !selectedHostProfile ? (
                         <option value={selectedSession.hostId}>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Host hiện tại")}</option>
                       ) : null}
-                      {hosts.map((host) => (
+                      {visibleHostOptions.map((host) => (
                         <option key={host.id} value={host.id}>
-                          {host.name} · {host.id}{host.level ? ` · ${host.level}` : ""}{host.workLocation ? ` · ${host.workLocation}` : ""}
+                          {getAssignmentPersonOptionLabel(host)}
                         </option>
                       ))}
                     </select>
@@ -960,6 +1003,16 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   </label>
                   <label className="assignmentSupportField">
                     <span>Support Live</span>
+                    <div className="assignmentSearchField">
+                      <Icon name="search" size={15} />
+                      <input
+                        value={supportPickerQuery}
+                        disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
+                        onChange={(event) => setSupportPickerQuery(event.target.value)}
+                        placeholder="Tìm tên, mã, cấp độ..."
+                      />
+                      <em>{visibleSupportOptions.length}</em>
+                    </div>
                     <select
                       value={selectedSession.supportId}
                       disabled={peopleLoading || Boolean(assignmentBusy) || (selectedLocationMode === "home" && !selectedHostCanUseStudio)}
@@ -969,9 +1022,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                       {selectedSession.supportId && !selectedSupportProfile ? (
                         <option value={selectedSession.supportId}>{getPersonLabel(selectedSession.supportId, selectedSession.supportName, "Support hiện tại")}</option>
                       ) : null}
-                      {supports.map((support) => (
+                      {visibleSupportOptions.map((support) => (
                         <option key={support.id} value={support.id}>
-                          {support.name} · {support.id}{support.level ? ` · ${support.level}` : ""}
+                          {getAssignmentPersonOptionLabel(support)}
                         </option>
                       ))}
                     </select>

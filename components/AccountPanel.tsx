@@ -1,5 +1,6 @@
 "use client";
 
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
@@ -19,6 +20,11 @@ type AccountPanelProps = {
 
 type AdminAction = "reset_password" | "lock" | "unlock" | "revoke_sessions";
 
+type PendingAdminAction = {
+  account: ManagedAccount;
+  action: Exclude<AdminAction, "reset_password">;
+};
+
 export default function AccountPanel({ isAdmin, username, onClose }: AccountPanelProps) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -32,6 +38,7 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
   const [resetConfirmation, setResetConfirmation] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [pendingAdminAction, setPendingAdminAction] = useState<PendingAdminAction | null>(null);
 
   async function loadAccounts() {
     if (!isAdmin) return;
@@ -93,12 +100,7 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
     }
   }
 
-  async function runAdminAction(account: ManagedAccount, action: AdminAction) {
-    if (action !== "reset_password") {
-      const actionLabel = action === "lock" ? "khóa tài khoản" : action === "unlock" ? "mở khóa tài khoản" : "đăng xuất khỏi mọi thiết bị";
-      if (!window.confirm(`Xác nhận ${actionLabel} của ${account.displayName}?`)) return;
-    }
-
+  async function executeAdminAction(account: ManagedAccount, action: AdminAction) {
     setBusyAccountKey(account.accountKey);
     setError("");
     setMessage("");
@@ -116,6 +118,7 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
       const payload = (await response.json()) as { success?: boolean; message?: string };
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không cập nhật được tài khoản.");
       setMessage(payload.message || "Đã cập nhật tài khoản.");
+      setPendingAdminAction(null);
       setResetAccountKey("");
       setResetPassword("");
       setResetConfirmation("");
@@ -126,6 +129,25 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
       setBusyAccountKey("");
     }
   }
+
+  async function runAdminAction(account: ManagedAccount, action: AdminAction) {
+    if (action !== "reset_password") {
+      setPendingAdminAction({
+        account,
+        action
+      });
+      return;
+    }
+    await executeAdminAction(account, action);
+  }
+
+  const pendingActionLabel = pendingAdminAction
+    ? pendingAdminAction.action === "lock"
+      ? "khóa tài khoản"
+      : pendingAdminAction.action === "unlock"
+        ? "mở khóa tài khoản"
+        : "đăng xuất khỏi mọi thiết bị"
+    : "";
 
   return (
     <div className="accountModalBackdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -187,6 +209,40 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
           </section>
         ) : null}
       </section>
+      <AlertDialog.Root
+        open={Boolean(pendingAdminAction)}
+        onOpenChange={(open) => {
+          if (!open && !busyAccountKey) setPendingAdminAction(null);
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="employeeDeleteOverlay" />
+          <AlertDialog.Content className="employeeDeleteDialog">
+            <AlertDialog.Title>Xác nhận thao tác tài khoản</AlertDialog.Title>
+            <AlertDialog.Description>
+              {pendingAdminAction
+                ? `Bạn sắp ${pendingActionLabel} của ${pendingAdminAction.account.displayName} (${pendingAdminAction.account.employeeId}).`
+                : "Bạn sắp cập nhật tài khoản này."}
+            </AlertDialog.Description>
+            <p>Thao tác sẽ được áp dụng ngay sau khi bạn xác nhận.</p>
+            <div className="employeeDeleteActions">
+              <AlertDialog.Cancel asChild>
+                <button disabled={Boolean(busyAccountKey)} type="button">Huỷ</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  className="danger"
+                  disabled={!pendingAdminAction || Boolean(busyAccountKey)}
+                  onClick={() => pendingAdminAction ? void executeAdminAction(pendingAdminAction.account, pendingAdminAction.action) : undefined}
+                  type="button"
+                >
+                  Xác nhận
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </div>
   );
 }

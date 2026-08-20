@@ -297,8 +297,10 @@ async function upsertEmployeeFromApplication(application: PeopleApplication) {
 }
 
 async function syncApplicationToGoogleSheet(application: PeopleApplication & { employeeId: string }) {
-  void application;
-  return syncRecruitmentProfilesToSheets("application:auto");
+  return syncRecruitmentProfilesToSheets("application:auto", {
+    role: application.role,
+    employeeId: application.employeeId
+  });
 }
 
 async function getApplicationsCollection(): Promise<Collection<PeopleApplicationDocument>> {
@@ -359,39 +361,44 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
     const message = error instanceof Error ? error.message : "Không đồng bộ được dữ liệu sang Google Sheet.";
     const failedStatus = existing
       ? await collection.findOneAndUpdate(
-          { applicationId: existing.applicationId },
-          {
-            $set: {
-              ...normalized,
-              employeeId: employee.id,
-              status: "accepted",
-              updatedAt: now,
-              resubmittedAt: now,
-              sheetSyncStatus: "failed",
-              sheetSyncError: message
-            }
-          },
-          { upsert: true, returnDocument: "after" }
-        )
+        { applicationId: existing.applicationId },
+        {
+          $set: {
+            ...normalized,
+            employeeId: employee.id,
+            status: "accepted",
+            updatedAt: now,
+            resubmittedAt: now,
+            sheetSyncStatus: "failed",
+            sheetSyncError: message
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      )
       : await collection.findOneAndUpdate(
-          { applicationId: baseDocument.applicationId },
-          {
-            $setOnInsert: { submittedAt: now, consentedAt: now },
-            $set: {
-              ...normalized,
-              applicationId: baseDocument.applicationId,
-              normalizedPhone: normalized.normalizedPhone,
-              employeeId: employee.id,
-              status: "accepted",
-              updatedAt: now,
-              sheetSyncStatus: "failed",
-              sheetSyncError: message
-            }
-          },
-          { upsert: true, returnDocument: "after" }
-        );
+        { applicationId: baseDocument.applicationId },
+        {
+          $setOnInsert: { submittedAt: now, consentedAt: now },
+          $set: {
+            ...normalized,
+            applicationId: baseDocument.applicationId,
+            normalizedPhone: normalized.normalizedPhone,
+            employeeId: employee.id,
+            status: "accepted",
+            updatedAt: now,
+            sheetSyncStatus: "failed",
+            sheetSyncError: message
+          }
+        },
+        { upsert: true, returnDocument: "after" }
+      );
     if (!failedStatus) throw new Error(message);
-    throw new Error(`Hồ sơ đã lưu với mã ${employee.id}, nhưng chưa đẩy được sang Google Sheet: ${message}`);
+    return {
+      application: toApplication(failedStatus),
+      updated: !created,
+      sheetSynced: false,
+      sheetSyncMessage: message
+    };
   }
 
   const persisted = existing
@@ -431,7 +438,12 @@ export async function submitPeopleApplication(input: PeopleApplicationInput) {
       );
 
   if (!persisted) throw new Error("Không lưu được hồ sơ ứng tuyển.");
-  return { application: toApplication(persisted), updated: !created };
+  return {
+    application: toApplication(persisted),
+    updated: !created,
+    sheetSynced: true,
+    sheetSyncMessage: ""
+  };
 }
 
 export async function listPeopleApplications() {

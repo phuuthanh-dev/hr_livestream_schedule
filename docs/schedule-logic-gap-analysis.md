@@ -31,7 +31,7 @@ Website đang là một scheduling engine mới, đơn giản hơn và clean hơ
 - backup host / backup support generation theo candidate pool
 - lock semantics dựa trên dữ liệu confirm ở sheet master
 - xử lý data repair sau resolve
-- session identity chuẩn thống nhất với `Live_Session_Master`
+- session identity chuẩn thống nhất với `Live_Session_Master_Web`
 
 Ngược lại, website đã có một số hướng mới tốt hơn:
 
@@ -77,7 +77,7 @@ Flow chính:
 3. Unpivot dữ liệu host / support từ sheet nguồn
 4. Backfill `format` theo hồ sơ host
 5. Align support trong shift
-6. Resolve conflict vào `Live_Session_Master`
+6. Resolve conflict vào `Live_Session_Master_Web`
 7. Post-process:
    - host daily limit
    - support fairness
@@ -334,7 +334,7 @@ Không nên bê nguyên các phần sau nếu đã chốt website làm master:
 
 - sheet-first schedule generation
 - cast-ready / cast-offer legacy
-- dependency vào `Live_Session_Master` như source vận hành
+- dependency vào `Live_Session_Master_Web` như source vận hành
 - hậu xử lý sửa sheet để vá dữ liệu thay vì sửa model dữ liệu
 
 ## Phương án tiếp theo

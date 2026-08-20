@@ -337,7 +337,7 @@ Các hạng mục chưa thấy tồn tại trong engine hiện tại:
 - chưa có rule xếp theo script, campaign, ngành hàng, category sản phẩm
 - chưa có rule matching skill host với skill support
 - chưa có rule chấm điểm hiệu suất từ báo cáo livestream để quay lại ảnh hưởng xếp lịch tuần sau
-- chưa có rule ưu tiên theo `Portfolio_Master` hoặc `Live_Session_Master`
+- chưa có rule ưu tiên theo `Portfolio_Master` hoặc `Live_Session_Master_Web`
 - chưa có bước approve nhiều tầng trước khi publish
 
 ## 13. Đề xuất mở rộng nếu muốn “xếp lịch theo skill thật”

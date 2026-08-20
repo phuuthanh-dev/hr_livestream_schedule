@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const session = await getDashboardSession();
   if (!session || session.accountType !== "admin") {
     return NextResponse.json(
-      { success: false, message: "Chỉ Admin được đồng bộ lịch sang Live_Session_Master." },
+      { success: false, message: "Chỉ Admin được đồng bộ lịch sang Live_Session_Master_Web." },
       { status: 403 }
     );
   }
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Không sync được Live_Session_Master."
+        message: error instanceof Error ? error.message : "Không sync được Live_Session_Master_Web."
       },
       { status: 400 }
     );
