@@ -164,6 +164,8 @@ export default function AccountPanel({ isAdmin, username, onClose }: AccountPane
         {error ? <p className="accountNotice error" aria-live="polite">{error}</p> : null}
         {message ? <p className="accountNotice success" aria-live="polite">{message}</p> : null}
 
+        {!isAdmin ? <a className="accountProfileShortcut" href="/profile"><span>Hồ sơ cá nhân</span><small>Cập nhật tên, liên hệ và ảnh đại diện</small></a> : null}
+
         <form className="passwordChangeForm" onSubmit={changePassword}>
           <div className="accountSectionHeading">
             <strong>Đổi mật khẩu của tôi</strong>

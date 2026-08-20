@@ -25,6 +25,9 @@ export type ScheduleLocationsPayload = {
 export type SchedulePerson = {
   id: string;
   name: string;
+  aliasName?: string;
+  email?: string;
+  avatarUrl?: string;
   role: EmployeeRole;
   level?: string;
   rating?: string;

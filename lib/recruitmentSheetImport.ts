@@ -446,6 +446,8 @@ function buildHostEmployeeMutation(input: {
       || getColumn(input.row, input.indexMap, "tên gọi khác")
       || input.existing?.name
       || input.employeeId,
+    aliasName: getColumn(input.row, input.indexMap, "tên gọi khác") || input.existing?.aliasName || "",
+    email: getColumn(input.row, input.indexMap, "gmail") || input.existing?.email || "",
     phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
     level: getColumn(input.row, input.indexMap, "đánh giá level") || input.existing?.level || "Thử việc",
     rating: getColumn(input.row, input.indexMap, "rating") || input.existing?.rating || "",
@@ -485,6 +487,8 @@ function buildSupportEmployeeMutation(input: {
     id: input.employeeId,
     role: "support",
     name: getColumn(input.row, input.indexMap, "tên") || input.existing?.name || input.employeeId,
+    aliasName: getColumn(input.row, input.indexMap, "tên gọi khác") || input.existing?.aliasName || "",
+    email: getColumn(input.row, input.indexMap, "gmail") || input.existing?.email || "",
     phone: getColumn(input.row, input.indexMap, "sđt") || input.existing?.phone || "",
     level: getColumn(input.row, input.indexMap, "level") || input.existing?.level || "Cấp 1",
     rating: input.existing?.rating || "D",

@@ -1,6 +1,7 @@
 import type { Collection } from "mongodb";
 import { nextEmployeeIdForRole } from "@/lib/applicationAutomation";
 import { deleteContractImage } from "@/lib/contractCloudinary";
+import { deleteEmployeeAvatar, getEmployeeAvatarUrl, type EmployeeAvatarAsset } from "@/lib/employeeAvatarCloudinary";
 import { resolveEmployeeCompensation } from "@/lib/employeeCompensation";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { normalizeLocationCode } from "@/lib/locationUtils";
@@ -13,6 +14,9 @@ type SchedulePersonDocument = {
   employeeId: string;
   normalizedEmployeeId: string;
   name: string;
+  aliasName?: string;
+  email?: string;
+  avatar?: EmployeeAvatarAsset;
   role: EmployeeRole;
   rating?: string;
   level: string;
@@ -44,6 +48,8 @@ export type SchedulePersonMutation = {
   id: string;
   role: EmployeeRole;
   name?: string;
+  aliasName?: string;
+  email?: string;
   level?: string;
   rating?: string;
   workLocation?: string;
@@ -87,6 +93,12 @@ function normalizePhone(value: unknown) {
   return raw.replace(/\D/g, "");
 }
 
+function normalizeEmail(value: unknown) {
+  const email = normalizeText(value).toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Email không hợp lệ.");
+  return email;
+}
+
 function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
   const compensation = resolveEmployeeCompensation(document.role, {
     rating: document.rating,
@@ -96,6 +108,9 @@ function toSchedulePerson(document: SchedulePersonDocument): SchedulePerson {
   return {
     id: document.employeeId,
     name: document.name || document.employeeId,
+    aliasName: document.aliasName || undefined,
+    email: document.email || undefined,
+    avatarUrl: document.avatar?.publicId ? getEmployeeAvatarUrl(document.avatar) : undefined,
     role: document.role,
     level: compensation.level || undefined,
     rating: compensation.rating || undefined,
@@ -125,6 +140,8 @@ function personFields(input: SchedulePersonMutation) {
   });
   return {
     name: normalizeText(input.name),
+    aliasName: normalizeText(input.aliasName),
+    email: normalizeEmail(input.email),
     rating: normalizeText(compensation.rating),
     level: normalizeText(compensation.level),
     workLocation: input.role === "host" ? normalizeLocationCode(input.workLocation) : "",
@@ -308,6 +325,7 @@ export async function hardDeleteSchedulePerson(role: EmployeeRole, employeeId: s
   const contractImageIds = [contractDocument?.citizenIdFront?.publicId, contractDocument?.citizenIdBack?.publicId]
     .filter((value): value is string => Boolean(value));
   await Promise.all(contractImageIds.map((publicId) => deleteContractImage(publicId).catch(() => undefined)));
+  if (existing.avatar?.publicId) await deleteEmployeeAvatar(existing.avatar.publicId).catch(() => undefined);
 
   return {
     employee: toSchedulePerson(existing),
@@ -393,7 +411,58 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
   );
   if (!updated) throw new Error("Không tìm thấy nhân viên.");
   const person = toSchedulePerson(updated);
-  await syncEmployeeAccountProfile({ person, actorAccountKey });
+  const database = await getMongoDatabase();
+  const recruitmentUpdates: Record<string, unknown> = { updatedAt: now, updatedBy: actorAccountKey };
+  if (input.name !== undefined) recruitmentUpdates.fullName = person.name;
+  if (input.aliasName !== undefined) recruitmentUpdates.aliasName = person.aliasName || "";
+  if (input.phone !== undefined) recruitmentUpdates.phone = person.phone || "";
+  if (input.email !== undefined) recruitmentUpdates.email = person.email || "";
+  await Promise.all([
+    syncEmployeeAccountProfile({ person, actorAccountKey }),
+    database.collection("recruitment_profiles").updateOne(
+      { personKey },
+      { $set: recruitmentUpdates }
+    )
+  ]);
   return person;
+}
+
+export async function saveSchedulePersonAvatar(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  avatar: Omit<EmployeeAvatarAsset, "updatedAt">;
+  actorAccountKey: string;
+}) {
+  const collection = await getRosterCollection();
+  const personKey = buildPersonKey(input.role, input.employeeId);
+  const existing = await collection.findOne({ personKey });
+  if (!existing) throw new Error("Không tìm thấy nhân viên.");
+  const now = new Date();
+  const updated = await collection.findOneAndUpdate(
+    { personKey },
+    { $set: { avatar: { ...input.avatar, updatedAt: now }, updatedAt: now, updatedBy: input.actorAccountKey } },
+    { returnDocument: "after" }
+  );
+  if (!updated) throw new Error("Không lưu được avatar nhân viên.");
+  return { employee: toSchedulePerson(updated), replacedAvatar: existing.avatar };
+}
+
+export async function removeSchedulePersonAvatar(input: {
+  role: EmployeeRole;
+  employeeId: string;
+  actorAccountKey: string;
+}) {
+  const collection = await getRosterCollection();
+  const personKey = buildPersonKey(input.role, input.employeeId);
+  const existing = await collection.findOne({ personKey });
+  if (!existing) throw new Error("Không tìm thấy nhân viên.");
+  const now = new Date();
+  const updated = await collection.findOneAndUpdate(
+    { personKey },
+    { $unset: { avatar: "" }, $set: { updatedAt: now, updatedBy: input.actorAccountKey } },
+    { returnDocument: "after" }
+  );
+  if (!updated) throw new Error("Không xóa được avatar nhân viên.");
+  return { employee: toSchedulePerson(updated), removedAvatar: existing.avatar };
 }
 
