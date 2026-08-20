@@ -77,6 +77,16 @@ type SubmitAvailabilityWeekInput = {
   allowLockedOverwrite?: boolean;
 };
 
+type RemoveAvailabilitySlotInput = {
+  role: EmployeeRole;
+  employeeId: string;
+  weekStartKey: string;
+  dateKey: string;
+  slot: string;
+  actorAccountKey: string;
+  allowLockedOverwrite?: boolean;
+};
+
 type GetAvailabilityAdminDashboardInput = {
   weekStartKey?: string;
   roleFilter?: AvailabilityAdminRoleFilter;
@@ -447,6 +457,62 @@ export async function submitAvailabilityWeek(
         weekStartKey,
         status: existingWeek?.status === "locked" ? "locked" : "submitted",
         submittedAt: now,
+        lockedAt: existingWeek?.lockedAt || null,
+        lockedReason: existingWeek?.lockedReason || "",
+        updatedAt: now,
+        updatedBy: actorAccountKey
+      },
+      $setOnInsert: {
+        personKey
+      }
+    },
+    { upsert: true }
+  );
+
+  return getAvailabilityWeekForPerson(role, employeeId, weekStartKey);
+}
+
+export async function removeAvailabilitySlot(
+  input: RemoveAvailabilitySlotInput
+): Promise<AvailabilityPayload> {
+  const weekStartKey = normalizeWeekStartKey(input.weekStartKey);
+  const role = input.role;
+  const requestedEmployeeId = normalizeText(input.employeeId);
+  const dateKey = normalizeText(input.dateKey);
+  const slot = normalizeText(input.slot);
+  const person = await findActiveSchedulePerson(role, requestedEmployeeId);
+  if (!person) {
+    throw new Error("Không tìm thấy nhân sự hoạt động cho lịch rảnh.");
+  }
+  if (!isValidScheduleDateKey(dateKey) || !getScheduleWeekDateKeys(weekStartKey).includes(dateKey)) {
+    throw new Error("Ngày cần xóa không thuộc tuần đang xem.");
+  }
+  if (!isValidSlot(slot)) {
+    throw new Error("Khung giờ cần xóa không hợp lệ.");
+  }
+
+  const employeeId = person.id;
+  const personKey = buildPersonKey(role, employeeId);
+  const actorAccountKey = normalizeText(input.actorAccountKey) || "system";
+  const { weeks, slots } = await getCollections();
+  const now = new Date();
+
+  const existingWeek = await weeks.findOne({ personKey, weekStartKey });
+  if (existingWeek?.status === "locked" && !input.allowLockedOverwrite) {
+    throw new Error("Tuần này đã bị khóa nên bạn không thể chỉnh lịch rảnh.");
+  }
+
+  await slots.deleteOne({ personKey, weekStartKey, dateKey, slot });
+  await weeks.updateOne(
+    { personKey, weekStartKey },
+    {
+      $set: {
+        role,
+        employeeId,
+        normalizedEmployeeId: normalizeEmployeeId(employeeId),
+        weekStartKey,
+        status: existingWeek?.status || "draft",
+        submittedAt: existingWeek?.submittedAt || null,
         lockedAt: existingWeek?.lockedAt || null,
         lockedReason: existingWeek?.lockedReason || "",
         updatedAt: now,

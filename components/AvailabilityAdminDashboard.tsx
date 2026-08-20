@@ -32,6 +32,13 @@ type AvailabilityAdminDashboardProps = {
 
 type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "location" | "logout" | "refresh" | "users" | "warning";
 type AvailabilityConfirmAction = "refresh_unconfirmed" | "force_pull" | null;
+type AvailabilityDeleteIntent = {
+  role: "host" | "support";
+  employeeId: string;
+  employeeName: string;
+  dateKey: string;
+  slot: string;
+} | null;
 
 const DAY_NAMES = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"];
 
@@ -113,15 +120,69 @@ function coverageTone(count: number, totalPeople: number) {
   return Math.min(4, Math.max(1, Math.ceil((count / Math.max(totalPeople, 1)) * 4)));
 }
 
-function AvailabilityCoverageCodes({ cell }: { cell?: AvailabilityAdminSlotSummary }) {
+function AvailabilityCoverageCodes({
+  cell,
+  peopleByKey,
+  deletingKey,
+  onRemove
+}: {
+  cell?: AvailabilityAdminSlotSummary;
+  peopleByKey: Map<string, AvailabilityAdminPerson>;
+  deletingKey?: string;
+  onRemove?: (input: { role: "host" | "support"; employeeId: string; employeeName: string }) => void;
+}) {
   const hostIds = cell?.hostEmployeeIds || [];
   const supportIds = cell?.supportEmployeeIds || [];
   if (hostIds.length === 0 && supportIds.length === 0) return null;
 
   return (
     <span className="availabilityCoverageCodes">
-      {hostIds.map((employeeId) => <span className="availabilityCoverageCode host" key={`host-${employeeId}`}><b>H</b>{employeeId}</span>)}
-      {supportIds.map((employeeId) => <span className="availabilityCoverageCode support" key={`support-${employeeId}`}><b>S</b>{employeeId}</span>)}
+      {hostIds.map((employeeId) => {
+        const person = peopleByKey.get(`host:${employeeId.toLowerCase()}`);
+        const removeKey = `host:${employeeId}`;
+        return (
+          <span className="availabilityCoverageCode host" key={`host-${employeeId}`}>
+            <b>H</b>
+            <span className="availabilityCoverageCodeText">
+              <strong>{person?.employeeName || employeeId}</strong>
+              <small>{employeeId}</small>
+            </span>
+            {onRemove ? (
+              <button
+                className="availabilityCoverageCodeRemove"
+                disabled={deletingKey === removeKey}
+                onClick={() => onRemove({ role: "host", employeeId, employeeName: person?.employeeName || employeeId })}
+                type="button"
+              >
+                {deletingKey === removeKey ? "..." : "x"}
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
+      {supportIds.map((employeeId) => {
+        const person = peopleByKey.get(`support:${employeeId.toLowerCase()}`);
+        const removeKey = `support:${employeeId}`;
+        return (
+          <span className="availabilityCoverageCode support" key={`support-${employeeId}`}>
+            <b>S</b>
+            <span className="availabilityCoverageCodeText">
+              <strong>{person?.employeeName || employeeId}</strong>
+              <small>{employeeId}</small>
+            </span>
+            {onRemove ? (
+              <button
+                className="availabilityCoverageCodeRemove"
+                disabled={deletingKey === removeKey}
+                onClick={() => onRemove({ role: "support", employeeId, employeeName: person?.employeeName || employeeId })}
+                type="button"
+              >
+                {deletingKey === removeKey ? "..." : "x"}
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -144,6 +205,8 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<AvailabilityConfirmAction>(null);
   const [syncLogExpanded, setSyncLogExpanded] = useState(false);
+  const [deletingAvailabilityKey, setDeletingAvailabilityKey] = useState("");
+  const [deleteIntent, setDeleteIntent] = useState<AvailabilityDeleteIntent>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -221,6 +284,10 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     ? Math.round((summary.submittedPeople / summary.totalPeople) * 100)
     : 0;
   const visibleDenominator = Math.max(summary?.visiblePeople || 0, 1);
+  const peopleByKey = useMemo(
+    () => new Map(people.map((person) => [`${person.role}:${person.employeeId.toLowerCase()}`, person] as const)),
+    [people]
+  );
 
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
@@ -329,6 +396,41 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
+  async function removeAvailabilityFromSlot(input: {
+    role: "host" | "support";
+    employeeId: string;
+    dateKey: string;
+    slot: string;
+  }) {
+    const busyKey = `${input.role}:${input.employeeId}`;
+    setDeletingAvailabilityKey(busyKey);
+    setError("");
+    setScheduleMessage("");
+    try {
+      const response = await fetch("/api/availability", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          role: input.role,
+          employeeId: input.employeeId,
+          weekStartKey,
+          dateKey: input.dateKey,
+          slot: input.slot
+        })
+      });
+      const result = await response.json() as { success?: boolean; message?: string };
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Không xóa được lịch rảnh.");
+      }
+      setScheduleMessage(result.message || `Đã xóa slot ${input.slot} của ${input.employeeId}.`);
+      setReloadKey((current) => current + 1);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "Không xóa được lịch rảnh.");
+    } finally {
+      setDeletingAvailabilityKey("");
+    }
+  }
+
   async function handleConfirmedAction() {
     if (confirmAction === "refresh_unconfirmed") {
       setConfirmAction(null);
@@ -339,6 +441,13 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
       setConfirmAction(null);
       await importAvailabilityFromSheet(true, true);
     }
+  }
+
+  async function handleDeleteAvailabilityConfirmed() {
+    if (!deleteIntent) return;
+    const currentIntent = deleteIntent;
+    setDeleteIntent(null);
+    await removeAvailabilityFromSlot(currentIntent);
   }
 
   const confirmTitle = confirmAction === "refresh_unconfirmed"
@@ -663,7 +772,18 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                         >
                           <strong>{count}</strong>
                           {count > 0 ? <span className="availabilityCoverageBreakdown">Host {cell?.hostAvailable || 0} · Support {cell?.supportAvailable || 0}</span> : null}
-                          <AvailabilityCoverageCodes cell={cell} />
+                          <AvailabilityCoverageCodes
+                            cell={cell}
+                            deletingKey={deletingAvailabilityKey}
+                            onRemove={({ role, employeeId, employeeName }) => setDeleteIntent({
+                              role,
+                              employeeId,
+                              employeeName,
+                              dateKey: day.dateKey,
+                              slot
+                            })}
+                            peopleByKey={peopleByKey}
+                          />
                         </div>
                       );
                     })}
@@ -686,7 +806,18 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
                           <span>{slot}</span>
                           <i><b style={{ width: `${Math.min(100, (count / visibleDenominator) * 100)}%` }} /></i>
                           <strong>{count}</strong>
-                          <AvailabilityCoverageCodes cell={cell} />
+                          <AvailabilityCoverageCodes
+                            cell={cell}
+                            deletingKey={deletingAvailabilityKey}
+                            onRemove={({ role, employeeId, employeeName }) => setDeleteIntent({
+                              role,
+                              employeeId,
+                              employeeName,
+                              dateKey: day.dateKey,
+                              slot
+                            })}
+                            peopleByKey={peopleByKey}
+                          />
                         </div>
                       );
                     })}
@@ -738,6 +869,34 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <AlertDialog.Action asChild>
                 <button className="danger" onClick={() => void handleConfirmedAction()} type="button">
                   {confirmActionLabel}
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <AlertDialog.Root open={Boolean(deleteIntent)} onOpenChange={(open) => !open && setDeleteIntent(null)}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="availabilityConfirmOverlay" />
+          <AlertDialog.Content className="availabilityConfirmDialog">
+            <AlertDialog.Title>Xóa slot lịch rảnh</AlertDialog.Title>
+            <AlertDialog.Description>
+              Xóa <strong>{deleteIntent?.employeeName}</strong> · <strong>{deleteIntent?.employeeId}</strong> khỏi slot{" "}
+              <strong>{deleteIntent?.slot}</strong> ngày <strong>{deleteIntent ? formatShortDate(deleteIntent.dateKey) : ""}</strong>.
+            </AlertDialog.Description>
+            <p>Hành động này sẽ lưu vào MongoDB và đẩy xuống sheet ngay sau khi xác nhận.</p>
+            <div className="availabilityConfirmActions">
+              <AlertDialog.Cancel asChild>
+                <button type="button">Huỷ</button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  className="danger"
+                  disabled={Boolean(deletingAvailabilityKey)}
+                  onClick={() => void handleDeleteAvailabilityConfirmed()}
+                  type="button"
+                >
+                  {deletingAvailabilityKey ? "Đang xóa..." : "Xóa slot"}
                 </button>
               </AlertDialog.Action>
             </div>

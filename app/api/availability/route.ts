@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDashboardSession } from "@/lib/auth";
 import { syncAvailabilityWeekToCollectSheets } from "@/lib/availabilitySheetImport";
-import { getAvailabilityWeekForPerson, hasEditableAvailabilitySlots, saveAvailabilityWeek } from "@/lib/availabilityStore";
+import { getAvailabilityWeekForPerson, hasEditableAvailabilitySlots, removeAvailabilitySlot, saveAvailabilityWeek } from "@/lib/availabilityStore";
 import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type { AvailabilitySlot, EmployeeRole } from "@/lib/types";
 
@@ -121,6 +121,57 @@ export async function PUT(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { success: false, message: error instanceof Error ? error.message : "Không lưu được lịch rảnh." },
+      { status: 400 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await getDashboardSession();
+  if (!session) {
+    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = (await request.json()) as {
+      role?: EmployeeRole;
+      employeeId?: string;
+      weekStartKey?: string;
+      dateKey?: string;
+      slot?: string;
+    };
+
+    const target = resolveTarget(session, body.role, body.employeeId);
+    const weekStartKey = body.weekStartKey || getScheduleWeekStartKey();
+    const payload = await removeAvailabilitySlot({
+      role: target.role,
+      employeeId: target.employeeId,
+      weekStartKey,
+      dateKey: body.dateKey || "",
+      slot: body.slot || "",
+      actorAccountKey: session.accountKey,
+      allowLockedOverwrite: session.accountType === "admin"
+    });
+    let syncWarning = "";
+    try {
+      await syncAvailabilityWeekToCollectSheets(weekStartKey, session.accountKey);
+    } catch (error) {
+      syncWarning = error instanceof Error ? ` Tuy nhiên chưa đẩy được sang Google Sheet: ${error.message}` : " Tuy nhiên chưa đẩy được sang Google Sheet.";
+    }
+
+    return NextResponse.json({
+      ...payload,
+      canEdit: hasEditableAvailabilitySlots(weekStartKey) &&
+        (payload.target?.role !== "host" || Boolean(payload.target.workLocation)) &&
+        payload.target?.workLocationActive !== false &&
+        (session.accountType === "admin" || payload.week?.status !== "locked"),
+      message: session.accountType === "admin"
+        ? `Đã xóa slot lịch rảnh của nhân sự.${syncWarning}`
+        : `Đã xóa slot lịch rảnh.${syncWarning}`
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, message: error instanceof Error ? error.message : "Không xóa được lịch rảnh." },
       { status: 400 }
     );
   }
