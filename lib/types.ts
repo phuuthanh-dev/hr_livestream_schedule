@@ -520,6 +520,8 @@ export type PayrollSheetExportRecord = {
   exportId: string;
   weekStartKey: string;
   weekEndKey: string;
+  fromDate?: string;
+  toDate?: string;
   spreadsheetId: string;
   tabTitle: string;
   summaryTabTitle?: string;

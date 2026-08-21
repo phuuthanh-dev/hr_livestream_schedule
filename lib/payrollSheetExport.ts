@@ -8,7 +8,6 @@ import {
 } from "@/lib/googleSheets";
 import { getMongoDatabase } from "@/lib/mongodb";
 import type {
-  PayrollDashboardPayload,
   PayrollEntry,
   PayrollException,
   PayrollPersonHours,
@@ -329,9 +328,34 @@ function summarizeEntries(entries: PayrollEntry[]): PayrollSheetExportTotals {
   );
 }
 
-function buildReconciliation(dashboard: PayrollDashboardPayload) {
-  const entries = dashboard.entries || [];
-  const exceptions = dashboard.exceptions || [];
+function buildPersonHours(entries: PayrollEntry[]): PayrollPersonHours[] {
+  const grouped = new Map<string, PayrollPersonHours>();
+  entries.forEach((entry) => {
+    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
+    const current = grouped.get(key) || {
+      employeeId: entry.employeeId,
+      employeeName: entry.employeeName,
+      role: entry.role,
+      grade: entry.grade,
+      sessionCount: 0,
+      scheduledHours: 0,
+      netPay: 0
+    };
+    current.employeeName = current.employeeName || entry.employeeName;
+    current.grade = current.grade || entry.grade;
+    current.sessionCount += entry.sessionIds.length;
+    current.scheduledHours += entry.scheduledHours;
+    current.netPay += entry.netPay;
+    grouped.set(key, current);
+  });
+  return Array.from(grouped.values()).sort((left, right) =>
+    left.role.localeCompare(right.role)
+    || left.employeeName.localeCompare(right.employeeName, "vi")
+    || left.employeeId.localeCompare(right.employeeId)
+  );
+}
+
+function buildReconciliation(entries: PayrollEntry[], exceptions: PayrollException[], periodStatus?: "draft" | "locked") {
   const exceptionCounts: Record<string, number> = {};
   exceptions.forEach((exception) => {
     exceptionCounts[exception.type] = (exceptionCounts[exception.type] || 0) + 1;
@@ -342,7 +366,7 @@ function buildReconciliation(dashboard: PayrollDashboardPayload) {
   } else {
     notes.push(`Đối chiếu chấm công ↔ lương: ${exceptions.length} ngoại lệ cần xem trước khi chốt lương.`);
   }
-  if (dashboard.periodStatus === "locked") {
+  if (periodStatus === "locked") {
     notes.push("Tuần lương đã khóa — số liệu xuất ra là bản chốt.");
   }
   return {
@@ -387,14 +411,16 @@ function compareWritten(headers: readonly string[], expected: SheetGridRow[], ac
 async function getExportCollection() {
   const database = await getMongoDatabase();
   const collection = database.collection<PayrollSheetExportRecord & { _id?: unknown }>("payroll_sheet_exports");
-  await collection.createIndex({ weekStartKey: 1, exportedAt: -1 }).catch(() => undefined);
+  await collection.createIndex({ weekStartKey: 1, weekEndKey: 1, exportedAt: -1 }).catch(() => undefined);
   return collection;
 }
 
-export async function getLastPayrollSheetExport(weekStartKey: string) {
+export async function getLastPayrollSheetExport(weekStartKey: string, weekEndKey?: string) {
   const collection = await getExportCollection();
+  const filter: { weekStartKey: string; weekEndKey?: string; dryRun: boolean } = { weekStartKey, dryRun: false };
+  if (weekEndKey) filter.weekEndKey = weekEndKey;
   const document = await collection.findOne(
-    { weekStartKey, dryRun: false },
+    filter,
     { sort: { exportedAt: -1 } }
   );
   if (!document) return null;
@@ -424,16 +450,17 @@ function normalizeExistingRows(rows: string[][], existingHeaders: string[], cano
     }) as SheetGridRow);
 }
 
-function isDetailRowInsideWeek(row: SheetGridRow, weekStartKey: string, weekEndKey: string) {
+function isDetailRowInsideRange(row: SheetGridRow, fromDate: string, toDate: string) {
   const storedWeekStart = parseDateDisplayToKey(row[2]);
-  if (storedWeekStart) return storedWeekStart === weekStartKey;
   const dateKey = parseDateDisplayToKey(row[1]);
-  return Boolean(dateKey && dateKey >= weekStartKey && dateKey <= weekEndKey);
+  if (dateKey) return dateKey >= fromDate && dateKey <= toDate;
+  return Boolean(storedWeekStart && storedWeekStart >= fromDate && storedWeekStart <= toDate);
 }
 
-function isSummaryRowInsideWeek(row: SheetGridRow, weekStartKey: string) {
+function isSummaryRowInsideRange(row: SheetGridRow, fromDate: string, toDate: string) {
   const storedWeekStart = parseDateDisplayToKey(row[0]);
-  return storedWeekStart === weekStartKey;
+  const storedWeekEnd = parseDateDisplayToKey(row[1]);
+  return storedWeekStart === fromDate && storedWeekEnd === toDate;
 }
 
 function compareDetailRows(left: SheetGridRow, right: SheetGridRow) {
@@ -590,7 +617,8 @@ export async function exportPayrollWeekToSheet(
   const entries = dashboard.entries;
   const exceptions = dashboard.exceptions || [];
   const personHours = dashboard.personHours || [];
-  const reconciliation = buildReconciliation(dashboard);
+  const periodEndKey = dashboard.weekEndKey || weekStartKey;
+  const reconciliation = buildReconciliation(entries, exceptions, dashboard.periodStatus);
   const totals = summarizeEntries(entries);
   const detailSheetName = getGooglePayrollSheetName();
   const summarySheetName = getGooglePayrollSummarySheetName();
@@ -598,14 +626,16 @@ export async function exportPayrollWeekToSheet(
   const exportedAtIso = exportedAt.toISOString();
 
   const detailRows = buildPayrollSheetRows(entries, exceptions);
-  const summaryRows = buildPayrollSummaryRows(personHours, entries, weekStartKey, dashboard.weekEndKey || weekStartKey, exportedAtIso);
+  const summaryRows = buildPayrollSummaryRows(personHours, entries, weekStartKey, periodEndKey, exportedAtIso);
 
   if (options?.dryRun) {
     return {
       success: true,
       exportId: randomUUID(),
       weekStartKey,
-      weekEndKey: dashboard.weekEndKey || weekStartKey,
+      weekEndKey: periodEndKey,
+      fromDate: weekStartKey,
+      toDate: periodEndKey,
       spreadsheetId: getGoogleHrMasterSpreadsheetId(),
       tabTitle: detailSheetName,
       summaryTabTitle: summarySheetName,
@@ -634,7 +664,7 @@ export async function exportPayrollWeekToSheet(
     headers: PAYROLL_SHEET_HEADERS,
     aliases: DETAIL_HEADER_ALIASES,
     replacementRows: detailRows,
-    shouldReplaceRow: (row) => isDetailRowInsideWeek(row, weekStartKey, dashboard.weekEndKey || weekStartKey),
+    shouldReplaceRow: (row) => isDetailRowInsideRange(row, weekStartKey, periodEndKey),
     compareRows: compareDetailRows,
     freezeColumns: 5,
     dateColumnIndexes: [1, 2, 3]
@@ -647,7 +677,7 @@ export async function exportPayrollWeekToSheet(
     headers: PAYROLL_SUMMARY_HEADERS,
     aliases: SUMMARY_HEADER_ALIASES,
     replacementRows: summaryRows,
-    shouldReplaceRow: (row) => isSummaryRowInsideWeek(row, weekStartKey),
+    shouldReplaceRow: (row) => isSummaryRowInsideRange(row, weekStartKey, periodEndKey),
     compareRows: compareSummaryRows,
     freezeColumns: 4,
     dateColumnIndexes: [0, 1]
@@ -662,7 +692,145 @@ export async function exportPayrollWeekToSheet(
   const record: PayrollSheetExportRecord = {
     exportId: randomUUID(),
     weekStartKey,
-    weekEndKey: dashboard.weekEndKey || weekStartKey,
+    weekEndKey: periodEndKey,
+    fromDate: weekStartKey,
+    toDate: periodEndKey,
+    spreadsheetId,
+    tabTitle: detailSheetName,
+    summaryTabTitle: summarySheetName,
+    sheetUrl: detailResult.sheetUrl,
+    summarySheetUrl: summaryResult.sheetUrl,
+    exportedAt: exportedAtIso,
+    exportedBy: actorAccountKey,
+    rowCount: detailRows.length,
+    summaryRowCount: summaryRows.length,
+    totals,
+    exceptionCounts: reconciliation.exceptionCounts,
+    verification,
+    dryRun: false
+  };
+  const collection = await getExportCollection();
+  await collection.insertOne({ ...record });
+
+  return {
+    ...record,
+    success: true,
+    message: verification.ok
+      ? `Đã đồng bộ ${detailRows.length} dòng vào ${detailSheetName} và ${summaryRows.length} dòng vào ${summarySheetName}; read-back khớp 100%.`
+      : `Đã đồng bộ ${detailRows.length} dòng vào ${detailSheetName} và ${summaryRows.length} dòng vào ${summarySheetName}, nhưng read-back lệch ${verification.mismatches} ô — cần kiểm tra.`,
+    reconciliation
+  };
+}
+
+export async function exportPayrollRangeToSheet(
+  fromDate: string,
+  toDate: string,
+  actorAccountKey: string,
+  options?: { dryRun?: boolean }
+): Promise<PayrollSheetExportResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    throw new Error("Khoảng ngày export không hợp lệ.");
+  }
+  if (fromDate > toDate) {
+    throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
+  }
+
+  const database = await getMongoDatabase();
+  const [entryDocuments, exceptionDocuments] = await Promise.all([
+    database
+      .collection<PayrollEntry & { _id?: unknown }>("payroll_entries")
+      .find({ dateKey: { $gte: fromDate, $lte: toDate } })
+      .sort({ dateKey: 1, employeeName: 1, role: 1 })
+      .toArray(),
+    database
+      .collection<(PayrollException & { weekStartKey?: string; generationId?: string; _id?: unknown })>("payroll_exceptions")
+      .find({ dateKey: { $gte: fromDate, $lte: toDate } })
+      .sort({ dateKey: 1, type: 1 })
+      .toArray()
+  ]);
+
+  const entries = entryDocuments.map(({ _id: _ignored, ...entry }) => entry);
+  if (entries.length === 0) {
+    throw new Error("Khoảng ngày này chưa có dữ liệu payroll — hãy tính lương cho các tuần liên quan trước khi đồng bộ.");
+  }
+  const exceptions = exceptionDocuments.map(({ _id: _ignored, weekStartKey: _weekStartKey, generationId: _generationId, ...exception }) => exception);
+  const personHours = buildPersonHours(entries);
+  const reconciliation = buildReconciliation(entries, exceptions);
+  const totals = summarizeEntries(entries);
+  const detailSheetName = getGooglePayrollSheetName();
+  const summarySheetName = getGooglePayrollSummarySheetName();
+  const exportedAt = new Date();
+  const exportedAtIso = exportedAt.toISOString();
+  const detailRows = buildPayrollSheetRows(entries, exceptions);
+  const summaryRows = buildPayrollSummaryRows(personHours, entries, fromDate, toDate, exportedAtIso);
+
+  if (options?.dryRun) {
+    return {
+      success: true,
+      exportId: randomUUID(),
+      weekStartKey: fromDate,
+      weekEndKey: toDate,
+      fromDate,
+      toDate,
+      spreadsheetId: getGoogleHrMasterSpreadsheetId(),
+      tabTitle: detailSheetName,
+      summaryTabTitle: summarySheetName,
+      sheetUrl: "",
+      summarySheetUrl: "",
+      exportedAt: exportedAtIso,
+      exportedBy: actorAccountKey,
+      rowCount: detailRows.length,
+      summaryRowCount: summaryRows.length,
+      totals,
+      exceptionCounts: reconciliation.exceptionCounts,
+      verification: { checked: 0, mismatches: 0, ok: true },
+      dryRun: true,
+      message: `Dry-run: đã dựng ${detailRows.length} dòng chi tiết cho ${detailSheetName} và ${summaryRows.length} dòng tổng hợp cho ${summarySheetName}.`,
+      reconciliation
+    };
+  }
+
+  const spreadsheetId = getGoogleHrMasterSpreadsheetId();
+  const sheets = createGoogleSheetsClient();
+
+  const detailResult = await writeFixedSheet({
+    sheets,
+    spreadsheetId,
+    sheetName: detailSheetName,
+    headers: PAYROLL_SHEET_HEADERS,
+    aliases: DETAIL_HEADER_ALIASES,
+    replacementRows: detailRows,
+    shouldReplaceRow: (row) => isDetailRowInsideRange(row, fromDate, toDate),
+    compareRows: compareDetailRows,
+    freezeColumns: 5,
+    dateColumnIndexes: [1, 2, 3]
+  });
+
+  const summaryResult = await writeFixedSheet({
+    sheets,
+    spreadsheetId,
+    sheetName: summarySheetName,
+    headers: PAYROLL_SUMMARY_HEADERS,
+    aliases: SUMMARY_HEADER_ALIASES,
+    replacementRows: summaryRows,
+    shouldReplaceRow: (row) => isSummaryRowInsideRange(row, fromDate, toDate),
+    compareRows: compareSummaryRows,
+    freezeColumns: 4,
+    dateColumnIndexes: [0, 1]
+  });
+
+  const verification = {
+    checked: detailResult.verification.checked + summaryResult.verification.checked,
+    mismatches: detailResult.verification.mismatches + summaryResult.verification.mismatches,
+    ok: detailResult.verification.ok && summaryResult.verification.ok
+  };
+
+  const record: PayrollSheetExportRecord = {
+    exportId: randomUUID(),
+    weekStartKey: fromDate,
+    weekEndKey: toDate,
+    fromDate,
+    toDate,
     spreadsheetId,
     tabTitle: detailSheetName,
     summaryTabTitle: summarySheetName,

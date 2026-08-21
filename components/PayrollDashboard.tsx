@@ -106,7 +106,12 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [personHoursOpen, setPersonHoursOpen] = useState(false);
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [payslipRangeOpen, setPayslipRangeOpen] = useState(false);
+  const [sheetRangeOpen, setSheetRangeOpen] = useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
+  const [sheetFromDate, setSheetFromDate] = useState(initialWeekStartKey || currentWeekStart());
+  const [sheetToDate, setSheetToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
+  const [sheetFromDisplay, setSheetFromDisplay] = useState(formatDate(initialWeekStartKey || currentWeekStart()));
+  const [sheetToDisplay, setSheetToDisplay] = useState(formatDate(addDays(initialWeekStartKey || currentWeekStart(), 6)));
   const [payslipFromDate, setPayslipFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [payslipToDate, setPayslipToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
   const [payslipFromDisplay, setPayslipFromDisplay] = useState(formatDate(initialWeekStartKey || currentWeekStart()));
@@ -139,6 +144,10 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
 
   useEffect(() => {
     const nextToDate = addDays(weekStartKey, 6);
+    setSheetFromDate(weekStartKey);
+    setSheetToDate(nextToDate);
+    setSheetFromDisplay(formatDate(weekStartKey));
+    setSheetToDisplay(formatDate(nextToDate));
     setPayslipFromDate(weekStartKey);
     setPayslipToDate(nextToDate);
     setPayslipFromDisplay(formatDate(weekStartKey));
@@ -199,15 +208,28 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setError("");
     setNotice("");
     try {
+      const fromDate = parseDisplayDate(sheetFromDisplay);
+      const toDate = parseDisplayDate(sheetToDisplay);
+      if (!fromDate || !toDate) {
+        throw new Error("Hãy nhập khoảng ngày sync sheet theo định dạng dd/mm/yyyy.");
+      }
+      if (fromDate > toDate) {
+        throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
+      }
+      setSheetFromDate(fromDate);
+      setSheetToDate(toDate);
+      setSheetFromDisplay(formatDate(fromDate));
+      setSheetToDisplay(formatDate(toDate));
       const response = await fetch("/api/payroll/export-sheet", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ weekStartKey })
+        body: JSON.stringify({ weekStartKey, fromDate, toDate })
       });
       const result = await response.json() as PayrollSheetExportRecord & { success: boolean; message?: string; sheetUrl?: string; summarySheetUrl?: string };
       if (!response.ok || !result.success) throw new Error(result.message || "Không đồng bộ được bảng lương sang Google Sheet.");
       const summarySuffix = result.summarySheetUrl ? ` · Summary: ${result.summarySheetUrl}` : "";
       setNotice(`${result.message || "Đã đồng bộ bảng lương."}${result.sheetUrl ? ` Detail: ${result.sheetUrl}` : ""}${summarySuffix}`);
+      setSheetRangeOpen(false);
       await loadDashboard();
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "Không đồng bộ được bảng lương sang Google Sheet.");
@@ -391,10 +413,63 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
           <button className={`payrollActionButton subtle ${payslipRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setPayslipRangeOpen((current) => !current)} type="button"><Icon name="download" />Tạo phiếu lương</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
-          <button className="payrollActionButton" disabled={entries.length === 0 || Boolean(working)} onClick={() => void exportToSheet()} type="button"><Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Sync Payroll Sheets"}</button>
+          <button className={`payrollActionButton subtle ${sheetRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setSheetRangeOpen((current) => !current)} type="button"><Icon name="upload" />Sync Payroll Sheets</button>
           <button className="payrollIconAction" disabled={isLocked || entries.length === 0 || Boolean(working)} onClick={() => setLockConfirmOpen(true)} title="Khóa bảng lương" type="button"><Icon name="lock" /></button>
         </div>
       </section>
+
+      {sheetRangeOpen ? (
+        <section className="payrollRangePanel">
+          <div className="payrollPanelTitle">
+            <div>
+              <strong>Đồng bộ payroll ra Google Sheet theo khoảng ngày</strong>
+              <span>Chọn khoảng ngày cần ghi vào <code>Payroll_Sheet</code> và <code>Payroll_Summary_Raw</code>. Hệ thống sẽ replace đúng phạm vi ngày này trên sheet.</span>
+            </div>
+          </div>
+          <div className="payrollRangeFields">
+            <label>
+              <span>Từ ngày</span>
+              <input
+                inputMode="numeric"
+                onBlur={() => {
+                  const parsed = parseDisplayDate(sheetFromDisplay);
+                  if (parsed) {
+                    setSheetFromDate(parsed);
+                    setSheetFromDisplay(formatDate(parsed));
+                  }
+                }}
+                onChange={(event) => setSheetFromDisplay(cleanDisplayDateInput(event.target.value))}
+                placeholder="dd/mm/yyyy"
+                type="text"
+                value={sheetFromDisplay}
+              />
+            </label>
+            <label>
+              <span>Đến ngày</span>
+              <input
+                inputMode="numeric"
+                onBlur={() => {
+                  const parsed = parseDisplayDate(sheetToDisplay);
+                  if (parsed) {
+                    setSheetToDate(parsed);
+                    setSheetToDisplay(formatDate(parsed));
+                  }
+                }}
+                onChange={(event) => setSheetToDisplay(cleanDisplayDateInput(event.target.value))}
+                placeholder="dd/mm/yyyy"
+                type="text"
+                value={sheetToDisplay}
+              />
+            </label>
+            <div className="payrollRangeActions">
+              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { const nextToDate = addDays(weekStartKey, 6); setSheetFromDate(weekStartKey); setSheetToDate(nextToDate); setSheetFromDisplay(formatDate(weekStartKey)); setSheetToDisplay(formatDate(nextToDate)); setSheetRangeOpen(false); }} type="button">Đóng</button>
+              <button className="payrollActionButton" disabled={Boolean(working)} onClick={() => void exportToSheet()} type="button">
+                <Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Xác nhận sync sheet"}
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {payslipRangeOpen ? (
         <section className="payrollRangePanel">
