@@ -59,27 +59,6 @@ function formatDate(key?: string) {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(dateFromKey(key));
 }
 
-function parseDisplayDate(value: string) {
-  const match = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(value.trim());
-  if (!match) return "";
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day, 12));
-  if (
-    date.getUTCFullYear() !== year
-    || date.getUTCMonth() !== month - 1
-    || date.getUTCDate() !== day
-  ) {
-    return "";
-  }
-  return keyFromDate(date);
-}
-
-function cleanDisplayDateInput(value: string) {
-  return value.replace(/[^\d/.-]/g, "").slice(0, 10);
-}
-
 function formatMoney(value = 0) {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(value);
 }
@@ -110,12 +89,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
   const [sheetFromDate, setSheetFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [sheetToDate, setSheetToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
-  const [sheetFromDisplay, setSheetFromDisplay] = useState(formatDate(initialWeekStartKey || currentWeekStart()));
-  const [sheetToDisplay, setSheetToDisplay] = useState(formatDate(addDays(initialWeekStartKey || currentWeekStart(), 6)));
   const [payslipFromDate, setPayslipFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [payslipToDate, setPayslipToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
-  const [payslipFromDisplay, setPayslipFromDisplay] = useState(formatDate(initialWeekStartKey || currentWeekStart()));
-  const [payslipToDisplay, setPayslipToDisplay] = useState(formatDate(addDays(initialWeekStartKey || currentWeekStart(), 6)));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadDashboard(signal?: AbortSignal) {
@@ -146,12 +121,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     const nextToDate = addDays(weekStartKey, 6);
     setSheetFromDate(weekStartKey);
     setSheetToDate(nextToDate);
-    setSheetFromDisplay(formatDate(weekStartKey));
-    setSheetToDisplay(formatDate(nextToDate));
     setPayslipFromDate(weekStartKey);
     setPayslipToDate(nextToDate);
-    setPayslipFromDisplay(formatDate(weekStartKey));
-    setPayslipToDisplay(formatDate(nextToDate));
   }, [weekStartKey]);
 
   async function uploadReport() {
@@ -208,18 +179,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setError("");
     setNotice("");
     try {
-      const fromDate = parseDisplayDate(sheetFromDisplay);
-      const toDate = parseDisplayDate(sheetToDisplay);
-      if (!fromDate || !toDate) {
-        throw new Error("Hãy nhập khoảng ngày sync sheet theo định dạng dd/mm/yyyy.");
-      }
+      const fromDate = sheetFromDate;
+      const toDate = sheetToDate;
       if (fromDate > toDate) {
         throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
       }
-      setSheetFromDate(fromDate);
-      setSheetToDate(toDate);
-      setSheetFromDisplay(formatDate(fromDate));
-      setSheetToDisplay(formatDate(toDate));
       const response = await fetch("/api/payroll/export-sheet", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -243,18 +207,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setError("");
     setNotice("");
     try {
-      const fromDate = parseDisplayDate(payslipFromDisplay);
-      const toDate = parseDisplayDate(payslipToDisplay);
-      if (!fromDate || !toDate) {
-        throw new Error("Hãy nhập ngày theo định dạng dd/mm/yyyy.");
-      }
+      const fromDate = payslipFromDate;
+      const toDate = payslipToDate;
       if (fromDate > toDate) {
         throw new Error("Ngày bắt đầu phải nhỏ hơn hoặc bằng ngày kết thúc.");
       }
-      setPayslipFromDate(fromDate);
-      setPayslipToDate(toDate);
-      setPayslipFromDisplay(formatDate(fromDate));
-      setPayslipToDisplay(formatDate(toDate));
       const response = await fetch("/api/payroll/generate-payslips", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -430,39 +387,21 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
             <label>
               <span>Từ ngày</span>
               <input
-                inputMode="numeric"
-                onBlur={() => {
-                  const parsed = parseDisplayDate(sheetFromDisplay);
-                  if (parsed) {
-                    setSheetFromDate(parsed);
-                    setSheetFromDisplay(formatDate(parsed));
-                  }
-                }}
-                onChange={(event) => setSheetFromDisplay(cleanDisplayDateInput(event.target.value))}
-                placeholder="dd/mm/yyyy"
-                type="text"
-                value={sheetFromDisplay}
+                onChange={(event) => setSheetFromDate(event.target.value)}
+                type="date"
+                value={sheetFromDate}
               />
             </label>
             <label>
               <span>Đến ngày</span>
               <input
-                inputMode="numeric"
-                onBlur={() => {
-                  const parsed = parseDisplayDate(sheetToDisplay);
-                  if (parsed) {
-                    setSheetToDate(parsed);
-                    setSheetToDisplay(formatDate(parsed));
-                  }
-                }}
-                onChange={(event) => setSheetToDisplay(cleanDisplayDateInput(event.target.value))}
-                placeholder="dd/mm/yyyy"
-                type="text"
-                value={sheetToDisplay}
+                onChange={(event) => setSheetToDate(event.target.value)}
+                type="date"
+                value={sheetToDate}
               />
             </label>
             <div className="payrollRangeActions">
-              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { const nextToDate = addDays(weekStartKey, 6); setSheetFromDate(weekStartKey); setSheetToDate(nextToDate); setSheetFromDisplay(formatDate(weekStartKey)); setSheetToDisplay(formatDate(nextToDate)); setSheetRangeOpen(false); }} type="button">Đóng</button>
+              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { const nextToDate = addDays(weekStartKey, 6); setSheetFromDate(weekStartKey); setSheetToDate(nextToDate); setSheetRangeOpen(false); }} type="button">Đóng</button>
               <button className="payrollActionButton" disabled={Boolean(working)} onClick={() => void exportToSheet()} type="button">
                 <Icon name="upload" />{working === "export-sheet" ? "Đang đồng bộ..." : "Xác nhận sync sheet"}
               </button>
@@ -483,39 +422,21 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
             <label>
               <span>Từ ngày</span>
               <input
-                inputMode="numeric"
-                onBlur={() => {
-                  const parsed = parseDisplayDate(payslipFromDisplay);
-                  if (parsed) {
-                    setPayslipFromDate(parsed);
-                    setPayslipFromDisplay(formatDate(parsed));
-                  }
-                }}
-                onChange={(event) => setPayslipFromDisplay(cleanDisplayDateInput(event.target.value))}
-                placeholder="dd/mm/yyyy"
-                type="text"
-                value={payslipFromDisplay}
+                onChange={(event) => setPayslipFromDate(event.target.value)}
+                type="date"
+                value={payslipFromDate}
               />
             </label>
             <label>
               <span>Đến ngày</span>
               <input
-                inputMode="numeric"
-                onBlur={() => {
-                  const parsed = parseDisplayDate(payslipToDisplay);
-                  if (parsed) {
-                    setPayslipToDate(parsed);
-                    setPayslipToDisplay(formatDate(parsed));
-                  }
-                }}
-                onChange={(event) => setPayslipToDisplay(cleanDisplayDateInput(event.target.value))}
-                placeholder="dd/mm/yyyy"
-                type="text"
-                value={payslipToDisplay}
+                onChange={(event) => setPayslipToDate(event.target.value)}
+                type="date"
+                value={payslipToDate}
               />
             </label>
             <div className="payrollRangeActions">
-              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { const nextToDate = addDays(weekStartKey, 6); setPayslipFromDate(weekStartKey); setPayslipToDate(nextToDate); setPayslipFromDisplay(formatDate(weekStartKey)); setPayslipToDisplay(formatDate(nextToDate)); setPayslipRangeOpen(false); }} type="button">Đóng</button>
+              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => { const nextToDate = addDays(weekStartKey, 6); setPayslipFromDate(weekStartKey); setPayslipToDate(nextToDate); setPayslipRangeOpen(false); }} type="button">Đóng</button>
               <button className="payrollActionButton" disabled={Boolean(working)} onClick={() => void generatePayslips()} type="button">
                 <Icon name="download" />{working === "payslips" ? "Đang tạo phiếu..." : "Xác nhận tạo phiếu"}
               </button>
