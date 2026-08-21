@@ -32,9 +32,10 @@ export function buildPayrollPersonHours(entries: PayrollEntry[], taxRate: number
   });
 
   const result = Array.from(grouped.values()).map((person) => {
-    const effectiveTax = person.role === "host" ? Math.round(person.grossPay * taxRate) : 0;
+    const taxablePay = person.basePay + person.adjustments;
+    const effectiveTax = person.role === "host" ? Math.round(taxablePay * taxRate) : 0;
     person.taxAmount = effectiveTax;
-    person.netPay = person.grossPay - effectiveTax;
+    person.netPay = taxablePay - effectiveTax;
     return person;
   });
 
@@ -43,4 +44,3 @@ export function buildPayrollPersonHours(entries: PayrollEntry[], taxRate: number
     || left.employeeName.localeCompare(right.employeeName, "vi")
   );
 }
-
