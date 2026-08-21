@@ -1333,24 +1333,26 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 ) : null}
                 {peopleError || assignmentError ? <p className="assignmentError">{assignmentError || peopleError}</p> : null}
                 <p className="assignmentHint">Tên, mã, kênh live, địa điểm, trạng thái và cảnh báo được đồng bộ tự động.</p>
-                <div className="assignmentQuickActions">
-                  <button
-                    className="assignmentUtilityButton"
-                    disabled={Boolean(assignmentBusy) || peopleLoading}
-                    onClick={() => void rerankSelectedSession("host")}
-                    type="button"
-                  >
-                    {assignmentBusy === "rerank-host" ? "Đang xếp lại Host..." : "Xếp lại Host"}
-                  </button>
-                  <button
-                    className="assignmentUtilityButton"
-                    disabled={Boolean(assignmentBusy) || peopleLoading || selectedLocationMode === "home"}
-                    onClick={() => void rerankSelectedSession("support")}
-                    type="button"
-                  >
-                    {assignmentBusy === "rerank-support" ? "Đang xếp lại Support..." : "Xếp lại Support"}
-                  </button>
-                </div>
+                {!selectedSessionIsPast ? (
+                  <div className="assignmentQuickActions">
+                    <button
+                      className="assignmentUtilityButton"
+                      disabled={Boolean(assignmentBusy) || peopleLoading}
+                      onClick={() => void rerankSelectedSession("host")}
+                      type="button"
+                    >
+                      {assignmentBusy === "rerank-host" ? "Đang xếp lại Host..." : "Xếp lại Host"}
+                    </button>
+                    <button
+                      className="assignmentUtilityButton"
+                      disabled={Boolean(assignmentBusy) || peopleLoading || selectedLocationMode === "home"}
+                      onClick={() => void rerankSelectedSession("support")}
+                      type="button"
+                    >
+                      {assignmentBusy === "rerank-support" ? "Đang xếp lại Support..." : "Xếp lại Support"}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="drawerDangerZone">
                   <div className="drawerDangerHeader">
                     <strong>Xóa ca live</strong>
