@@ -16,6 +16,7 @@ type PayrollDashboardProps = {
 };
 
 type Tab = "payroll" | "exceptions" | "rates";
+type PayrollEmployeeOption = { id: string; name: string; role: "host" | "support"; grade?: string };
 
 function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "download" | "alert" | "money" | "clock" | "calendar" | "chevron" | "chevronDown" | "search" }) {
   const paths = {
@@ -100,7 +101,8 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [adjustmentDateKey, setAdjustmentDateKey] = useState(initialWeekStartKey || currentWeekStart());
   const [adjustmentHours, setAdjustmentHours] = useState("2");
   const [adjustmentNote, setAdjustmentNote] = useState("Công bù");
-  const [employeeOptions, setEmployeeOptions] = useState<Array<{ id: string; name: string; role: "host" | "support"; grade?: string }>>([]);
+  const [rosterEmployeeOptions, setRosterEmployeeOptions] = useState<PayrollEmployeeOption[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<PayrollEmployeeOption[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const adjustmentEmployeePickerRef = useRef<HTMLDivElement>(null);
   const [adjustmentEmployeePickerOpen, setAdjustmentEmployeePickerOpen] = useState(false);
@@ -124,9 +126,31 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     }
   }
 
+  async function loadEmployeeOptions(signal?: AbortSignal) {
+    try {
+      const response = await fetch("/api/people", { signal, cache: "no-store" });
+      const result = await response.json() as {
+        success?: boolean;
+        hosts?: Array<{ id: string; name: string; role: "host"; level?: string }>;
+        supports?: Array<{ id: string; name: string; role: "support"; level?: string }>;
+      };
+      if (!response.ok || !result.success) throw new Error("Không tải được roster nhân sự.");
+      const nextOptions: PayrollEmployeeOption[] = [
+        ...(result.hosts || []).map((person) => ({ id: person.id, name: person.name, role: "host" as const, grade: person.level })),
+        ...(result.supports || []).map((person) => ({ id: person.id, name: person.name, role: "support" as const, grade: person.level }))
+      ];
+      setRosterEmployeeOptions(nextOptions.sort((left, right) =>
+        left.role.localeCompare(right.role) || left.name.localeCompare(right.name, "vi")
+      ));
+    } catch {
+      // Keep the in-memory fallback from current payroll entries if roster API is unavailable.
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController();
     void loadDashboard(controller.signal);
+    void loadEmployeeOptions(controller.signal);
     return () => controller.abort();
   }, [weekStartKey]);
 
@@ -140,7 +164,10 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   }, [weekStartKey]);
 
   useEffect(() => {
-    const unique = new Map<string, { id: string; name: string; role: "host" | "support"; grade?: string }>();
+    const unique = new Map<string, PayrollEmployeeOption>();
+    rosterEmployeeOptions.forEach((person) => {
+      unique.set(`${person.role}:${person.id.toLowerCase()}`, person);
+    });
     (payload?.personHours || []).forEach((person) => {
       unique.set(`${person.role}:${person.employeeId.toLowerCase()}`, {
         id: person.employeeId,
@@ -160,7 +187,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setEmployeeOptions(Array.from(unique.values()).sort((left, right) =>
       left.role.localeCompare(right.role) || left.name.localeCompare(right.name, "vi")
     ));
-  }, [payload]);
+  }, [payload, rosterEmployeeOptions]);
 
   useEffect(() => {
     const firstMatch = employeeOptions.find((item) => item.role === adjustmentRole);
