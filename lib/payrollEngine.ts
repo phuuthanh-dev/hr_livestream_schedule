@@ -391,7 +391,8 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     const commissionPay = Math.round(eligibleGmv * commissionRate);
     const adjustments = 0;
     const grossPay = basePay + commissionPay + adjustments;
-    const taxAmount = Math.round(grossPay * input.settings.taxRate);
+    const effectiveTaxRate = role === "support" ? 0 : input.settings.taxRate;
+    const taxAmount = Math.round(grossPay * effectiveTaxRate);
     entries.push({
       entryKey: hashKey([input.weekStartKey, live.key, role, employeeId.toLowerCase()]),
       weekStartKey: input.weekStartKey,
@@ -415,7 +416,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
       commissionPay,
       adjustments,
       grossPay,
-      taxRate: input.settings.taxRate,
+      taxRate: effectiveTaxRate,
       taxAmount,
       netPay: grossPay - taxAmount,
       generatedAt: generatedAt.toISOString()
