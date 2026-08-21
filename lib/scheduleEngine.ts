@@ -45,6 +45,29 @@ type SupportSelectionOptions = {
   occupiedSupports: Set<string>;
 };
 
+export type SingleSessionHostCandidateInput = {
+  dateKey: string;
+  slot: string;
+  lane: ScheduleLane;
+  people: SchedulePerson[];
+  availability: SubmittedScheduleSlot[];
+  hostWeekCounts: Map<string, number>;
+  hostDayCounts: Map<string, number>;
+  occupiedHosts: Set<string>;
+  excludeEmployeeIds?: string[];
+};
+
+export type SingleSessionSupportCandidateInput = {
+  session: ScheduleSession;
+  currentHost: SchedulePerson | null;
+  people: SchedulePerson[];
+  availability: SubmittedScheduleSlot[];
+  supportWeekCounts: Map<string, number>;
+  supportUsedDays: Set<string>;
+  occupiedSupports: Set<string>;
+  excludeEmployeeIds?: string[];
+};
+
 const POSITIVE_TRAINING_VALUES = ["roi", "da training", "da train", "hoan thanh", "completed"];
 
 function normalizeText(value: unknown) {
@@ -349,6 +372,101 @@ function assignSupportBlock(
     if (!backup) item.row.warnings.push("BACKUP_SUPPORT: Chưa có Support dự phòng phù hợp.");
   });
   return true;
+}
+
+export function pickHostCandidatesForSingleSession(input: SingleSessionHostCandidateInput): HostCandidate[] {
+  const excluded = new Set((input.excludeEmployeeIds || []).map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const peopleByKey = new Map(input.people.map((person) => [personKey(person.role, person.id), person]));
+  const candidatesByPerson = new Map<string, HostCandidate>();
+
+  input.availability
+    .filter((entry) =>
+      entry.role === "host"
+      && entry.dateKey === input.dateKey
+      && entry.slot === input.slot
+    )
+    .forEach((entry) => {
+      const person = peopleByKey.get(personKey("host", entry.employeeId));
+      if (!person || person.role !== "host" || !isQualified(person)) return;
+      if (excluded.has(person.id.trim().toLowerCase())) return;
+      const location = locationForHost(person, entry.locationPreference);
+      if (!location || location !== input.lane) return;
+      candidatesByPerson.set(personKey("host", person.id), { person, location });
+    });
+
+  return Array.from(candidatesByPerson.values())
+    .filter(({ person }) => {
+      const key = personKey("host", person.id);
+      return getCount(input.hostDayCounts, `${key}__${input.dateKey}`) < maxHostSessionsPerDay(input.lane)
+        && !input.occupiedHosts.has(`${key}__${input.dateKey}__${input.slot}`);
+    })
+    .sort((left, right) => {
+      const leftKey = personKey("host", left.person.id);
+      const rightKey = personKey("host", right.person.id);
+      const leftWeekCount = getCount(input.hostWeekCounts, leftKey);
+      const rightWeekCount = getCount(input.hostWeekCounts, rightKey);
+      const leftDayCount = getCount(input.hostDayCounts, `${leftKey}__${input.dateKey}`);
+      const rightDayCount = getCount(input.hostDayCounts, `${rightKey}__${input.dateKey}`);
+      const leftScore = buildHostSelectionScore(left.person, input.lane, input.slot, leftWeekCount, leftDayCount);
+      const rightScore = buildHostSelectionScore(right.person, input.lane, input.slot, rightWeekCount, rightDayCount);
+
+      for (let index = 0; index < leftScore.length; index += 1) {
+        const difference = rightScore[index] - leftScore[index];
+        if (difference) return difference;
+      }
+
+      return compareText(left.person.name, right.person.name) || compareText(left.person.id, right.person.id);
+    });
+}
+
+export function pickSupportCandidatesForSingleSession(input: SingleSessionSupportCandidateInput): SchedulePerson[] {
+  const sessionLane = getScheduleSessionLane(input.session);
+  if (sessionLane !== "studio") return [];
+
+  const excluded = new Set((input.excludeEmployeeIds || []).map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const weekend = isWeekend(input.session.dateKey);
+  const availableSupport = input.availability.filter((entry) =>
+    entry.role === "support"
+    && entry.dateKey === input.session.dateKey
+    && entry.slot === input.session.slot
+    && !excluded.has(entry.employeeId.trim().toLowerCase())
+  );
+  if (availableSupport.length === 0) return [];
+
+  const block: GeneratedItem[] = [{ row: input.session, host: input.currentHost || undefined }];
+  const strictCandidates = buildSupportCandidates({
+    block,
+    dateKey: input.session.dateKey,
+    weekend,
+    blockSize: 1,
+    requireSixHour: false,
+    allowUsedDay: false,
+    people: input.people,
+    supportAvailability: new Set(
+      availableSupport.map((entry) => `${personKey("support", entry.employeeId)}__${entry.dateKey}__${entry.slot}`)
+    ),
+    supportWeekCounts: input.supportWeekCounts,
+    supportUsedDays: input.supportUsedDays,
+    occupiedSupports: input.occupiedSupports
+  });
+
+  if (strictCandidates.length > 0) return strictCandidates;
+
+  return buildSupportCandidates({
+    block,
+    dateKey: input.session.dateKey,
+    weekend,
+    blockSize: 1,
+    requireSixHour: false,
+    allowUsedDay: true,
+    people: input.people,
+    supportAvailability: new Set(
+      availableSupport.map((entry) => `${personKey("support", entry.employeeId)}__${entry.dateKey}__${entry.slot}`)
+    ),
+    supportWeekCounts: input.supportWeekCounts,
+    supportUsedDays: input.supportUsedDays,
+    occupiedSupports: input.occupiedSupports
+  });
 }
 
 function assignHostToGeneratedItem(item: GeneratedItem, candidate: HostCandidate) {

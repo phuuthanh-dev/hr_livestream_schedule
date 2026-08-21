@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Collection, WithId } from "mongodb";
-import { findActiveSchedulePerson } from "@/lib/employeeRoster";
+import { findActiveSchedulePerson, listSchedulePeopleForAdmin } from "@/lib/employeeRoster";
+import { getSubmittedScheduleSlotsForWeek } from "@/lib/availabilityStore";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
+import { getScheduleWeekDateKeys, getScheduleWeekStartKey } from "@/lib/scheduleDate";
+import { pickHostCandidatesForSingleSession, pickSupportCandidatesForSingleSession } from "@/lib/scheduleEngine";
 import { buildScheduleLaneKey, getScheduleSessionLane } from "@/lib/scheduleLane";
 import { buildScheduleSessionCode, buildScheduleSessionKey, getScheduleSessionCode } from "@/lib/scheduleSessionCode";
 import type {
@@ -127,6 +130,7 @@ export type UpdateScheduleAssignmentInput = {
   hostId?: string;
   supportId?: string;
   locationMode?: AvailabilityLocationPreference;
+  rerankRole?: "host" | "support";
   actorAccountKey: string;
 };
 
@@ -179,6 +183,26 @@ function buildAutoConfirmationState(input: ScheduleSession) {
     isSupportConfirmed: supportAssigned,
     canConfirmHost: hostAssigned,
     canConfirmSupport: supportAssigned
+  };
+}
+
+function buildPreservedHostPerson(session: ScheduleSession) {
+  if (!cleanText(session.hostId)) return null;
+  return {
+    id: session.hostId,
+    name: session.hostName || session.hostId,
+    role: "host" as const,
+    workLocation: getSessionLocationMode(session) || "studio",
+    liveChannelId: session.channel
+  };
+}
+
+function buildPreservedSupportPerson(session: ScheduleSession) {
+  if (!cleanText(session.supportId)) return null;
+  return {
+    id: session.supportId,
+    name: session.supportName || session.supportId,
+    role: "support" as const
   };
 }
 
@@ -540,6 +564,167 @@ export async function findScheduleSessionById(sessionId: string): Promise<Schedu
   return document ? toScheduleSession(document) : null;
 }
 
+async function saveUpdatedScheduleSession(
+  sessions: Collection<ScheduleSessionDocument>,
+  current: ScheduleSession,
+  updated: ScheduleSession,
+  actorAccountKey: string
+) {
+  await assertNoScheduleAssignmentConflict(sessions, {
+    excludeSessionId: current.sessionId,
+    dateKey: updated.dateKey,
+    slot: updated.slot,
+    lane: getScheduleSessionLane(updated),
+    hostId: updated.hostId,
+    supportId: updated.supportId
+  });
+  const hostNeedsConfirmationReset = current.hostId.toLowerCase() !== updated.hostId.toLowerCase()
+    || current.format.toLowerCase() !== updated.format.toLowerCase();
+  const supportNeedsConfirmationReset = current.supportId.toLowerCase() !== updated.supportId.toLowerCase()
+    || current.format.toLowerCase() !== updated.format.toLowerCase();
+  const now = new Date();
+  const unsetFields: Record<string, ""> = {};
+
+  if (hostNeedsConfirmationReset) {
+    unsetFields.hostConfirmationUpdatedAt = "";
+    unsetFields.hostConfirmationActorKey = "";
+  }
+  if (supportNeedsConfirmationReset) {
+    unsetFields.supportConfirmationUpdatedAt = "";
+    unsetFields.supportConfirmationActorKey = "";
+  }
+
+  const result = await sessions.updateOne(
+    { sessionKey: current.sessionId, active: true },
+    {
+      $set: {
+        ...updated,
+        hostPersonKey: buildPersonKey("host", updated.hostId),
+        supportPersonKey: buildPersonKey("support", updated.supportId),
+        backupHostPersonKey: buildPersonKey("host", updated.backupHostId),
+        backupSupportPersonKey: buildPersonKey("support", updated.backupSupportId),
+        ...(hostNeedsConfirmationReset ? { hostConfirmationRevision: 0 } : {}),
+        ...(supportNeedsConfirmationReset ? { supportConfirmationRevision: 0 } : {}),
+        manualOverride: true,
+        manualOverrideUpdatedAt: now,
+        manualOverrideUpdatedBy: cleanText(actorAccountKey) || "admin:admin",
+        updatedAt: now
+      },
+      ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {})
+    }
+  );
+  if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi cập nhật được lưu.");
+}
+
+async function rerankScheduleSessionRole(
+  sessions: Collection<ScheduleSessionDocument>,
+  current: ScheduleSession,
+  role: "host" | "support",
+  actorAccountKey: string
+): Promise<ScheduleSession> {
+  const weekStartKey = getScheduleWeekStartKey(current.dateKey);
+  const weekEndKey = getScheduleWeekDateKeys(weekStartKey).at(-1) || weekStartKey;
+  const [people, availability, weekPayload] = await Promise.all([
+    listSchedulePeopleForAdmin(),
+    getSubmittedScheduleSlotsForWeek(weekStartKey),
+    getScheduleFromMongo({ from: weekStartKey, to: weekEndKey })
+  ]);
+  const activePeople = people.filter((person) => person.active !== false);
+  const siblingSessions = (weekPayload.rows || []).filter((session) => session.sessionId !== current.sessionId);
+
+  const hostWeekCounts = new Map<string, number>();
+  const hostDayCounts = new Map<string, number>();
+  const occupiedHosts = new Set<string>();
+  const supportWeekCounts = new Map<string, number>();
+  const supportUsedDays = new Set<string>();
+  const occupiedSupports = new Set<string>();
+
+  siblingSessions.forEach((session) => {
+    if (session.hostId) {
+      const key = buildPersonKey("host", session.hostId).toLowerCase();
+      hostWeekCounts.set(key, (hostWeekCounts.get(key) || 0) + 1);
+      hostDayCounts.set(`${key}__${session.dateKey}`, (hostDayCounts.get(`${key}__${session.dateKey}`) || 0) + 1);
+      occupiedHosts.add(`${key}__${session.dateKey}__${session.slot}`);
+    }
+    if (session.supportId) {
+      const key = buildPersonKey("support", session.supportId).toLowerCase();
+      supportWeekCounts.set(key, (supportWeekCounts.get(key) || 0) + 1);
+      supportUsedDays.add(`${key}__${session.dateKey}`);
+      occupiedSupports.add(`${key}__${session.dateKey}__${session.slot}`);
+    }
+  });
+
+  const preservedHost = (current.hostId ? await findActiveSchedulePerson("host", current.hostId) : null) || buildPreservedHostPerson(current);
+  const preservedSupport = (current.supportId ? await findActiveSchedulePerson("support", current.supportId) : null) || buildPreservedSupportPerson(current);
+  const lane = getScheduleSessionLane(current);
+
+  if (role === "host") {
+    const candidates = pickHostCandidatesForSingleSession({
+      dateKey: current.dateKey,
+      slot: current.slot,
+      lane,
+      people: activePeople,
+      availability,
+      hostWeekCounts,
+      hostDayCounts,
+      occupiedHosts,
+      excludeEmployeeIds: current.hostId ? [current.hostId] : []
+    });
+    const nextHost = candidates[0]?.person || null;
+    const updated = buildManualScheduleAssignment({
+      current,
+      host: nextHost,
+      support: preservedSupport,
+      hostWasEdited: true,
+      supportWasEdited: false,
+      locationMode: candidates[0]?.location || getSessionLocationMode(current) || undefined
+    });
+    updated.backupHostId = candidates[1]?.person.id || "";
+    updated.backupHostName = candidates[1]?.person.name || "";
+    if (!nextHost) {
+      updated.warnings = updated.warnings.filter((warning) => !warning.startsWith("BACKUP_HOST:"));
+      if (!updated.warnings.some((warning) => warning.startsWith("OPEN_HOST:"))) {
+        updated.warnings.push("OPEN_HOST: Không tìm thấy Host thay thế phù hợp khi xếp lại ca.");
+      }
+    }
+    await saveUpdatedScheduleSession(sessions, current, updated, actorAccountKey);
+    return updated;
+  }
+
+  if (lane !== "studio") {
+    throw new Error("Ca Home không dùng Support để xếp lại.");
+  }
+
+  const supportCandidates = pickSupportCandidatesForSingleSession({
+    session: current,
+    currentHost: preservedHost,
+    people: activePeople,
+    availability,
+    supportWeekCounts,
+    supportUsedDays,
+    occupiedSupports,
+    excludeEmployeeIds: current.supportId ? [current.supportId] : []
+  });
+  const updated = buildManualScheduleAssignment({
+    current,
+    host: preservedHost,
+    support: supportCandidates[0] || null,
+    hostWasEdited: false,
+    supportWasEdited: true
+  });
+  updated.backupSupportId = supportCandidates[1]?.id || "";
+  updated.backupSupportName = supportCandidates[1]?.name || "";
+  updated.supportCandidatePool = supportCandidates.map((person) => person.id).join(", ");
+  if (!supportCandidates[0]) {
+    updated.warnings = updated.warnings.filter((warning) => !warning.startsWith("BACKUP_SUPPORT:"));
+    if (!updated.warnings.some((warning) => warning.startsWith("OPEN_SUPPORT:"))) {
+      updated.warnings.push("OPEN_SUPPORT: Không tìm thấy Support thay thế phù hợp khi xếp lại ca.");
+    }
+  }
+  await saveUpdatedScheduleSession(sessions, current, updated, actorAccountKey);
+  return updated;
+}
+
 export async function updateScheduleSessionAssignment(
   input: UpdateScheduleAssignmentInput
 ): Promise<ScheduleSession> {
@@ -553,6 +738,9 @@ export async function updateScheduleSessionAssignment(
   const document = await sessions.findOne({ sessionKey: sessionId, active: true });
   if (!document) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
   const current = toScheduleSession(document);
+  if (input.rerankRole) {
+    return rerankScheduleSessionRole(sessions, current, input.rerankRole, input.actorAccountKey);
+  }
   const hostWasEdited = input.hostId !== undefined;
   const supportWasEdited = input.supportId !== undefined;
   const resolvedHostId = hostWasEdited ? cleanText(input.hostId) : current.hostId;
@@ -597,50 +785,7 @@ export async function updateScheduleSessionAssignment(
     locationMode: input.locationMode,
     studioLocationName: studioLocation?.name
   });
-  await assertNoScheduleAssignmentConflict(sessions, {
-    excludeSessionId: sessionId,
-    dateKey: updated.dateKey,
-    slot: updated.slot,
-    lane: getScheduleSessionLane(updated),
-    hostId: updated.hostId,
-    supportId: updated.supportId
-  });
-  const hostNeedsConfirmationReset = current.hostId.toLowerCase() !== updated.hostId.toLowerCase()
-    || current.format.toLowerCase() !== updated.format.toLowerCase();
-  const supportNeedsConfirmationReset = current.supportId.toLowerCase() !== updated.supportId.toLowerCase()
-    || current.format.toLowerCase() !== updated.format.toLowerCase();
-  const now = new Date();
-  const unsetFields: Record<string, ""> = {};
-
-  if (hostNeedsConfirmationReset) {
-    unsetFields.hostConfirmationUpdatedAt = "";
-    unsetFields.hostConfirmationActorKey = "";
-  }
-  if (supportNeedsConfirmationReset) {
-    unsetFields.supportConfirmationUpdatedAt = "";
-    unsetFields.supportConfirmationActorKey = "";
-  }
-
-  const result = await sessions.updateOne(
-    { sessionKey: sessionId, active: true },
-    {
-      $set: {
-        ...updated,
-        hostPersonKey: buildPersonKey("host", updated.hostId),
-        supportPersonKey: buildPersonKey("support", updated.supportId),
-        backupHostPersonKey: buildPersonKey("host", updated.backupHostId),
-        backupSupportPersonKey: buildPersonKey("support", updated.backupSupportId),
-        ...(hostNeedsConfirmationReset ? { hostConfirmationRevision: 0 } : {}),
-        ...(supportNeedsConfirmationReset ? { supportConfirmationRevision: 0 } : {}),
-        manualOverride: true,
-        manualOverrideUpdatedAt: now,
-        manualOverrideUpdatedBy: cleanText(input.actorAccountKey) || "admin:admin",
-        updatedAt: now
-      },
-      ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {})
-    }
-  );
-  if (result.matchedCount !== 1) throw new Error("Ca đã thay đổi trước khi cập nhật được lưu.");
+  await saveUpdatedScheduleSession(sessions, current, updated, input.actorAccountKey);
   return updated;
 }
 

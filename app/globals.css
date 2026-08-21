@@ -2619,6 +2619,35 @@ a:hover {
   margin-top: 10px;
 }
 
+.assignmentQuickActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.assignmentUtilityButton {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid #bdd7d2;
+  border-radius: 12px;
+  color: #155e59;
+  background: #ffffff;
+  font-size: 0.69rem;
+  font-weight: 800;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.assignmentUtilityButton:hover {
+  border-color: #0f766e;
+  background: #f3fbf9;
+}
+
+.assignmentUtilityButton:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .assignmentStatus {
   margin-top: 10px;
   color: #0f766e;

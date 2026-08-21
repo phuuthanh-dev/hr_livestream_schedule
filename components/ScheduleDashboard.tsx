@@ -499,6 +499,37 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
+  async function rerankSelectedSession(role: "host" | "support") {
+    if (!selectedSession || !isAdmin) return;
+    setAssignmentBusy(role === "host" ? "rerank-host" : "rerank-support");
+    setAssignmentError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: selectedSession.sessionId,
+          rerankRole: role,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || `Không xếp lại được ${role === "host" ? "Host" : "Support"}.`);
+      }
+      applyPayload(payload);
+      setMessage(payload.message || `Đã xếp lại ${role === "host" ? "Host" : "Support"} cho ca ${selectedSession.slot}.`);
+    } catch (rerankError) {
+      setAssignmentError(rerankError instanceof Error ? rerankError.message : `Không xếp lại được ${role === "host" ? "Host" : "Support"}.`);
+    } finally {
+      setAssignmentBusy("");
+    }
+  }
+
   async function cancelParticipation(session: ScheduleSession, role: "host" | "support") {
     if (isAdmin) return;
     if (session.dateKey < todayKey) {
@@ -1289,9 +1320,37 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                       : "Đổi người sẽ tự hủy xác nhận Support cũ."}</small>
                   </label>
                 </div>
-                {assignmentBusy ? <p className="assignmentStatus">Đang cập nhật {assignmentBusy === "host" ? "Host" : assignmentBusy === "support" ? "Support" : "địa điểm"}...</p> : null}
+                {assignmentBusy ? (
+                  <p className="assignmentStatus">
+                    Đang cập nhật {
+                      assignmentBusy === "host" ? "Host"
+                        : assignmentBusy === "support" ? "Support"
+                          : assignmentBusy === "rerank-host" ? "xếp lại Host"
+                            : assignmentBusy === "rerank-support" ? "xếp lại Support"
+                              : "địa điểm"
+                    }...
+                  </p>
+                ) : null}
                 {peopleError || assignmentError ? <p className="assignmentError">{assignmentError || peopleError}</p> : null}
                 <p className="assignmentHint">Tên, mã, kênh live, địa điểm, trạng thái và cảnh báo được đồng bộ tự động.</p>
+                <div className="assignmentQuickActions">
+                  <button
+                    className="assignmentUtilityButton"
+                    disabled={Boolean(assignmentBusy) || peopleLoading}
+                    onClick={() => void rerankSelectedSession("host")}
+                    type="button"
+                  >
+                    {assignmentBusy === "rerank-host" ? "Đang xếp lại Host..." : "Xếp lại Host"}
+                  </button>
+                  <button
+                    className="assignmentUtilityButton"
+                    disabled={Boolean(assignmentBusy) || peopleLoading || selectedLocationMode === "home"}
+                    onClick={() => void rerankSelectedSession("support")}
+                    type="button"
+                  >
+                    {assignmentBusy === "rerank-support" ? "Đang xếp lại Support..." : "Xếp lại Support"}
+                  </button>
+                </div>
                 <div className="drawerDangerZone">
                   <div className="drawerDangerHeader">
                     <strong>Xóa ca live</strong>

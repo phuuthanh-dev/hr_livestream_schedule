@@ -71,6 +71,7 @@ export async function PATCH(request: Request) {
       hostId?: string;
       supportId?: string;
       locationMode?: AvailabilityLocationPreference;
+      rerankRole?: "host" | "support";
       from?: string;
       to?: string;
     };
@@ -80,7 +81,7 @@ export async function PATCH(request: Request) {
         { status: 400 }
       );
     }
-    if (body.hostId === undefined && body.supportId === undefined && body.locationMode === undefined) {
+    if (body.hostId === undefined && body.supportId === undefined && body.locationMode === undefined && !body.rerankRole) {
       return NextResponse.json<SchedulePayload>(
         { success: false, message: "Chưa có nội dung phân công cần cập nhật." },
         { status: 400 }
@@ -92,6 +93,7 @@ export async function PATCH(request: Request) {
       ...(body.hostId !== undefined ? { hostId: body.hostId } : {}),
       ...(body.supportId !== undefined ? { supportId: body.supportId } : {}),
       ...(body.locationMode !== undefined ? { locationMode: body.locationMode } : {}),
+      ...(body.rerankRole ? { rerankRole: body.rerankRole } : {}),
       actorAccountKey: session.accountKey
     });
     const payload = await getScheduleFromMongo({ from: body.from, to: body.to });
