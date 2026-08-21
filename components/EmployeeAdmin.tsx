@@ -54,11 +54,12 @@ function syncCompensationFields(current: EmployeeForm, updates: Partial<Employee
     level: next.level,
     cashOffer: next.cashOffer
   });
+  const cashOfferTouched = Object.prototype.hasOwnProperty.call(updates, "cashOffer");
   return {
     ...next,
     rating: compensation.rating || next.rating,
     level: compensation.level || next.level,
-    cashOffer: compensation.cashOffer || ""
+    cashOffer: cashOfferTouched ? next.cashOffer : (next.cashOffer || compensation.cashOffer || "")
   };
 }
 
@@ -84,7 +85,7 @@ function toForm(employee: SchedulePerson): EmployeeForm {
   const compensation = resolveEmployeeCompensation(employee.role, {
     rating: employee.trainingProfile?.rating || employee.rating,
     level: employee.level,
-    cashOffer: employee.trainingProfile?.cashOffer || employee.cashOffer
+    cashOffer: employee.cashOffer || employee.trainingProfile?.cashOffer
   });
   return {
     id: employee.id,
@@ -95,7 +96,7 @@ function toForm(employee: SchedulePerson): EmployeeForm {
     workLocation: employee.workLocation || "",
     phone: employee.phone || "",
     cvReference: employee.cvReference || "",
-    cashOffer: compensation.cashOffer || "",
+    cashOffer: employee.cashOffer || compensation.cashOffer || "",
     experience: employee.experience || "",
     trainingStatus: employee.trainingStatus || "",
     notes: employee.notes || "",
@@ -209,7 +210,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
       const response = await fetch("/api/employees", {
         method: editingExisting ? "PUT" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, cashOffer: formCompensation.cashOffer || "" })
+        body: JSON.stringify({ ...form, cashOffer: form.cashOffer || formCompensation.cashOffer || "" })
       });
       const payload = (await response.json()) as EmployeeAdminPayload;
       if (!response.ok || !payload.success) throw new Error(payload.message || "Không lưu được hồ sơ nhân viên.");
@@ -392,7 +393,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                     <td data-label="Nhân viên"><span className={`employeeIdentity ${employee.role}`}><i>{employee.name.slice(0, 1).toUpperCase()}</i><span><strong>{employee.name}</strong><code>{employee.id}</code>{isIncomplete(employee) ? <small>Thiếu thông tin bắt buộc</small> : null}</span></span></td>
                     <td data-label="Vai trò"><span className={`employeeRoleBadge ${employee.role}`}>{employee.role === "host" ? "Host" : "Support"}</span></td>
                     <td data-label="Liên hệ"><span className="employeeStackValue"><strong>{employee.phone || "Chưa có SĐT"}</strong><small>{employee.liveChannelId || employee.cvReference || "Chưa có kênh/CV"}</small></span></td>
-                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? `Rating ${employee.rating || "Chưa chấm"} · ${locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm"}` : `Rating ${employee.trainingProfile?.rating || employee.rating || "Chưa chấm"} · Offer ${employee.trainingProfile?.cashOffer || employee.cashOffer || "Chưa có"}`}</small></span></td>
+                    <td data-label="Level / Địa điểm"><span className="employeeStackValue"><strong>{employee.level || "Chưa xếp level"}</strong><small>{employee.role === "host" ? `Rating ${employee.rating || "Chưa chấm"} · ${locationNameByCode.get(employee.workLocation || "") || "Chưa có địa điểm"}` : `Rating ${employee.trainingProfile?.rating || employee.rating || "Chưa chấm"} · Offer ${employee.cashOffer || employee.trainingProfile?.cashOffer || "Chưa có"}`}</small></span></td>
                     <td data-label="Training"><span className="employeeStackValue"><strong>{employee.trainingStatus || "Chưa cập nhật"}</strong><small>{employee.role === "support" && employee.trainingProfile ? `${employee.trainingProfile.scorePercent}% score` : ""}</small></span></td>
                     <td data-label="Hợp đồng"><span className="employeeStackValue"><span className={`employeeContractBadge ${employee.contractProfile?.completed ? "complete" : employee.contractProfile?.updatedAt ? "partial" : "empty"}`}>{employee.contractProfile?.completed ? "Đã đủ" : employee.contractProfile?.updatedAt ? "Thiếu ảnh" : "Chưa khai"}</span><small className={`employeeDriveSyncNote ${getDriveSyncMeta(employee).tone}`}>{getDriveSyncMeta(employee).label} · {getDriveSyncMeta(employee).detail}</small></span></td>
                     <td data-label="Trạng thái"><span className={`employeeStatusBadge ${employee.active === false ? "inactive" : "active"}`}>{employee.active === false ? "Tạm ngưng" : "Hoạt động"}</span></td>
@@ -450,7 +451,7 @@ export default function EmployeeAdmin({ username }: EmployeeAdminProps) {
                 <label><span>Rating</span><input value={form.rating} onChange={(event) => setForm((current) => syncCompensationFields(current, { rating: event.target.value }))} placeholder={form.role === "host" ? "Thử việc / C / B / A / S" : "A / B / C / D"} /></label>
                 <label><span>Level / Grade</span><input value={form.level} onChange={(event) => setForm((current) => syncCompensationFields(current, { level: event.target.value }))} placeholder={form.role === "host" ? "B" : "Cấp 2"} /></label>
                 {form.role === "host" ? <label><span>Địa điểm</span><select required value={form.workLocation} onChange={(event) => setForm((current) => ({ ...current, workLocation: event.target.value }))}>{locations.map((location) => <option disabled={!location.active} key={location.code} value={location.code}>{location.name}{location.active ? "" : " · Tạm ngưng"}</option>)}</select></label> : null}
-                <label><span>Cash offer</span><input readOnly value={formCompensation.cashOffer || ""} placeholder="Tự động lấy từ rating/grade" /></label>
+                <label><span>Cash offer</span><input value={form.cashOffer} onChange={(event) => setForm((current) => syncCompensationFields(current, { cashOffer: event.target.value }))} placeholder={formCompensation.cashOffer || "Tự động lấy từ rating/grade nếu để trống"} /></label>
                 <label><span>Kinh nghiệm</span><textarea rows={3} value={form.experience} onChange={(event) => setForm((current) => ({ ...current, experience: event.target.value }))} placeholder="Mô tả ngắn kinh nghiệm chính" /></label>
                 <label><span>Training</span><input value={form.trainingStatus} onChange={(event) => setForm((current) => ({ ...current, trainingStatus: event.target.value }))} /></label>
                 <label className="wide"><span>CV / Portfolio / Ghi chú nguồn</span><input value={form.cvReference} onChange={(event) => setForm((current) => ({ ...current, cvReference: event.target.value }))} placeholder="Link CV, link hồ sơ hoặc ghi chú nguồn" /></label>

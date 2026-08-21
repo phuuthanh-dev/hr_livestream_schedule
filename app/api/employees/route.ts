@@ -43,7 +43,7 @@ export async function GET() {
       return {
         ...employee,
         rating: trainingProfile?.rating || employee.rating,
-        cashOffer: trainingProfile?.cashOffer || employee.cashOffer,
+        cashOffer: employee.cashOffer || trainingProfile?.cashOffer,
         contractProfile: contractSummaries.get(employeeContractPersonKey(employee.role, employee.id)) || {
           completed: false,
           hasFront: false,

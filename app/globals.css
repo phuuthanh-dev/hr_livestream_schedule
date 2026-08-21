@@ -4865,6 +4865,151 @@ a:hover {
   box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.1);
 }
 
+.payrollEmployeePicker {
+  position: relative;
+}
+
+.payrollEmployeePickerTrigger {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 14px;
+  color: var(--payroll-ink);
+  background: #fff;
+  font: inherit;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.payrollEmployeePickerTrigger span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payrollEmployeePickerTrigger em {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--payroll-green);
+  background: #eef7f3;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+}
+
+.payrollEmployeePickerTrigger svg {
+  width: 16px;
+  height: 16px;
+  color: var(--payroll-muted);
+  transition: transform 160ms ease;
+  flex: 0 0 auto;
+}
+
+.payrollEmployeePicker.isOpen .payrollEmployeePickerTrigger,
+.payrollEmployeePickerTrigger:focus-visible {
+  outline: none;
+  border-color: var(--payroll-green);
+  box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.1);
+}
+
+.payrollEmployeePicker.isOpen .payrollEmployeePickerTrigger svg {
+  transform: rotate(180deg);
+}
+
+.payrollEmployeePickerPanel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 8;
+  display: grid;
+  padding: 12px;
+  border: 1px solid rgba(13, 112, 104, 0.12);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(18, 39, 40, 0.16);
+  gap: 10px;
+}
+
+.payrollEmployeePickerSearch {
+  display: flex;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 12px;
+  color: var(--payroll-muted);
+  background: #fbfcf9;
+  align-items: center;
+  gap: 8px;
+}
+
+.payrollEmployeePickerSearch:focus-within {
+  border-color: var(--payroll-green);
+  box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.08);
+}
+
+.payrollEmployeePickerSearch input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  color: var(--payroll-ink);
+  background: transparent;
+  font: inherit;
+}
+
+.payrollEmployeePickerList {
+  display: grid;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.payrollEmployeePickerOption {
+  display: grid;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  color: var(--payroll-ink);
+  background: transparent;
+  text-align: left;
+  gap: 4px;
+}
+
+.payrollEmployeePickerOption:hover {
+  background: #f5faf7;
+}
+
+.payrollEmployeePickerOption.isSelected {
+  background: #eef7f3;
+}
+
+.payrollEmployeePickerOption strong {
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.payrollEmployeePickerOption small {
+  color: var(--payroll-muted);
+  font-size: 0.78rem;
+}
+
+.payrollEmployeePickerEmpty {
+  padding: 14px 12px;
+  color: var(--payroll-muted);
+  font-size: 0.82rem;
+}
+
 .payrollAdjustmentList {
   display: grid;
   gap: 12px;

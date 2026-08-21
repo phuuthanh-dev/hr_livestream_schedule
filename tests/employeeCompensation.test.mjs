@@ -27,7 +27,7 @@ test("support compensation is derived from rating", () => {
   });
 });
 
-test("support legacy cash offer is overridden by mapped grade", () => {
+test("support explicit cash offer is preserved over mapped grade", () => {
   const result = resolveEmployeeCompensation("support", {
     level: "Cấp 2",
     cashOffer: "45.000"
@@ -36,6 +36,6 @@ test("support legacy cash offer is overridden by mapped grade", () => {
   assert.deepEqual(result, {
     rating: "C",
     level: "Cấp 2",
-    cashOffer: "50.000"
+    cashOffer: "45.000"
   });
 });

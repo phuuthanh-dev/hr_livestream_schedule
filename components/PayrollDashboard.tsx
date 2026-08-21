@@ -1,7 +1,7 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   EmployeeAdminPayload,
   PayrollDashboardPayload,
@@ -17,7 +17,7 @@ type PayrollDashboardProps = {
 
 type Tab = "payroll" | "exceptions" | "rates";
 
-function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "download" | "alert" | "money" | "clock" | "calendar" | "chevron" }) {
+function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "download" | "alert" | "money" | "clock" | "calendar" | "chevron" | "chevronDown" | "search" }) {
   const paths = {
     back: <path d="m15 18-6-6 6-6M9 12h10" />,
     upload: <><path d="M12 16V4m0 0L7 9m5-5 5 5" /><path d="M5 15v4h14v-4" /></>,
@@ -28,7 +28,9 @@ function Icon({ name }: { name: "back" | "upload" | "calculate" | "lock" | "down
     money: <><circle cx="12" cy="12" r="9" /><path d="M15 8.5c-.7-.5-1.5-.8-2.5-.8-1.4 0-2.5.7-2.5 1.8 0 2.8 5 1.2 5 4 0 1.1-1.1 1.8-2.5 1.8-1 0-2-.3-2.8-.9M12.5 6v12" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4m8-4v4M3 10h18" /></>,
-    chevron: <path d="m6 9 6 6 6-6" />
+    chevron: <path d="m6 9 6 6 6-6" />,
+    chevronDown: <path d="m6 9 6 6 6-6" />,
+    search: <><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></>
   };
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -100,6 +102,9 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [adjustmentNote, setAdjustmentNote] = useState("Công bù");
   const [employeeOptions, setEmployeeOptions] = useState<Array<{ id: string; name: string; role: "host" | "support"; grade?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const adjustmentEmployeePickerRef = useRef<HTMLDivElement>(null);
+  const [adjustmentEmployeePickerOpen, setAdjustmentEmployeePickerOpen] = useState(false);
+  const [adjustmentEmployeePickerQuery, setAdjustmentEmployeePickerQuery] = useState("");
 
   async function loadDashboard(signal?: AbortSignal) {
     setLoading(true);
@@ -163,6 +168,22 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
       setAdjustmentEmployeeId(firstMatch?.id || "");
     }
   }, [adjustmentRole, adjustmentEmployeeId, employeeOptions]);
+
+  useEffect(() => {
+    setAdjustmentEmployeePickerOpen(false);
+    setAdjustmentEmployeePickerQuery("");
+  }, [adjustmentRole, adjustmentModalOpen]);
+
+  useEffect(() => {
+    if (!adjustmentEmployeePickerOpen) return undefined;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!adjustmentEmployeePickerRef.current?.contains(event.target as Node)) {
+        setAdjustmentEmployeePickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [adjustmentEmployeePickerOpen]);
 
   async function uploadReport() {
     if (!file) {
@@ -386,7 +407,15 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const exceptions = payload?.exceptions || [];
   const latestImport = payload?.imports?.[0];
   const sheetExport = payload?.sheetExport;
-  const filteredAdjustmentPeople = employeeOptions.filter((item) => item.role === adjustmentRole);
+  const filteredAdjustmentPeople = useMemo(() => {
+    const normalizedQuery = adjustmentEmployeePickerQuery.trim().toLowerCase();
+    return employeeOptions.filter((item) => {
+      if (item.role !== adjustmentRole) return false;
+      if (!normalizedQuery) return true;
+      return item.name.toLowerCase().includes(normalizedQuery) || item.id.toLowerCase().includes(normalizedQuery);
+    });
+  }, [adjustmentEmployeePickerQuery, adjustmentRole, employeeOptions]);
+  const selectedAdjustmentEmployee = employeeOptions.find((item) => item.role === adjustmentRole && item.id === adjustmentEmployeeId) || null;
 
   return (
     <main className="payrollApp">
@@ -559,14 +588,54 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
               </label>
               <label>
                 <span>Nhân sự</span>
-                <select value={adjustmentEmployeeId} onChange={(event) => setAdjustmentEmployeeId(event.target.value)}>
-                  {filteredAdjustmentPeople.length === 0 ? <option value="">Chưa có nhân sự trong payroll tuần</option> : null}
-                  {filteredAdjustmentPeople.map((item) => (
-                    <option key={`${item.role}-${item.id}`} value={item.id}>
-                      {item.name} · {item.id}{item.grade ? ` · ${item.grade}` : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className={`payrollEmployeePicker ${adjustmentEmployeePickerOpen ? "isOpen" : ""}`} ref={adjustmentEmployeePickerRef}>
+                  <button
+                    className="payrollEmployeePickerTrigger"
+                    onClick={() => setAdjustmentEmployeePickerOpen((current) => !current)}
+                    type="button"
+                  >
+                    <span>
+                      {selectedAdjustmentEmployee
+                        ? `${selectedAdjustmentEmployee.name} · ${selectedAdjustmentEmployee.id}${selectedAdjustmentEmployee.grade ? ` · ${selectedAdjustmentEmployee.grade}` : ""}`
+                        : "Chọn nhân sự"}
+                    </span>
+                    <em>{filteredAdjustmentPeople.length}</em>
+                    <Icon name="chevronDown" />
+                  </button>
+                  {adjustmentEmployeePickerOpen ? (
+                    <div className="payrollEmployeePickerPanel">
+                      <div className="payrollEmployeePickerSearch">
+                        <Icon name="search" />
+                        <input
+                          autoFocus
+                          value={adjustmentEmployeePickerQuery}
+                          onChange={(event) => setAdjustmentEmployeePickerQuery(event.target.value)}
+                          placeholder="Tìm tên hoặc mã..."
+                        />
+                      </div>
+                      <div className="payrollEmployeePickerList" role="listbox" aria-label="Danh sách nhân sự payroll">
+                        {filteredAdjustmentPeople.map((item) => (
+                          <button
+                            className={`payrollEmployeePickerOption ${adjustmentEmployeeId === item.id ? "isSelected" : ""}`}
+                            key={`${item.role}-${item.id}`}
+                            onClick={() => {
+                              setAdjustmentEmployeeId(item.id);
+                              setAdjustmentEmployeePickerOpen(false);
+                              setAdjustmentEmployeePickerQuery("");
+                            }}
+                            type="button"
+                          >
+                            <strong>{item.name}</strong>
+                            <small>{item.id}{item.grade ? ` · ${item.grade}` : ""}</small>
+                          </button>
+                        ))}
+                        {filteredAdjustmentPeople.length === 0 ? (
+                          <div className="payrollEmployeePickerEmpty">Không tìm thấy nhân sự phù hợp.</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </label>
               <label>
                 <span>Ngày</span>

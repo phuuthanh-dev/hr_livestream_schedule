@@ -90,7 +90,8 @@ function deriveSupportCompensation(input: CompensationInput): EmployeeCompensati
   const normalizedLevel = normalizeSupportLevel(input.level);
   const rating = normalizeSupportRating(input.rating) || (normalizedLevel ? SUPPORT_RATING_BY_LEVEL[normalizedLevel] : undefined);
   const level = rating ? SUPPORT_BY_RATING[rating].level : normalizedLevel;
-  const cashOffer = rating ? SUPPORT_BY_RATING[rating].cashOffer : fallbackCashOffer(input.cashOffer);
+  const explicitCashOffer = fallbackCashOffer(input.cashOffer);
+  const cashOffer = explicitCashOffer || (rating ? SUPPORT_BY_RATING[rating].cashOffer : undefined);
   return { rating, level, cashOffer };
 }
 
