@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { getPayrollDashboard } from "@/lib/payrollStore";
+import { getPayrollConfiguration, getPayrollDashboard } from "@/lib/payrollStore";
+import { buildPayrollPersonHours } from "@/lib/payrollPersonSummary";
 import {
   createGoogleSheetsClient,
   getGoogleHrMasterSpreadsheetId,
@@ -58,7 +59,8 @@ export const PAYROLL_SUMMARY_HEADERS = [
   "Tổng Bonus",
   "Tổng Thuế",
   "Tổng Thực Nhận",
-  "Last_Recalculated_At"
+  "Last_Recalculated_At",
+  "Payslip_Doc_URL"
 ] as const;
 
 export type PayrollSheetExportResult = PayrollSheetExportRecord & {
@@ -128,7 +130,16 @@ const SUMMARY_HEADER_ALIASES: Record<string, string[]> = {
   "Tổng Bonus": ["Tổng Bonus"],
   "Tổng Thuế": ["Tổng Thuế"],
   "Tổng Thực Nhận": ["Tổng Thực Nhận"],
-  Last_Recalculated_At: ["Last_Recalculated_At"]
+  Last_Recalculated_At: ["Last_Recalculated_At"],
+  Payslip_Doc_URL: ["Payslip_Doc_URL", "Link Phiếu Lương", "Payslip Link"]
+};
+
+type PayrollPayslipRecord = {
+  employeeId: string;
+  role: "host" | "support";
+  fromDate: string;
+  toDate: string;
+  documentUrl: string;
 };
 
 function roundMoney(value: number) {
@@ -278,22 +289,17 @@ export function buildPayrollSheetRows(entries: PayrollEntry[], exceptions: Payro
   ]) as SheetGridRow[];
 }
 
-export function buildPayrollSummaryRows(personHours: PayrollPersonHours[], entries: PayrollEntry[], weekStartKey: string, weekEndKey: string, recalculatedAt: string) {
-  const aggregates = new Map<string, { basePay: number; commissionPay: number; adjustments: number; taxAmount: number; netPay: number }>();
-  entries.forEach((entry) => {
-    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
-    const current = aggregates.get(key) || { basePay: 0, commissionPay: 0, adjustments: 0, taxAmount: 0, netPay: 0 };
-    current.basePay += entry.basePay;
-    current.commissionPay += entry.commissionPay;
-    current.adjustments += entry.adjustments;
-    current.taxAmount += entry.taxAmount;
-    current.netPay += entry.netPay;
-    aggregates.set(key, current);
-  });
-
+export function buildPayrollSummaryRows(
+  personHours: PayrollPersonHours[],
+  entries: PayrollEntry[],
+  weekStartKey: string,
+  weekEndKey: string,
+  recalculatedAt: string,
+  payslipLinks?: Map<string, string>
+) {
   return personHours.map((person) => {
     const key = `${person.role}:${person.employeeId.toLowerCase()}`;
-    const totals = aggregates.get(key) || { basePay: 0, commissionPay: 0, adjustments: 0, taxAmount: 0, netPay: 0 };
+    const payslipUrl = payslipLinks?.get(key) || "";
     return [
       weekStartKey,
       weekEndKey,
@@ -303,56 +309,34 @@ export function buildPayrollSummaryRows(personHours: PayrollPersonHours[], entri
       person.grade,
       person.sessionCount,
       roundHours(person.scheduledHours),
-      roundMoney(totals.basePay),
-      roundMoney(totals.commissionPay),
-      roundMoney(totals.adjustments),
-      roundMoney(totals.taxAmount),
-      roundMoney(totals.netPay),
-      recalculatedAt
+      roundMoney(person.basePay),
+      roundMoney(person.commissionPay),
+      roundMoney(person.adjustments),
+      roundMoney(person.taxAmount),
+      roundMoney(person.netPay),
+      recalculatedAt,
+      payslipUrl
     ];
   }) as SheetGridRow[];
 }
 
-function summarizeEntries(entries: PayrollEntry[]): PayrollSheetExportTotals {
-  return entries.reduce(
+function summarizeEntries(entries: PayrollEntry[], personHours: PayrollPersonHours[]): PayrollSheetExportTotals {
+  const entryTotals = entries.reduce(
     (totals, entry) => ({
       scheduledHours: totals.scheduledHours + entry.scheduledHours,
       basePay: totals.basePay + entry.basePay,
       commissionPay: totals.commissionPay + entry.commissionPay,
       adjustments: totals.adjustments + entry.adjustments,
       grossPay: totals.grossPay + entry.grossPay,
-      taxAmount: totals.taxAmount + entry.taxAmount,
-      netPay: totals.netPay + entry.netPay
+      taxAmount: totals.taxAmount,
+      netPay: totals.netPay
     }),
     { scheduledHours: 0, basePay: 0, commissionPay: 0, adjustments: 0, grossPay: 0, taxAmount: 0, netPay: 0 }
   );
-}
 
-function buildPersonHours(entries: PayrollEntry[]): PayrollPersonHours[] {
-  const grouped = new Map<string, PayrollPersonHours>();
-  entries.forEach((entry) => {
-    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
-    const current = grouped.get(key) || {
-      employeeId: entry.employeeId,
-      employeeName: entry.employeeName,
-      role: entry.role,
-      grade: entry.grade,
-      sessionCount: 0,
-      scheduledHours: 0,
-      netPay: 0
-    };
-    current.employeeName = current.employeeName || entry.employeeName;
-    current.grade = current.grade || entry.grade;
-    current.sessionCount += entry.sessionIds.length;
-    current.scheduledHours += entry.scheduledHours;
-    current.netPay += entry.netPay;
-    grouped.set(key, current);
-  });
-  return Array.from(grouped.values()).sort((left, right) =>
-    left.role.localeCompare(right.role)
-    || left.employeeName.localeCompare(right.employeeName, "vi")
-    || left.employeeId.localeCompare(right.employeeId)
-  );
+  entryTotals.taxAmount = personHours.reduce((total, person) => total + person.taxAmount, 0);
+  entryTotals.netPay = personHours.reduce((total, person) => total + person.netPay, 0);
+  return entryTotals;
 }
 
 function buildReconciliation(entries: PayrollEntry[], exceptions: PayrollException[], periodStatus?: "draft" | "locked") {
@@ -413,6 +397,21 @@ async function getExportCollection() {
   const collection = database.collection<PayrollSheetExportRecord & { _id?: unknown }>("payroll_sheet_exports");
   await collection.createIndex({ weekStartKey: 1, weekEndKey: 1, exportedAt: -1 }).catch(() => undefined);
   return collection;
+}
+
+async function getPayslipLinksForPeriod(fromDate: string, toDate: string) {
+  const database = await getMongoDatabase();
+  const documents = await database
+    .collection<PayrollPayslipRecord>("payroll_payslips")
+    .find({ fromDate, toDate })
+    .toArray()
+    .catch(() => []);
+  return new Map(
+    documents.map((document) => [
+      `${document.role}:${document.employeeId.toLowerCase()}`,
+      document.documentUrl
+    ])
+  );
 }
 
 export async function getLastPayrollSheetExport(weekStartKey: string, weekEndKey?: string) {
@@ -619,14 +618,15 @@ export async function exportPayrollWeekToSheet(
   const personHours = dashboard.personHours || [];
   const periodEndKey = dashboard.weekEndKey || weekStartKey;
   const reconciliation = buildReconciliation(entries, exceptions, dashboard.periodStatus);
-  const totals = summarizeEntries(entries);
+  const totals = summarizeEntries(entries, personHours);
   const detailSheetName = getGooglePayrollSheetName();
   const summarySheetName = getGooglePayrollSummarySheetName();
   const exportedAt = new Date();
   const exportedAtIso = exportedAt.toISOString();
+  const payslipLinks = await getPayslipLinksForPeriod(weekStartKey, periodEndKey);
 
   const detailRows = buildPayrollSheetRows(entries, exceptions);
-  const summaryRows = buildPayrollSummaryRows(personHours, entries, weekStartKey, periodEndKey, exportedAtIso);
+  const summaryRows = buildPayrollSummaryRows(personHours, entries, weekStartKey, periodEndKey, exportedAtIso, payslipLinks);
 
   if (options?.dryRun) {
     return {
@@ -754,15 +754,17 @@ export async function exportPayrollRangeToSheet(
     throw new Error("Khoảng ngày này chưa có dữ liệu payroll — hãy tính lương cho các tuần liên quan trước khi đồng bộ.");
   }
   const exceptions = exceptionDocuments.map(({ _id: _ignored, weekStartKey: _weekStartKey, generationId: _generationId, ...exception }) => exception);
-  const personHours = buildPersonHours(entries);
+  const config = await getPayrollConfiguration().catch(() => null);
+  const personHours = buildPayrollPersonHours(entries, config?.settings?.taxRate || 0);
   const reconciliation = buildReconciliation(entries, exceptions);
-  const totals = summarizeEntries(entries);
+  const totals = summarizeEntries(entries, personHours);
   const detailSheetName = getGooglePayrollSheetName();
   const summarySheetName = getGooglePayrollSummarySheetName();
   const exportedAt = new Date();
   const exportedAtIso = exportedAt.toISOString();
+  const payslipLinks = await getPayslipLinksForPeriod(fromDate, toDate);
   const detailRows = buildPayrollSheetRows(entries, exceptions);
-  const summaryRows = buildPayrollSummaryRows(personHours, entries, fromDate, toDate, exportedAtIso);
+  const summaryRows = buildPayrollSummaryRows(personHours, entries, fromDate, toDate, exportedAtIso, payslipLinks);
 
   if (options?.dryRun) {
     return {

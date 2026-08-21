@@ -503,7 +503,25 @@ export type PayrollPersonHours = {
   grade: string;
   sessionCount: number;
   scheduledHours: number;
+  basePay: number;
+  commissionPay: number;
+  adjustments: number;
+  grossPay: number;
+  taxAmount: number;
   netPay: number;
+};
+
+export type PayrollManualAdjustment = {
+  adjustmentId: string;
+  weekStartKey: string;
+  dateKey: string;
+  employeeId: string;
+  employeeName: string;
+  role: PayrollRole;
+  hours: number;
+  note?: string;
+  createdAt: string;
+  createdBy: string;
 };
 
 export type PayrollSheetExportTotals = {
@@ -550,6 +568,7 @@ export type PayrollDashboardPayload = {
   summary?: PayrollDashboardSummary;
   entries?: PayrollEntry[];
   personHours?: PayrollPersonHours[];
+  adjustments?: PayrollManualAdjustment[];
   exceptions?: PayrollException[];
   rates?: PayrollRateCard[];
   settings?: PayrollSettings;

@@ -9,7 +9,13 @@ import {
   findDriveChildByName,
   getContractDriveRootFolderId
 } from "@/lib/googleDrive";
+import {
+  createGoogleSheetsClient,
+  getGoogleHrMasterSpreadsheetId,
+  getGooglePayrollSummarySheetName
+} from "@/lib/googleSheets";
 import { getMongoDatabase } from "@/lib/mongodb";
+import { buildPayrollPersonHours } from "@/lib/payrollPersonSummary";
 import { getPayrollDashboard } from "@/lib/payrollStore";
 import type { EmployeeRole, PayrollDashboardPayload, PayrollEntry } from "@/lib/types";
 
@@ -56,6 +62,13 @@ type PayrollPayslipPersonSummary = {
   taxAmount: number;
   netPay: number;
   sessionCount: number;
+};
+
+type PayrollPayslipRecord = PayrollPayslipDocument & {
+  fromDate: string;
+  toDate: string;
+  generatedAt: string;
+  generatedBy: string;
 };
 
 function getPayrollPayslipTemplateDocId() {
@@ -167,68 +180,173 @@ function isValidDateKey(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(cleanText(value));
 }
 
-function summarizePayrollPeople(payload: PayrollDashboardPayload) {
-  const summaries = new Map<string, PayrollPayslipPersonSummary>();
-  for (const entry of payload.entries || []) {
-    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
-    const current = summaries.get(key) || {
-      employeeId: entry.employeeId,
-      role: entry.role,
-      employeeName: entry.employeeName,
-      grade: entry.grade,
-      totalHours: 0,
-      basePay: 0,
-      commissionPay: 0,
-      grossPay: 0,
-      taxAmount: 0,
-      netPay: 0,
-      sessionCount: 0
-    };
-    current.employeeName = current.employeeName || entry.employeeName;
-    current.grade = current.grade || entry.grade;
-    current.totalHours += entry.scheduledHours;
-    current.basePay += entry.basePay;
-    current.commissionPay += entry.commissionPay;
-    current.grossPay += entry.grossPay;
-    current.taxAmount += entry.taxAmount;
-    current.netPay += entry.netPay;
-    current.sessionCount += entry.sessionIds.length;
-    summaries.set(key, current);
+function normalizeCell(value: unknown) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "number") return Math.round(value * 100) / 100;
+  return String(value).trim();
+}
+
+function convertSheetsSerialToDateKey(value: number) {
+  if (!Number.isFinite(value)) return "";
+  const epochUtc = Date.UTC(1899, 11, 30);
+  const timestamp = epochUtc + Math.round(value) * 24 * 60 * 60 * 1000;
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function parseDateDisplayToKey(value: unknown) {
+  if (typeof value === "number") return convertSheetsSerialToDateKey(value);
+  const trimmed = String(normalizeCell(value)).trim();
+  if (!trimmed) return "";
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (isoMatch) return trimmed;
+  const localMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (!localMatch) return "";
+  const [, day, month, year] = localMatch;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function columnLetterFromCount(columnCount: number) {
+  let index = Math.max(1, columnCount);
+  let output = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    output = String.fromCharCode(65 + remainder) + output;
+    index = Math.floor((index - 1) / 26);
   }
-  return Array.from(summaries.values()).sort((left, right) =>
+  return output;
+}
+
+async function persistPayrollPayslips(records: PayrollPayslipRecord[]) {
+  if (records.length === 0) return;
+  const database = await getMongoDatabase();
+  const collection = database.collection<PayrollPayslipRecord>("payroll_payslips");
+  await collection.createIndex({ fromDate: 1, toDate: 1, role: 1, employeeId: 1 }, { unique: true }).catch(() => undefined);
+  await collection.bulkWrite(records.map((record) => ({
+    updateOne: {
+      filter: {
+        fromDate: record.fromDate,
+        toDate: record.toDate,
+        role: record.role,
+        employeeId: record.employeeId
+      },
+      update: { $set: record },
+      upsert: true
+    }
+  })), { ordered: false });
+}
+
+async function syncPayslipLinksToSummarySheet(records: PayrollPayslipRecord[]) {
+  if (records.length === 0) return { updatedCount: 0 };
+  const sheets = createGoogleSheetsClient();
+  const spreadsheetId = getGoogleHrMasterSpreadsheetId();
+  const sheetName = getGooglePayrollSummarySheetName();
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId, fields: "sheets(properties(sheetId,title))" });
+  const existingTab = spreadsheet.data.sheets?.find((sheet) => sheet.properties?.title === sheetName);
+  if (!existingTab?.properties?.sheetId) return { updatedCount: 0 };
+
+  const quotedTitle = sheetName.replace(/'/g, "''");
+  const current = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${quotedTitle}'!A:Z`,
+    valueRenderOption: "UNFORMATTED_VALUE"
+  });
+  const values = (current.data.values as unknown[][] | undefined) || [];
+  if (values.length === 0) return { updatedCount: 0 };
+
+  const headers = values[0].map((cell) => String(normalizeCell(cell)));
+  const rows = values.slice(1).map((row) => [...row]);
+  const weekStartIndex = headers.findIndex((header) => header === "Week_Start");
+  const weekEndIndex = headers.findIndex((header) => header === "Week_End");
+  const employeeIdIndex = headers.findIndex((header) => header === "Mã Nhân Sự");
+  let payslipIndex = headers.findIndex((header) => header === "Payslip_Doc_URL" || header === "Link Phiếu Lương");
+
+  if (weekStartIndex < 0 || weekEndIndex < 0 || employeeIdIndex < 0) {
+    return { updatedCount: 0 };
+  }
+
+  if (payslipIndex < 0) {
+    headers.push("Payslip_Doc_URL");
+    payslipIndex = headers.length - 1;
+    rows.forEach((row) => {
+      while (row.length < headers.length) row.push("");
+    });
+  }
+
+  const recordMap = new Map(records.map((record) => [
+    `${record.fromDate}|${record.toDate}|${record.employeeId.toLowerCase()}`,
+    record.documentUrl
+  ]));
+
+  let updatedCount = 0;
+  rows.forEach((row) => {
+    while (row.length < headers.length) row.push("");
+    const key = `${parseDateDisplayToKey(row[weekStartIndex])}|${parseDateDisplayToKey(row[weekEndIndex])}|${String(normalizeCell(row[employeeIdIndex])).toLowerCase()}`;
+    const documentUrl = recordMap.get(key);
+    if (!documentUrl) return;
+    if (String(normalizeCell(row[payslipIndex])) === documentUrl) return;
+    row[payslipIndex] = documentUrl;
+    updatedCount += 1;
+  });
+
+  if (updatedCount === 0 && headers.length === values[0].length) {
+    return { updatedCount: 0 };
+  }
+
+  const allRows = [headers, ...rows];
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${quotedTitle}'!A1:Z`
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${quotedTitle}'!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: allRows }
+  });
+  const readbackRange = `'${quotedTitle}'!A1:${columnLetterFromCount(headers.length)}${allRows.length}`;
+  await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: readbackRange,
+    valueRenderOption: "UNFORMATTED_VALUE"
+  });
+  return { updatedCount };
+}
+
+function summarizePayrollPeople(payload: PayrollDashboardPayload) {
+  const personHours = payload.personHours?.length
+    ? payload.personHours
+    : buildPayrollPersonHours(payload.entries || [], payload.settings?.taxRate || 0);
+  return personHours.map((person) => ({
+    employeeId: person.employeeId,
+    role: person.role,
+    employeeName: person.employeeName,
+    grade: person.grade,
+    totalHours: person.scheduledHours,
+    basePay: person.basePay,
+    commissionPay: person.commissionPay,
+    grossPay: person.grossPay,
+    taxAmount: person.taxAmount,
+    netPay: person.netPay,
+    sessionCount: person.sessionCount
+  })).sort((left, right) =>
     left.role.localeCompare(right.role) || left.employeeName.localeCompare(right.employeeName, "vi")
   );
 }
 
 function summarizePayrollEntries(entries: PayrollEntry[]) {
-  const summaries = new Map<string, PayrollPayslipPersonSummary>();
-  for (const entry of entries) {
-    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
-    const current = summaries.get(key) || {
-      employeeId: entry.employeeId,
-      role: entry.role,
-      employeeName: entry.employeeName,
-      grade: entry.grade,
-      totalHours: 0,
-      basePay: 0,
-      commissionPay: 0,
-      grossPay: 0,
-      taxAmount: 0,
-      netPay: 0,
-      sessionCount: 0
-    };
-    current.employeeName = current.employeeName || entry.employeeName;
-    current.grade = current.grade || entry.grade;
-    current.totalHours += entry.scheduledHours;
-    current.basePay += entry.basePay;
-    current.commissionPay += entry.commissionPay;
-    current.grossPay += entry.grossPay;
-    current.taxAmount += entry.taxAmount;
-    current.netPay += entry.netPay;
-    current.sessionCount += entry.sessionIds.length;
-    summaries.set(key, current);
-  }
-  return Array.from(summaries.values()).sort((left, right) =>
+  return buildPayrollPersonHours(entries, 0.1).map((person) => ({
+    employeeId: person.employeeId,
+    role: person.role,
+    employeeName: person.employeeName,
+    grade: person.grade,
+    totalHours: person.scheduledHours,
+    basePay: person.basePay,
+    commissionPay: person.commissionPay,
+    grossPay: person.grossPay,
+    taxAmount: person.taxAmount,
+    netPay: person.netPay,
+    sessionCount: person.sessionCount
+  })).sort((left, right) =>
     left.role.localeCompare(right.role) || left.employeeName.localeCompare(right.employeeName, "vi")
   );
 }
@@ -383,6 +501,16 @@ export async function generatePayrollPayslipsForWeek(weekStartKey: string, actor
 
   const generatedCount = documents.length;
   const failedCount = failures.length;
+  const generatedAt = new Date().toISOString();
+  const persistedRecords = documents.map((document) => ({
+    ...document,
+    fromDate: weekStartKey,
+    toDate: payload.weekEndKey!,
+    generatedAt,
+    generatedBy: actorAccountKey
+  }));
+  await persistPayrollPayslips(persistedRecords);
+  const sheetSync = await syncPayslipLinksToSummarySheet(persistedRecords);
   return {
     success: failedCount === 0,
     fromDate: weekStartKey,
@@ -392,8 +520,8 @@ export async function generatePayrollPayslipsForWeek(weekStartKey: string, actor
     documents,
     failures,
     message: failedCount === 0
-      ? `Đã tạo ${generatedCount} phiếu lương trong tuần ${formatDateDisplay(weekStartKey)} - ${formatDateDisplay(payload.weekEndKey)}.`
-      : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra.`
+      ? `Đã tạo ${generatedCount} phiếu lương trong tuần ${formatDateDisplay(weekStartKey)} - ${formatDateDisplay(payload.weekEndKey)} và cập nhật ${sheetSync.updatedCount} link vào Payroll_Summary_Raw.`
+      : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra. Đã cập nhật ${sheetSync.updatedCount} link vào Payroll_Summary_Raw.`
   };
 }
 
@@ -440,6 +568,16 @@ export async function generatePayrollPayslipsForRange(fromDate: string, toDate: 
 
   const generatedCount = documents.length;
   const failedCount = failures.length;
+  const generatedAt = new Date().toISOString();
+  const persistedRecords = documents.map((document) => ({
+    ...document,
+    fromDate,
+    toDate,
+    generatedAt,
+    generatedBy: actorAccountKey
+  }));
+  await persistPayrollPayslips(persistedRecords);
+  const sheetSync = await syncPayslipLinksToSummarySheet(persistedRecords);
   return {
     success: failedCount === 0,
     fromDate,
@@ -449,7 +587,7 @@ export async function generatePayrollPayslipsForRange(fromDate: string, toDate: 
     documents,
     failures,
     message: failedCount === 0
-      ? `Đã tạo ${generatedCount} phiếu lương từ ${formatDateDisplay(fromDate)} đến ${formatDateDisplay(toDate)}.`
-      : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra.`
+      ? `Đã tạo ${generatedCount} phiếu lương từ ${formatDateDisplay(fromDate)} đến ${formatDateDisplay(toDate)} và cập nhật ${sheetSync.updatedCount} link vào Payroll_Summary_Raw.`
+      : `Đã tạo ${generatedCount} phiếu lương, còn ${failedCount} nhân sự cần kiểm tra. Đã cập nhật ${sheetSync.updatedCount} link vào Payroll_Summary_Raw.`
   };
 }

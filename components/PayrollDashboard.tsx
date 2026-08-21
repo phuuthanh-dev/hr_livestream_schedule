@@ -3,6 +3,7 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useEffect, useRef, useState } from "react";
 import type {
+  EmployeeAdminPayload,
   PayrollDashboardPayload,
   PayrollRateCard,
   PayrollSettings,
@@ -86,11 +87,18 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const [sheetExportOpen, setSheetExportOpen] = useState(false);
   const [payslipRangeOpen, setPayslipRangeOpen] = useState(false);
   const [sheetRangeOpen, setSheetRangeOpen] = useState(false);
+  const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
   const [sheetFromDate, setSheetFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [sheetToDate, setSheetToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
   const [payslipFromDate, setPayslipFromDate] = useState(initialWeekStartKey || currentWeekStart());
   const [payslipToDate, setPayslipToDate] = useState(addDays(initialWeekStartKey || currentWeekStart(), 6));
+  const [adjustmentRole, setAdjustmentRole] = useState<"host" | "support">("support");
+  const [adjustmentEmployeeId, setAdjustmentEmployeeId] = useState("");
+  const [adjustmentDateKey, setAdjustmentDateKey] = useState(initialWeekStartKey || currentWeekStart());
+  const [adjustmentHours, setAdjustmentHours] = useState("2");
+  const [adjustmentNote, setAdjustmentNote] = useState("Công bù");
+  const [employeeOptions, setEmployeeOptions] = useState<Array<{ id: string; name: string; role: "host" | "support"; grade?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadDashboard(signal?: AbortSignal) {
@@ -123,7 +131,38 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setSheetToDate(nextToDate);
     setPayslipFromDate(weekStartKey);
     setPayslipToDate(nextToDate);
+    setAdjustmentDateKey(weekStartKey);
   }, [weekStartKey]);
+
+  useEffect(() => {
+    const unique = new Map<string, { id: string; name: string; role: "host" | "support"; grade?: string }>();
+    (payload?.personHours || []).forEach((person) => {
+      unique.set(`${person.role}:${person.employeeId.toLowerCase()}`, {
+        id: person.employeeId,
+        name: person.employeeName,
+        role: person.role,
+        grade: person.grade
+      });
+    });
+    (payload?.entries || []).forEach((entry) => {
+      unique.set(`${entry.role}:${entry.employeeId.toLowerCase()}`, {
+        id: entry.employeeId,
+        name: entry.employeeName,
+        role: entry.role,
+        grade: entry.grade
+      });
+    });
+    setEmployeeOptions(Array.from(unique.values()).sort((left, right) =>
+      left.role.localeCompare(right.role) || left.name.localeCompare(right.name, "vi")
+    ));
+  }, [payload]);
+
+  useEffect(() => {
+    const firstMatch = employeeOptions.find((item) => item.role === adjustmentRole);
+    if (!adjustmentEmployeeId || !employeeOptions.some((item) => item.role === adjustmentRole && item.id === adjustmentEmployeeId)) {
+      setAdjustmentEmployeeId(firstMatch?.id || "");
+    }
+  }, [adjustmentRole, adjustmentEmployeeId, employeeOptions]);
 
   async function uploadReport() {
     if (!file) {
@@ -243,6 +282,55 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     }
   }
 
+  async function saveAdjustment() {
+    setWorking("adjustment");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/payroll/adjustments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          weekStartKey,
+          dateKey: adjustmentDateKey,
+          employeeId: adjustmentEmployeeId,
+          role: adjustmentRole,
+          hours: Number(adjustmentHours),
+          note: adjustmentNote
+        })
+      });
+      const result = await response.json() as PayrollDashboardPayload;
+      if (!response.ok || !result.success) throw new Error(result.message || "Không lưu được công bù.");
+      setPayload(result);
+      setNotice(result.message || "Đã lưu công bù.");
+      setAdjustmentModalOpen(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Không lưu được công bù.");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function removeAdjustment(adjustmentId: string) {
+    if (!window.confirm("Xóa công bù này và tính lại payroll tuần hiện tại?")) return;
+    setWorking("adjustment-delete");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/payroll/adjustments?adjustmentId=${encodeURIComponent(adjustmentId)}`, {
+        method: "DELETE"
+      });
+      const result = await response.json() as PayrollDashboardPayload;
+      if (!response.ok || !result.success) throw new Error(result.message || "Không xóa được công bù.");
+      setPayload(result);
+      setNotice(result.message || "Đã xóa công bù.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Không xóa được công bù.");
+    } finally {
+      setWorking("");
+    }
+  }
+
   async function saveRates() {
     if (!draftSettings) return;
     setWorking("rates");
@@ -294,9 +382,11 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
   const isLocked = payload?.periodStatus === "locked";
   const entries = payload?.entries || [];
   const personHours = payload?.personHours || [];
+  const adjustments = payload?.adjustments || [];
   const exceptions = payload?.exceptions || [];
   const latestImport = payload?.imports?.[0];
   const sheetExport = payload?.sheetExport;
+  const filteredAdjustmentPeople = employeeOptions.filter((item) => item.role === adjustmentRole);
 
   return (
     <main className="payrollApp">
@@ -368,6 +458,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
         <div className="payrollActions">
           <span className={`payrollStatus ${isLocked ? "locked" : "draft"}`}>{isLocked ? "Đã khóa" : "Bản nháp"}</span>
           <button className="payrollActionButton" disabled={isLocked || Boolean(working)} onClick={() => void runAction("generate")} type="button"><Icon name="calculate" />{working === "generate" ? "Đang tính..." : "Tính lương tuần"}</button>
+          <button className={`payrollActionButton subtle ${adjustmentModalOpen ? "active" : ""}`.trim()} disabled={isLocked || Boolean(working)} onClick={() => setAdjustmentModalOpen(true)} type="button"><Icon name="clock" />Công bù</button>
           <button className={`payrollActionButton subtle ${payslipRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setPayslipRangeOpen((current) => !current)} type="button"><Icon name="download" />Tạo phiếu lương</button>
           <button className="payrollActionButton subtle" disabled={entries.length === 0} onClick={exportCsv} type="button"><Icon name="download" />Xuất CSV</button>
           <button className={`payrollActionButton subtle ${sheetRangeOpen ? "active" : ""}`.trim()} disabled={Boolean(working)} onClick={() => setSheetRangeOpen((current) => !current)} type="button"><Icon name="upload" />Sync Payroll Sheets</button>
@@ -447,6 +538,72 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
 
       {error ? <div className="payrollMessage error"><Icon name="alert" /><span>{error}</span></div> : null}
       {notice ? <div className="payrollMessage success"><span>{notice}</span></div> : null}
+
+      {adjustmentModalOpen ? (
+        <div className="payrollModalBackdrop" role="dialog" aria-modal="true" aria-label="Công bù payroll">
+          <section className="payrollAdjustmentModal">
+            <div className="payrollPanelTitle">
+              <div>
+                <strong>Công bù theo ngày</strong>
+                <span>Áp dụng cho tuần đang chọn, lưu vào DB và tự regenerate payroll nếu tuần chưa khóa.</span>
+              </div>
+              <button className="payrollIconAction" disabled={Boolean(working)} onClick={() => setAdjustmentModalOpen(false)} type="button">×</button>
+            </div>
+            <div className="payrollAdjustmentGrid">
+              <label>
+                <span>Vai trò</span>
+                <select value={adjustmentRole} onChange={(event) => setAdjustmentRole(event.target.value as "host" | "support")}>
+                  <option value="support">Support</option>
+                  <option value="host">Host</option>
+                </select>
+              </label>
+              <label>
+                <span>Nhân sự</span>
+                <select value={adjustmentEmployeeId} onChange={(event) => setAdjustmentEmployeeId(event.target.value)}>
+                  {filteredAdjustmentPeople.length === 0 ? <option value="">Chưa có nhân sự trong payroll tuần</option> : null}
+                  {filteredAdjustmentPeople.map((item) => (
+                    <option key={`${item.role}-${item.id}`} value={item.id}>
+                      {item.name} · {item.id}{item.grade ? ` · ${item.grade}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Ngày</span>
+                <input type="date" value={adjustmentDateKey} min={weekStartKey} max={addDays(weekStartKey, 6)} onChange={(event) => setAdjustmentDateKey(event.target.value)} />
+              </label>
+              <label>
+                <span>Số giờ bù</span>
+                <input type="number" min="0.5" max="24" step="0.5" value={adjustmentHours} onChange={(event) => setAdjustmentHours(event.target.value)} />
+              </label>
+              <label className="wide">
+                <span>Ghi chú</span>
+                <input type="text" maxLength={160} value={adjustmentNote} onChange={(event) => setAdjustmentNote(event.target.value)} placeholder="Ví dụ: Deal fix fail không có host" />
+              </label>
+            </div>
+            <div className="payrollAdjustmentList">
+              <strong>Công bù hiện có trong tuần</strong>
+              {adjustments.length === 0 ? (
+                <div className="payrollEmpty compact">Chưa có công bù nào trong tuần này.</div>
+              ) : adjustments.map((adjustment) => (
+                <article className="payrollAdjustmentItem" key={adjustment.adjustmentId}>
+                  <div>
+                    <strong>{adjustment.employeeName} · {adjustment.employeeId}</strong>
+                    <small>{formatDate(adjustment.dateKey)} · {adjustment.hours}h · {adjustment.role === "host" ? "Host" : "Support"}{adjustment.note ? ` · ${adjustment.note}` : ""}</small>
+                  </div>
+                  <button className="payrollAdjustmentDelete" disabled={Boolean(working)} onClick={() => void removeAdjustment(adjustment.adjustmentId)} type="button">Xóa</button>
+                </article>
+              ))}
+            </div>
+            <div className="payrollRangeActions">
+              <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => setAdjustmentModalOpen(false)} type="button">Đóng</button>
+              <button className="payrollActionButton" disabled={Boolean(working) || !adjustmentEmployeeId} onClick={() => void saveAdjustment()} type="button">
+                <Icon name="clock" />{working === "adjustment" ? "Đang lưu..." : "Lưu công bù"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <section className="payrollExportPanel">
         <div className="payrollPanelTitle">

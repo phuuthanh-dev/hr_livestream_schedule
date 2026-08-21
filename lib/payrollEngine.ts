@@ -5,6 +5,7 @@ import { getScheduleSessionCode } from "./scheduleSessionCode.ts";
 import type {
   PayrollEntry,
   PayrollException,
+  PayrollManualAdjustment,
   PayrollRateCard,
   PayrollRole,
   PayrollSettings,
@@ -32,54 +33,9 @@ export type PayrollCalculationInput = {
   fragments: TikTokReportFragment[];
   rates: PayrollRateCard[];
   settings: PayrollSettings;
+  manualAdjustments?: PayrollManualAdjustment[];
   generatedAt?: Date;
 };
-
-type TemporaryPayrollHourAdjustment = {
-  weekStartKey: string;
-  role: PayrollRole;
-  employeeId: string;
-  extraHours: number;
-  location?: "home" | "studio";
-  reason: string;
-};
-
-// Temporary payroll compensation for the first two approved weeks only.
-// Remove these rows after HR finishes the manual catch-up for failed fixed-deal shifts.
-const TEMPORARY_PAYROLL_HOUR_ADJUSTMENTS: TemporaryPayrollHourAdjustment[] = [
-  {
-    weekStartKey: "2026-08-03",
-    role: "support",
-    employeeId: "HRSL02_6H",
-    extraHours: 2,
-    location: "studio",
-    reason: "Deal-fix fail compensation approved by HR"
-  },
-  {
-    weekStartKey: "2026-08-03",
-    role: "support",
-    employeeId: "HRSL01_6H",
-    extraHours: 2,
-    location: "studio",
-    reason: "Deal-fix fail compensation approved by HR"
-  },
-  {
-    weekStartKey: "2026-08-10",
-    role: "support",
-    employeeId: "HRSL02_6H",
-    extraHours: 2,
-    location: "studio",
-    reason: "Deal-fix fail compensation approved by HR"
-  },
-  {
-    weekStartKey: "2026-08-10",
-    role: "support",
-    employeeId: "HRSL01_6H",
-    extraHours: 2,
-    location: "studio",
-    reason: "Deal-fix fail compensation approved by HR"
-  }
-];
 
 function normalizeText(value: unknown) {
   return String(value || "")
@@ -251,14 +207,14 @@ function resolveHourlyRateOverride(value: unknown) {
   return Math.round(parsed);
 }
 
-function applyTemporaryHourAdjustments(
+function applyManualHourAdjustments(
   entries: PayrollEntry[],
   exceptions: PayrollException[],
   input: PayrollCalculationInput,
   peopleByKey: Map<string, SchedulePerson>
 ) {
-  const applicableAdjustments = TEMPORARY_PAYROLL_HOUR_ADJUSTMENTS.filter(
-    (item) => item.weekStartKey === input.weekStartKey && item.extraHours > 0
+  const applicableAdjustments = (input.manualAdjustments || []).filter(
+    (item) => item.weekStartKey === input.weekStartKey && item.hours > 0
   );
   if (applicableAdjustments.length === 0) return;
 
@@ -279,51 +235,52 @@ function applyTemporaryHourAdjustments(
 
     if (!hourlyRate) {
       exceptions.push({
-        exceptionKey: hashKey(["temporary_adjustment_missing_rate", input.weekStartKey, adjustment.role, adjustment.employeeId]),
+        exceptionKey: hashKey(["manual_adjustment_missing_rate", input.weekStartKey, adjustment.role, adjustment.employeeId]),
         type: "missing_rate",
-        dateKey: input.weekStartKey,
+        dateKey: adjustment.dateKey || input.weekStartKey,
         employeeId: adjustment.employeeId,
-        message: `Không thể áp dụng bù công tạm thời cho ${person?.name || adjustment.employeeId} vì chưa xác định được lương giờ.`
+        message: `Không thể áp dụng công bù cho ${person?.name || adjustment.employeeId} vì chưa xác định được lương giờ.`
       });
       return;
     }
 
-    const extraBasePay = Math.round(adjustment.extraHours * hourlyRate);
+    const extraBasePay = Math.round(adjustment.hours * hourlyRate);
 
     if (targetEntry) {
-      targetEntry.scheduledHours += adjustment.extraHours;
+      targetEntry.scheduledHours += adjustment.hours;
       targetEntry.basePay += extraBasePay;
+      targetEntry.adjustments += extraBasePay;
       targetEntry.grossPay += extraBasePay;
-      targetEntry.netPay = targetEntry.grossPay - targetEntry.taxAmount;
+      targetEntry.netPay = targetEntry.grossPay;
       return;
     }
 
     const grade = person?.level || "";
     const employeeName = person?.name || adjustment.employeeId;
     entries.push({
-      entryKey: hashKey([input.weekStartKey, "temporary_adjustment", adjustment.role, adjustment.employeeId.toLowerCase()]),
+      entryKey: hashKey([input.weekStartKey, "manual_adjustment", adjustment.role, adjustment.employeeId.toLowerCase(), adjustment.adjustmentId]),
       weekStartKey: input.weekStartKey,
       weekEndKey: input.weekEndKey,
-      dateKey: input.weekStartKey,
+      dateKey: adjustment.dateKey || input.weekStartKey,
       role: adjustment.role,
       employeeId: adjustment.employeeId,
       employeeName,
       grade,
-      location: adjustment.location || "studio",
-      accountId: `TEMP_ADJUSTMENT:${adjustment.reason}`,
+      location: "studio",
+      accountId: `MANUAL_ADJUSTMENT:${adjustment.note || "Cong bu"}`,
       sessionIds: [],
       tiktokLiveIds: [],
-      scheduledHours: adjustment.extraHours,
+      scheduledHours: adjustment.hours,
       hourlyRate,
       grossGmv: 0,
       returnedGmv: 0,
       eligibleGmv: 0,
       commissionRate: 0,
-      basePay: extraBasePay,
+      basePay: 0,
       commissionPay: 0,
-      adjustments: 0,
+      adjustments: extraBasePay,
       grossPay: extraBasePay,
-      taxRate: adjustment.role === "support" ? 0 : input.settings.taxRate,
+      taxRate: 0,
       taxAmount: 0,
       netPay: extraBasePay,
       generatedAt: (input.generatedAt || new Date()).toISOString()
@@ -444,7 +401,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     supportGroups.forEach((supportSessions) => buildEntry("support", supportSessions, live, eligibleGmv));
   });
 
-  applyTemporaryHourAdjustments(entries, exceptions, input, peopleByKey);
+  applyManualHourAdjustments(entries, exceptions, input, peopleByKey);
 
   function processSplitLive(live: LogicalLive, sessions: ScheduleSession[]) {
     const confirmedHostSessions = sessions.filter((session) => session.isHostConfirmed);
@@ -540,8 +497,8 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     const commissionPay = Math.round(eligibleGmv * commissionRate);
     const adjustments = 0;
     const grossPay = basePay + adjustments;
-    const effectiveTaxRate = role === "support" ? 0 : input.settings.taxRate;
-    const taxAmount = Math.round(grossPay * effectiveTaxRate);
+    const effectiveTaxRate = 0;
+    const taxAmount = 0;
     entries.push({
       entryKey: hashKey([input.weekStartKey, live.key, role, employeeId.toLowerCase()]),
       weekStartKey: input.weekStartKey,
@@ -567,7 +524,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
       grossPay,
       taxRate: effectiveTaxRate,
       taxAmount,
-      netPay: grossPay - taxAmount,
+      netPay: grossPay,
       generatedAt: generatedAt.toISOString()
     });
   }

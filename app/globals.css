@@ -4800,6 +4800,119 @@ a:hover {
   justify-content: flex-end;
 }
 
+.payrollModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  padding: 24px;
+  background: rgba(18, 35, 38, 0.4);
+  backdrop-filter: blur(6px);
+  place-items: center;
+}
+
+.payrollAdjustmentModal {
+  display: grid;
+  width: min(720px, 100%);
+  max-height: min(780px, calc(100vh - 48px));
+  padding: 22px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 26px;
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow: 0 24px 60px rgba(18, 39, 40, 0.16);
+  gap: 18px;
+  overflow: auto;
+}
+
+.payrollAdjustmentGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.payrollAdjustmentGrid label {
+  display: grid;
+  gap: 8px;
+}
+
+.payrollAdjustmentGrid label.wide {
+  grid-column: 1 / -1;
+}
+
+.payrollAdjustmentGrid label span {
+  color: var(--payroll-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.payrollAdjustmentGrid input,
+.payrollAdjustmentGrid select {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 14px;
+  color: var(--payroll-ink);
+  background: #fff;
+  font: inherit;
+}
+
+.payrollAdjustmentGrid input:focus,
+.payrollAdjustmentGrid select:focus {
+  outline: none;
+  border-color: var(--payroll-green);
+  box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.1);
+}
+
+.payrollAdjustmentList {
+  display: grid;
+  gap: 12px;
+}
+
+.payrollAdjustmentList > strong {
+  color: var(--payroll-ink);
+  font-size: 0.88rem;
+}
+
+.payrollAdjustmentItem {
+  display: flex;
+  padding: 14px 16px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 16px;
+  background: #fff;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.payrollAdjustmentItem div {
+  display: grid;
+  gap: 4px;
+}
+
+.payrollAdjustmentItem strong {
+  color: var(--payroll-ink);
+  font-size: 0.82rem;
+}
+
+.payrollAdjustmentItem small {
+  color: var(--payroll-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.payrollAdjustmentDelete {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #efc5bc;
+  border-radius: 12px;
+  color: #b03d2d;
+  background: #fff5f2;
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
 .payrollWeekControl,
 .payrollActions {
   display: flex;

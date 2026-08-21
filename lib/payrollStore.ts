@@ -3,6 +3,7 @@ import type { Collection } from "mongodb";
 import { getSchedulePeopleFromMongo } from "@/lib/employeeRoster";
 import { calculatePayroll } from "@/lib/payrollEngine";
 import { parseTikTokReport, type TikTokReportFragment } from "@/lib/payrollImport";
+import { buildPayrollPersonHours } from "@/lib/payrollPersonSummary";
 import { addDaysToScheduleDateKey, getScheduleWeekStartKey, isValidScheduleDateKey } from "@/lib/scheduleDate";
 import { getMongoDatabase } from "@/lib/mongodb";
 import { getScheduleFromMongo } from "@/lib/scheduleStore";
@@ -11,6 +12,7 @@ import type {
   PayrollEntry,
   PayrollException,
   PayrollImportRecord,
+  PayrollManualAdjustment,
   PayrollPersonHours,
   PayrollRateCard,
   PayrollSettings,
@@ -63,6 +65,12 @@ type PayrollPeriodDocument = {
 
 type PayrollEntryDocument = PayrollEntry & { generationId: string };
 type PayrollExceptionDocument = PayrollException & { weekStartKey: string; generationId: string };
+type PayrollManualAdjustmentDocument = Omit<PayrollManualAdjustment, "createdAt"> & {
+  createdAt: Date;
+  active: boolean;
+  updatedAt?: Date;
+  updatedBy?: string;
+};
 
 const DEFAULT_RATES: PayrollRateCard[] = [
   { id: "host:trial", role: "host", grade: "Thử việc", hourlyRate: 70_000, commissionMode: "fixed", commissionRate: 0.05, sortOrder: 10, active: true, note: "Cố định" },
@@ -99,7 +107,8 @@ async function getCollections() {
     settings: database.collection<PayrollSettingsDocument>("payroll_settings"),
     periods: database.collection<PayrollPeriodDocument>("payroll_periods"),
     entries: database.collection<PayrollEntryDocument>("payroll_entries"),
-    exceptions: database.collection<PayrollExceptionDocument>("payroll_exceptions")
+    exceptions: database.collection<PayrollExceptionDocument>("payroll_exceptions"),
+    adjustments: database.collection<PayrollManualAdjustmentDocument>("payroll_manual_adjustments")
   };
   if (!payrollIndexesPromise) {
     payrollIndexesPromise = Promise.all([
@@ -113,7 +122,9 @@ async function getCollections() {
       collections.entries.createIndex({ entryKey: 1 }, { unique: true }),
       collections.entries.createIndex({ weekStartKey: 1, dateKey: 1, role: 1 }),
       collections.exceptions.createIndex({ exceptionKey: 1 }, { unique: true }),
-      collections.exceptions.createIndex({ weekStartKey: 1, type: 1 })
+      collections.exceptions.createIndex({ weekStartKey: 1, type: 1 }),
+      collections.adjustments.createIndex({ adjustmentId: 1 }, { unique: true }),
+      collections.adjustments.createIndex({ weekStartKey: 1, active: 1, role: 1, employeeId: 1 })
     ]).catch((error) => {
       payrollIndexesPromise = null;
       throw error;
@@ -263,11 +274,12 @@ export async function generatePayrollWeek(weekStartKey: string, actorAccountKey:
   const existingPeriod = await collections.periods.findOne({ weekStartKey });
   if (existingPeriod?.status === "locked") throw new Error("Tuần lương đã khóa, không thể tính lại.");
 
-  const [{ rates, settings }, schedule, roster, reportDocuments] = await Promise.all([
+  const [{ rates, settings }, schedule, roster, reportDocuments, adjustmentDocuments] = await Promise.all([
     getPayrollConfiguration(),
     getScheduleFromMongo({ from: weekStartKey, to: weekEndKey }),
     getSchedulePeopleFromMongo(),
-    collections.reports.find({ dateKey: { $gte: weekStartKey, $lte: weekEndKey } }).sort({ startAt: 1 }).toArray()
+    collections.reports.find({ dateKey: { $gte: weekStartKey, $lte: weekEndKey } }).sort({ startAt: 1 }).toArray(),
+    collections.adjustments.find({ weekStartKey, active: true }).sort({ dateKey: 1, createdAt: 1 }).toArray()
   ]);
   const generatedAt = new Date();
   const generationId = randomUUID();
@@ -279,6 +291,10 @@ export async function generatePayrollWeek(weekStartKey: string, actorAccountKey:
     fragments: reportDocuments,
     rates,
     settings,
+    manualAdjustments: adjustmentDocuments.map(({ active: _active, ...adjustment }) => ({
+      ...adjustment,
+      createdAt: adjustment.createdAt.toISOString()
+    })),
     generatedAt
   });
 
@@ -317,7 +333,7 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
   const weekEndKey = addDaysToScheduleDateKey(weekStartKey, 6);
   const collections = await getCollections();
   const database = await getMongoDatabase();
-  const [{ rates, settings }, period, entryDocuments, exceptionDocuments, importDocuments, lastExport] = await Promise.all([
+  const [{ rates, settings }, period, entryDocuments, exceptionDocuments, importDocuments, lastExport, adjustmentDocuments] = await Promise.all([
     getPayrollConfiguration(),
     collections.periods.findOne({ weekStartKey }),
     collections.entries.find({ weekStartKey }).sort({ dateKey: 1, employeeName: 1 }).toArray(),
@@ -331,23 +347,25 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     }).sort({ importedAt: -1 }).limit(10).toArray(),
     database.collection<PayrollSheetExportRecord & { _id?: unknown }>("payroll_sheet_exports")
       .findOne({ weekStartKey, dryRun: false }, { sort: { exportedAt: -1 } })
-      .catch(() => null)
+      .catch(() => null),
+    collections.adjustments.find({ weekStartKey, active: true }).sort({ dateKey: 1, createdAt: 1 }).toArray()
   ]);
   const entries = entryDocuments.map(({ generationId: _generationId, ...entry }) => entry);
   const exceptions = exceptionDocuments.map(({ weekStartKey: _weekStart, generationId: _generationId, ...exception }) => exception);
-  const summary = entries.reduce((totals, entry) => ({
-    employeeCount: 0,
-    entryCount: totals.entryCount + 1,
-    scheduledHours: totals.scheduledHours + entry.scheduledHours,
+  const personHours = buildPayrollPersonHours(entries, settings.taxRate);
+  const summary = personHours.reduce((totals, person) => ({
+    employeeCount: totals.employeeCount + 1,
+    entryCount: totals.entryCount,
+    scheduledHours: totals.scheduledHours + person.scheduledHours,
     grossGmv: totals.grossGmv,
-    basePay: totals.basePay + entry.basePay,
-    commissionPay: totals.commissionPay + entry.commissionPay,
-    taxAmount: totals.taxAmount + entry.taxAmount,
-    netPay: totals.netPay + entry.netPay,
+    basePay: totals.basePay + person.basePay,
+    commissionPay: totals.commissionPay + person.commissionPay,
+    taxAmount: totals.taxAmount + person.taxAmount,
+    netPay: totals.netPay + person.netPay,
     exceptionCount: exceptionDocuments.length
   }), {
     employeeCount: 0,
-    entryCount: 0,
+    entryCount: entries.length,
     scheduledHours: 0,
     grossGmv: 0,
     basePay: 0,
@@ -356,33 +374,10 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     netPay: 0,
     exceptionCount: exceptionDocuments.length
   });
-  summary.employeeCount = new Set(entries.map((entry) => `${entry.role}:${entry.employeeId.toLowerCase()}`)).size;
   summary.grossGmv = Array.from(new Map(entries.map((entry) => [
     `${entry.dateKey}|${entry.accountId.toLowerCase()}|${entry.tiktokLiveIds.slice().sort().join(",")}`,
     entry.grossGmv
   ])).values()).reduce((total, grossGmv) => total + grossGmv, 0);
-
-  const personHoursMap = new Map<string, PayrollPersonHours>();
-  entries.forEach((entry) => {
-    const key = `${entry.role}:${entry.employeeId.toLowerCase()}`;
-    const current = personHoursMap.get(key) || {
-      employeeId: entry.employeeId,
-      employeeName: entry.employeeName,
-      role: entry.role,
-      grade: entry.grade,
-      sessionCount: 0,
-      scheduledHours: 0,
-      netPay: 0
-    };
-    current.sessionCount += entry.sessionIds.length;
-    current.scheduledHours += entry.scheduledHours;
-    current.netPay += entry.netPay;
-    if (!current.grade && entry.grade) current.grade = entry.grade;
-    personHoursMap.set(key, current);
-  });
-  const personHours = Array.from(personHoursMap.values()).sort((left, right) =>
-    right.scheduledHours - left.scheduledHours || left.employeeName.localeCompare(right.employeeName, "vi")
-  );
 
   return {
     success: true,
@@ -393,6 +388,10 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     summary,
     entries,
     personHours,
+    adjustments: adjustmentDocuments.map(({ active: _active, ...adjustment }) => ({
+      ...adjustment,
+      createdAt: adjustment.createdAt.toISOString?.() || String(adjustment.createdAt)
+    })),
     exceptions,
     rates,
     settings,
@@ -400,6 +399,67 @@ export async function getPayrollDashboard(weekStartKey: string): Promise<Payroll
     sheetExport: lastExport ? (({ _id: _ignored, ...record }) => record)(lastExport) : null,
     message: period ? undefined : "Tuần này chưa được tính lương."
   };
+}
+
+export async function createPayrollManualAdjustment(input: {
+  weekStartKey: string;
+  dateKey: string;
+  employeeId: string;
+  role: "host" | "support";
+  hours: number;
+  note?: string;
+}, actorAccountKey: string) {
+  assertWeekStart(input.weekStartKey);
+  const weekEndKey = addDaysToScheduleDateKey(input.weekStartKey, 6);
+  if (!isValidScheduleDateKey(input.dateKey) || input.dateKey < input.weekStartKey || input.dateKey > weekEndKey) {
+    throw new Error("Ngày công bù phải nằm trong tuần đang chọn.");
+  }
+  if (!Number.isFinite(input.hours) || input.hours <= 0 || input.hours > 24) {
+    throw new Error("Số giờ công bù phải lớn hơn 0 và không quá 24 giờ.");
+  }
+
+  const people = await getSchedulePeopleFromMongo();
+  const target = [...(people.hosts || []), ...(people.supports || [])]
+    .find((person) => person.role === input.role && person.id.toLowerCase() === input.employeeId.trim().toLowerCase());
+  if (!target) throw new Error("Không tìm thấy nhân sự để tạo công bù.");
+
+  const { adjustments, periods } = await getCollections();
+  const now = new Date();
+  const document: PayrollManualAdjustmentDocument = {
+    adjustmentId: randomUUID(),
+    weekStartKey: input.weekStartKey,
+    dateKey: input.dateKey,
+    employeeId: target.id,
+    employeeName: target.name,
+    role: input.role,
+    hours: Math.round(input.hours * 100) / 100,
+    note: input.note?.trim() || "",
+    createdAt: now,
+    createdBy: actorAccountKey,
+    active: true
+  };
+  await adjustments.insertOne(document);
+
+  const period = await periods.findOne({ weekStartKey: input.weekStartKey });
+  if (period?.status === "locked") {
+    return getPayrollDashboard(input.weekStartKey);
+  }
+  return generatePayrollWeek(input.weekStartKey, actorAccountKey);
+}
+
+export async function deletePayrollManualAdjustment(adjustmentId: string, actorAccountKey: string) {
+  const { adjustments, periods } = await getCollections();
+  const existing = await adjustments.findOne({ adjustmentId, active: true });
+  if (!existing) throw new Error("Không tìm thấy công bù để xóa.");
+  await adjustments.updateOne(
+    { adjustmentId },
+    { $set: { active: false, updatedAt: new Date(), updatedBy: actorAccountKey } }
+  );
+  const period = await periods.findOne({ weekStartKey: existing.weekStartKey });
+  if (period?.status === "locked") {
+    return getPayrollDashboard(existing.weekStartKey);
+  }
+  return generatePayrollWeek(existing.weekStartKey, actorAccountKey);
 }
 
 export async function updatePayrollConfiguration(
