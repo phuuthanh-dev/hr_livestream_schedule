@@ -185,6 +185,26 @@ function commissionRateFor(rate: PayrollRateCard, eligibleGmv: number, settings:
     .reduce((selected, tier) => eligibleGmv >= tier.minimumGmv ? Math.max(selected, tier.commissionRate) : selected, rate.commissionRate);
 }
 
+function resolveHourlyRateOverride(value: unknown) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return null;
+  const match = raw.match(/(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)\s*(k|ngh|ngan|ngàn)?/i);
+  if (!match) return null;
+  const numericToken = match[1];
+  const suffix = match[2] || "";
+  let parsed = 0;
+
+  if (/[.,]\d{3}/.test(numericToken)) {
+    parsed = Number(numericToken.replace(/[.,]/g, ""));
+  } else {
+    parsed = Number(numericToken.replace(",", "."));
+    if (suffix) parsed *= 1000;
+  }
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed);
+}
+
 export function calculatePayroll(input: PayrollCalculationInput) {
   const generatedAt = input.generatedAt || new Date();
   const peopleByKey = new Map(input.people.map((person) => [personKey(person.role, person.id), person]));
@@ -387,10 +407,11 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     const uniqueSessions = Array.from(new Map(sessions.map((session) => [session.sessionId, session])).values());
     const scheduledHours = uniqueSessions.reduce((total, session) => total + (sessionRanges.get(session.sessionId)?.hours || 0), 0);
     const commissionRate = commissionRateFor(rate, eligibleGmv, input.settings);
-    const basePay = Math.round(scheduledHours * rate.hourlyRate);
+    const hourlyRate = resolveHourlyRateOverride(person?.cashOffer) || rate.hourlyRate;
+    const basePay = Math.round(scheduledHours * hourlyRate);
     const commissionPay = Math.round(eligibleGmv * commissionRate);
     const adjustments = 0;
-    const grossPay = basePay + commissionPay + adjustments;
+    const grossPay = basePay + adjustments;
     const effectiveTaxRate = role === "support" ? 0 : input.settings.taxRate;
     const taxAmount = Math.round(grossPay * effectiveTaxRate);
     entries.push({
@@ -407,7 +428,7 @@ export function calculatePayroll(input: PayrollCalculationInput) {
       sessionIds: uniqueSessions.map((session) => getScheduleSessionCode(session)),
       tiktokLiveIds: live.tiktokLiveIds,
       scheduledHours,
-      hourlyRate: rate.hourlyRate,
+      hourlyRate,
       grossGmv: live.grossGmv,
       returnedGmv: live.returnedGmv,
       eligibleGmv,
