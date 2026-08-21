@@ -221,11 +221,14 @@ function applyManualHourAdjustments(
   applicableAdjustments.forEach((adjustment) => {
     const employeeKey = personKey(adjustment.role, adjustment.employeeId);
     const person = peopleByKey.get(employeeKey);
-    const targetEntry = entries
-      .filter((entry) => entry.role === adjustment.role && entry.employeeId.toLowerCase() === adjustment.employeeId.toLowerCase())
-      .sort((left, right) => left.dateKey.localeCompare(right.dateKey))[0];
+    const matchingDateEntry = entries.find(
+      (entry) =>
+        entry.role === adjustment.role
+        && entry.employeeId.toLowerCase() === adjustment.employeeId.toLowerCase()
+        && entry.dateKey === (adjustment.dateKey || input.weekStartKey)
+    );
 
-    const hourlyRate = targetEntry?.hourlyRate
+    const hourlyRate = matchingDateEntry?.hourlyRate
       || resolveHourlyRateOverride(person?.cashOffer)
       || (() => {
         const grade = person?.level || "";
@@ -246,15 +249,6 @@ function applyManualHourAdjustments(
 
     const extraBasePay = Math.round(adjustment.hours * hourlyRate);
 
-    if (targetEntry) {
-      targetEntry.scheduledHours += adjustment.hours;
-      targetEntry.basePay += extraBasePay;
-      targetEntry.adjustments += extraBasePay;
-      targetEntry.grossPay += extraBasePay;
-      targetEntry.netPay = targetEntry.grossPay;
-      return;
-    }
-
     const grade = person?.level || "";
     const employeeName = person?.name || adjustment.employeeId;
     entries.push({
@@ -266,7 +260,7 @@ function applyManualHourAdjustments(
       employeeId: adjustment.employeeId,
       employeeName,
       grade,
-      location: "studio",
+      location: matchingDateEntry?.location || "studio",
       accountId: `MANUAL_ADJUSTMENT:${adjustment.note || "Cong bu"}`,
       sessionIds: [],
       tiktokLiveIds: [],
@@ -276,9 +270,9 @@ function applyManualHourAdjustments(
       returnedGmv: 0,
       eligibleGmv: 0,
       commissionRate: 0,
-      basePay: 0,
+      basePay: extraBasePay,
       commissionPay: 0,
-      adjustments: extraBasePay,
+      adjustments: 0,
       grossPay: extraBasePay,
       taxRate: 0,
       taxAmount: 0,
