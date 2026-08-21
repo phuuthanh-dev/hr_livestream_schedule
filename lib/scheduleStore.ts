@@ -5,7 +5,7 @@ import { getSubmittedScheduleSlotsForWeek } from "@/lib/availabilityStore";
 import { findActiveScheduleLocation } from "@/lib/locationStore";
 import { getMongoClient, getMongoDatabase } from "@/lib/mongodb";
 import { buildManualScheduleAssignment, getSessionLocationMode } from "@/lib/scheduleAssignment";
-import { getScheduleWeekDateKeys, getScheduleWeekStartKey } from "@/lib/scheduleDate";
+import { getScheduleTodayKey, getScheduleWeekDateKeys, getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import { pickHostCandidatesForSingleSession, pickSupportCandidatesForSingleSession } from "@/lib/scheduleEngine";
 import { buildScheduleLaneKey, getScheduleSessionLane } from "@/lib/scheduleLane";
 import { buildScheduleSessionCode, buildScheduleSessionKey, getScheduleSessionCode } from "@/lib/scheduleSessionCode";
@@ -137,6 +137,13 @@ export type UpdateScheduleAssignmentInput = {
 export type DeleteScheduleSessionInput = {
   sessionId: string;
   actorAccountKey: string;
+};
+
+export type ReleaseFutureScheduleAssignmentsInput = {
+  role: EmployeeRole;
+  employeeId: string;
+  actorAccountKey: string;
+  fromDateKey?: string;
 };
 
 export type CancelScheduleParticipationInput = {
@@ -723,6 +730,54 @@ async function rerankScheduleSessionRole(
   }
   await saveUpdatedScheduleSession(sessions, current, updated, actorAccountKey);
   return updated;
+}
+
+export async function releaseFutureScheduleAssignmentsForEmployee(
+  input: ReleaseFutureScheduleAssignmentsInput
+): Promise<{ released: number; sessionIds: string[] }> {
+  const { sessions } = await getCollections();
+  const employeeId = cleanText(input.employeeId);
+  if (!employeeId) return { released: 0, sessionIds: [] };
+
+  const fromDateKey = cleanText(input.fromDateKey) || getScheduleTodayKey();
+  const personKeyField = input.role === "host" ? "hostPersonKey" : "supportPersonKey";
+  const personKey = buildPersonKey(input.role, employeeId);
+  if (!personKey) return { released: 0, sessionIds: [] };
+
+  const documents = await sessions.find({
+    active: true,
+    dateKey: { $gt: fromDateKey },
+    [personKeyField]: personKey
+  }).toArray();
+
+  const releasedSessionIds: string[] = [];
+  for (const document of documents) {
+    const current = toScheduleSession(document);
+    const retainedHostId = input.role === "host" ? "" : current.hostId;
+    const retainedSupportId = input.role === "support" ? "" : current.supportId;
+    const activeHost = retainedHostId ? await findActiveSchedulePerson("host", retainedHostId) : null;
+    const activeSupport = retainedSupportId ? await findActiveSchedulePerson("support", retainedSupportId) : null;
+    const host = activeHost || (retainedHostId ? buildPreservedHostPerson(current) : null);
+    const support = activeSupport || (retainedSupportId ? buildPreservedSupportPerson(current) : null);
+    const locationMode = getSessionLocationMode(current) || "studio";
+    const updated = buildManualScheduleAssignment({
+      current,
+      host,
+      support,
+      hostWasEdited: input.role === "host",
+      supportWasEdited: input.role === "support",
+      locationMode,
+      studioLocationName: locationMode === "studio" ? current.format : undefined
+    });
+
+    await saveUpdatedScheduleSession(sessions, current, updated, input.actorAccountKey);
+    releasedSessionIds.push(current.sessionId);
+  }
+
+  return {
+    released: releasedSessionIds.length,
+    sessionIds: releasedSessionIds
+  };
 }
 
 export async function updateScheduleSessionAssignment(

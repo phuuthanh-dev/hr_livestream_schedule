@@ -390,6 +390,7 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
   const active = input.active === undefined ? existing.active : input.active;
   await assertPersonInput(merged, active);
   const now = new Date();
+  const shouldReleaseFutureSessions = existing.active && !active;
 
   const updated = await collection.findOneAndUpdate(
     { personKey },
@@ -424,6 +425,14 @@ export async function updateSchedulePerson(input: SchedulePersonMutation, actorA
       { $set: recruitmentUpdates }
     )
   ]);
+  if (shouldReleaseFutureSessions) {
+    const { releaseFutureScheduleAssignmentsForEmployee } = await import("@/lib/scheduleStore");
+    await releaseFutureScheduleAssignmentsForEmployee({
+      role: existing.role,
+      employeeId: existing.employeeId,
+      actorAccountKey
+    });
+  }
   return person;
 }
 
