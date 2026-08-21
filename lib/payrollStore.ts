@@ -268,11 +268,21 @@ export async function importTikTokPayrollReport(
 }
 
 export async function generatePayrollWeek(weekStartKey: string, actorAccountKey: string) {
+  return rebuildPayrollWeek(weekStartKey, actorAccountKey, { allowLockedRebuild: false });
+}
+
+async function rebuildPayrollWeek(
+  weekStartKey: string,
+  actorAccountKey: string,
+  options: { allowLockedRebuild: boolean }
+) {
   assertWeekStart(weekStartKey);
   const weekEndKey = addDaysToScheduleDateKey(weekStartKey, 6);
   const collections = await getCollections();
   const existingPeriod = await collections.periods.findOne({ weekStartKey });
-  if (existingPeriod?.status === "locked") throw new Error("Tuần lương đã khóa, không thể tính lại.");
+  if (existingPeriod?.status === "locked" && !options.allowLockedRebuild) {
+    throw new Error("Tuần lương đã khóa, không thể tính lại.");
+  }
 
   const [{ rates, settings }, schedule, roster, reportDocuments, adjustmentDocuments] = await Promise.all([
     getPayrollConfiguration(),
@@ -321,7 +331,28 @@ export async function generatePayrollWeek(weekStartKey: string, actorAccountKey:
     collections.exceptions.deleteMany({ weekStartKey, generationId: { $ne: generationId } }),
     collections.periods.updateOne(
       { weekStartKey },
-      { $set: { weekEndKey, status: "draft", generationId, generatedAt, generatedBy: actorAccountKey }, $unset: { lockedAt: "", lockedBy: "" } },
+      existingPeriod?.status === "locked"
+        ? {
+            $set: {
+              weekEndKey,
+              status: "locked",
+              generationId,
+              generatedAt,
+              generatedBy: actorAccountKey,
+              lockedAt: existingPeriod.lockedAt || generatedAt,
+              lockedBy: existingPeriod.lockedBy || actorAccountKey
+            }
+          }
+        : {
+            $set: {
+              weekEndKey,
+              status: "draft",
+              generationId,
+              generatedAt,
+              generatedBy: actorAccountKey
+            },
+            $unset: { lockedAt: "", lockedBy: "" }
+          },
       { upsert: true }
     )
   ]);
@@ -423,7 +454,7 @@ export async function createPayrollManualAdjustment(input: {
     .find((person) => person.role === input.role && person.id.toLowerCase() === input.employeeId.trim().toLowerCase());
   if (!target) throw new Error("Không tìm thấy nhân sự để tạo công bù.");
 
-  const { adjustments, periods } = await getCollections();
+  const { adjustments } = await getCollections();
   const now = new Date();
   const document: PayrollManualAdjustmentDocument = {
     adjustmentId: randomUUID(),
@@ -439,27 +470,18 @@ export async function createPayrollManualAdjustment(input: {
     active: true
   };
   await adjustments.insertOne(document);
-
-  const period = await periods.findOne({ weekStartKey: input.weekStartKey });
-  if (period?.status === "locked") {
-    return getPayrollDashboard(input.weekStartKey);
-  }
-  return generatePayrollWeek(input.weekStartKey, actorAccountKey);
+  return rebuildPayrollWeek(input.weekStartKey, actorAccountKey, { allowLockedRebuild: true });
 }
 
 export async function deletePayrollManualAdjustment(adjustmentId: string, actorAccountKey: string) {
-  const { adjustments, periods } = await getCollections();
+  const { adjustments } = await getCollections();
   const existing = await adjustments.findOne({ adjustmentId, active: true });
   if (!existing) throw new Error("Không tìm thấy công bù để xóa.");
   await adjustments.updateOne(
     { adjustmentId },
     { $set: { active: false, updatedAt: new Date(), updatedBy: actorAccountKey } }
   );
-  const period = await periods.findOne({ weekStartKey: existing.weekStartKey });
-  if (period?.status === "locked") {
-    return getPayrollDashboard(existing.weekStartKey);
-  }
-  return generatePayrollWeek(existing.weekStartKey, actorAccountKey);
+  return rebuildPayrollWeek(existing.weekStartKey, actorAccountKey, { allowLockedRebuild: true });
 }
 
 export async function updatePayrollConfiguration(
