@@ -2,6 +2,7 @@
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getScheduleWeekStartKey } from "@/lib/scheduleDate";
 import type {
   EmployeeAdminPayload,
   PayrollDashboardPayload,
@@ -335,11 +336,12 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
     setError("");
     setNotice("");
     try {
+      const targetWeekStartKey = getScheduleWeekStartKey(adjustmentDateKey);
       const response = await fetch("/api/payroll/adjustments", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          weekStartKey,
+          weekStartKey: targetWeekStartKey,
           dateKey: adjustmentDateKey,
           employeeId: adjustmentEmployeeId,
           role: adjustmentRole,
@@ -350,6 +352,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
       const result = await response.json() as PayrollDashboardPayload;
       if (!response.ok || !result.success) throw new Error(result.message || "Không lưu được công bù.");
       setPayload(result);
+      setWeekStartKey(targetWeekStartKey);
       setNotice(result.message || "Đã lưu công bù.");
       setAdjustmentModalOpen(false);
     } catch (saveError) {
@@ -666,7 +669,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
               </label>
               <label>
                 <span>Ngày</span>
-                <input type="date" value={adjustmentDateKey} min={weekStartKey} max={addDays(weekStartKey, 6)} onChange={(event) => setAdjustmentDateKey(event.target.value)} />
+                <input type="date" value={adjustmentDateKey} onChange={(event) => setAdjustmentDateKey(event.target.value)} />
               </label>
               <label>
                 <span>Số giờ bù</span>
