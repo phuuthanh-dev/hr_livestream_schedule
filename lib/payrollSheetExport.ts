@@ -177,6 +177,7 @@ function columnLetterFromCount(columnCount: number) {
 }
 
 function parseDateDisplayToKey(value: unknown) {
+  if (typeof value === "number") return convertSheetsSerialToDateKey(value);
   const trimmed = String(normalizeCell(value)).trim();
   if (!trimmed) return "";
   const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
@@ -483,8 +484,20 @@ async function writeFixedSheet(args: {
   shouldReplaceRow: (row: SheetGridRow) => boolean;
   compareRows: (left: SheetGridRow, right: SheetGridRow) => number;
   freezeColumns?: number;
+  dateColumnIndexes?: number[];
 }) {
-  const { sheets, spreadsheetId, sheetName, headers, aliases, replacementRows, shouldReplaceRow, compareRows, freezeColumns = 1 } = args;
+  const {
+    sheets,
+    spreadsheetId,
+    sheetName,
+    headers,
+    aliases,
+    replacementRows,
+    shouldReplaceRow,
+    compareRows,
+    freezeColumns = 1,
+    dateColumnIndexes = []
+  } = args;
   const { sheetId, quotedTitle } = await ensureSheetTab(sheets, spreadsheetId, sheetName);
   const current = await sheets.spreadsheets.values.get({
     spreadsheetId,
@@ -524,7 +537,26 @@ async function writeFixedSheet(args: {
             },
             fields: "gridProperties.frozenRowCount,gridProperties.frozenColumnCount"
           }
-        }
+        },
+        ...dateColumnIndexes.map((columnIndex) => ({
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              startColumnIndex: columnIndex,
+              endColumnIndex: columnIndex + 1
+            },
+            cell: {
+              userEnteredFormat: {
+                numberFormat: {
+                  type: "DATE",
+                  pattern: "dd/MM/yyyy"
+                }
+              }
+            },
+            fields: "userEnteredFormat.numberFormat"
+          }
+        }))
       ]
     }
   });
@@ -604,7 +636,8 @@ export async function exportPayrollWeekToSheet(
     replacementRows: detailRows,
     shouldReplaceRow: (row) => isDetailRowInsideWeek(row, weekStartKey, dashboard.weekEndKey || weekStartKey),
     compareRows: compareDetailRows,
-    freezeColumns: 5
+    freezeColumns: 5,
+    dateColumnIndexes: [1, 2, 3]
   });
 
   const summaryResult = await writeFixedSheet({
@@ -616,7 +649,8 @@ export async function exportPayrollWeekToSheet(
     replacementRows: summaryRows,
     shouldReplaceRow: (row) => isSummaryRowInsideWeek(row, weekStartKey),
     compareRows: compareSummaryRows,
-    freezeColumns: 4
+    freezeColumns: 4,
+    dateColumnIndexes: [0, 1]
   });
 
   const verification = {
