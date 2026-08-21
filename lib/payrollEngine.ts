@@ -35,6 +35,52 @@ export type PayrollCalculationInput = {
   generatedAt?: Date;
 };
 
+type TemporaryPayrollHourAdjustment = {
+  weekStartKey: string;
+  role: PayrollRole;
+  employeeId: string;
+  extraHours: number;
+  location?: "home" | "studio";
+  reason: string;
+};
+
+// Temporary payroll compensation for the first two approved weeks only.
+// Remove these rows after HR finishes the manual catch-up for failed fixed-deal shifts.
+const TEMPORARY_PAYROLL_HOUR_ADJUSTMENTS: TemporaryPayrollHourAdjustment[] = [
+  {
+    weekStartKey: "2026-08-03",
+    role: "support",
+    employeeId: "HRSL02_6H",
+    extraHours: 2,
+    location: "studio",
+    reason: "Deal-fix fail compensation approved by HR"
+  },
+  {
+    weekStartKey: "2026-08-03",
+    role: "support",
+    employeeId: "HRSL01_6H",
+    extraHours: 2,
+    location: "studio",
+    reason: "Deal-fix fail compensation approved by HR"
+  },
+  {
+    weekStartKey: "2026-08-10",
+    role: "support",
+    employeeId: "HRSL02_6H",
+    extraHours: 2,
+    location: "studio",
+    reason: "Deal-fix fail compensation approved by HR"
+  },
+  {
+    weekStartKey: "2026-08-10",
+    role: "support",
+    employeeId: "HRSL01_6H",
+    extraHours: 2,
+    location: "studio",
+    reason: "Deal-fix fail compensation approved by HR"
+  }
+];
+
 function normalizeText(value: unknown) {
   return String(value || "")
     .trim()
@@ -205,6 +251,86 @@ function resolveHourlyRateOverride(value: unknown) {
   return Math.round(parsed);
 }
 
+function applyTemporaryHourAdjustments(
+  entries: PayrollEntry[],
+  exceptions: PayrollException[],
+  input: PayrollCalculationInput,
+  peopleByKey: Map<string, SchedulePerson>
+) {
+  const applicableAdjustments = TEMPORARY_PAYROLL_HOUR_ADJUSTMENTS.filter(
+    (item) => item.weekStartKey === input.weekStartKey && item.extraHours > 0
+  );
+  if (applicableAdjustments.length === 0) return;
+
+  applicableAdjustments.forEach((adjustment) => {
+    const employeeKey = personKey(adjustment.role, adjustment.employeeId);
+    const person = peopleByKey.get(employeeKey);
+    const targetEntry = entries
+      .filter((entry) => entry.role === adjustment.role && entry.employeeId.toLowerCase() === adjustment.employeeId.toLowerCase())
+      .sort((left, right) => left.dateKey.localeCompare(right.dateKey))[0];
+
+    const hourlyRate = targetEntry?.hourlyRate
+      || resolveHourlyRateOverride(person?.cashOffer)
+      || (() => {
+        const grade = person?.level || "";
+        const rate = findRate(input.rates, adjustment.role, grade);
+        return rate?.hourlyRate || 0;
+      })();
+
+    if (!hourlyRate) {
+      exceptions.push({
+        exceptionKey: hashKey(["temporary_adjustment_missing_rate", input.weekStartKey, adjustment.role, adjustment.employeeId]),
+        type: "missing_rate",
+        dateKey: input.weekStartKey,
+        employeeId: adjustment.employeeId,
+        message: `Không thể áp dụng bù công tạm thời cho ${person?.name || adjustment.employeeId} vì chưa xác định được lương giờ.`
+      });
+      return;
+    }
+
+    const extraBasePay = Math.round(adjustment.extraHours * hourlyRate);
+
+    if (targetEntry) {
+      targetEntry.scheduledHours += adjustment.extraHours;
+      targetEntry.basePay += extraBasePay;
+      targetEntry.grossPay += extraBasePay;
+      targetEntry.netPay = targetEntry.grossPay - targetEntry.taxAmount;
+      return;
+    }
+
+    const grade = person?.level || "";
+    const employeeName = person?.name || adjustment.employeeId;
+    entries.push({
+      entryKey: hashKey([input.weekStartKey, "temporary_adjustment", adjustment.role, adjustment.employeeId.toLowerCase()]),
+      weekStartKey: input.weekStartKey,
+      weekEndKey: input.weekEndKey,
+      dateKey: input.weekStartKey,
+      role: adjustment.role,
+      employeeId: adjustment.employeeId,
+      employeeName,
+      grade,
+      location: adjustment.location || "studio",
+      accountId: `TEMP_ADJUSTMENT:${adjustment.reason}`,
+      sessionIds: [],
+      tiktokLiveIds: [],
+      scheduledHours: adjustment.extraHours,
+      hourlyRate,
+      grossGmv: 0,
+      returnedGmv: 0,
+      eligibleGmv: 0,
+      commissionRate: 0,
+      basePay: extraBasePay,
+      commissionPay: 0,
+      adjustments: 0,
+      grossPay: extraBasePay,
+      taxRate: adjustment.role === "support" ? 0 : input.settings.taxRate,
+      taxAmount: 0,
+      netPay: extraBasePay,
+      generatedAt: (input.generatedAt || new Date()).toISOString()
+    });
+  });
+}
+
 export function calculatePayroll(input: PayrollCalculationInput) {
   const generatedAt = input.generatedAt || new Date();
   const peopleByKey = new Map(input.people.map((person) => [personKey(person.role, person.id), person]));
@@ -317,6 +443,8 @@ export function calculatePayroll(input: PayrollCalculationInput) {
     });
     supportGroups.forEach((supportSessions) => buildEntry("support", supportSessions, live, eligibleGmv));
   });
+
+  applyTemporaryHourAdjustments(entries, exceptions, input, peopleByKey);
 
   function processSplitLive(live: LogicalLive, sessions: ScheduleSession[]) {
     const confirmedHostSessions = sessions.filter((session) => session.isHostConfirmed);
