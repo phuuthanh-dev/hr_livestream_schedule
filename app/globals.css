@@ -2991,12 +2991,14 @@ a:hover {
 }
 
 .handoverRoleHeader strong {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .handoverRoleHeader small {
   color: var(--muted);
-  font-size: 0.63rem;
+  font-size: 0.61rem;
+  line-height: 1.45;
 }
 
 .handoverField {
@@ -3007,7 +3009,7 @@ a:hover {
 .handoverField > span {
   display: flex;
   color: #5f6368;
-  font-size: 0.66rem;
+  font-size: 0.63rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3018,7 +3020,7 @@ a:hover {
 
 .handoverField > span em {
   color: #9aa0a6;
-  font-size: 0.56rem;
+  font-size: 0.54rem;
   font-style: normal;
   font-weight: 650;
   letter-spacing: 0;
@@ -3032,8 +3034,9 @@ a:hover {
   border: 1px solid #d1e7e5;
   border-radius: 14px;
   font: inherit;
-  font-size: 0.97rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 550;
+  line-height: 1.35;
   letter-spacing: -0.01em;
   color: #1f2933;
   background: #fff;
@@ -3049,6 +3052,7 @@ a:hover {
 
 .handoverField input::placeholder {
   color: #8b9897;
+  font-size: 0.84rem;
   font-weight: 500;
 }
 
@@ -3062,14 +3066,15 @@ a:hover {
 }
 
 .handoverRequestCard strong {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
+  line-height: 1.4;
 }
 
 .handoverRequestCard span,
 .handoverRequestCard em,
 .handoverSidebarEmpty {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   line-height: 1.5;
 }
 
@@ -3119,20 +3124,27 @@ a:hover {
 }
 
 .handoverSidebarSummary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
 }
 
 .handoverSidebarSummary strong {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .handoverSidebarSummary span {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
   color: #0c706c;
-  font-size: 0.7rem;
+  background: #ebf8f5;
+  font-size: 0.66rem;
   font-weight: 800;
+  line-height: 1;
+  align-items: center;
+  justify-content: center;
 }
 
 .handoverSidebarList {
@@ -3159,19 +3171,22 @@ a:hover {
 }
 
 .handoverSidebarItem strong {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  line-height: 1.4;
 }
 
 .handoverSidebarItem span {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
+  line-height: 1.45;
 }
 
 .handoverSidebarItem em {
   color: #0c706c;
-  font-size: 0.62rem;
+  font-size: 0.59rem;
   font-style: normal;
   font-weight: 700;
+  line-height: 1.4;
 }
 
 @keyframes spin {
