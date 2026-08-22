@@ -2758,6 +2758,12 @@ a:hover {
   background: var(--amber-soft);
 }
 
+.drawerAlert.handover {
+  color: #0b5f5f;
+  background: linear-gradient(135deg, #e6fbf7, #eefcf9);
+  box-shadow: 0 8px 18px rgba(12, 112, 108, 0.08);
+}
+
 .drawerDetails {
   display: grid;
   margin: 8px 0 24px;
@@ -3159,6 +3165,13 @@ a:hover {
 .handoverSidebarItem span {
   color: var(--muted);
   font-size: 0.62rem;
+}
+
+.handoverSidebarItem em {
+  color: #0c706c;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 700;
 }
 
 @keyframes spin {

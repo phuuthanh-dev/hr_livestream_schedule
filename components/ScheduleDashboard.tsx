@@ -430,6 +430,13 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const selectedOutgoingSupportHandover = selectedSession
     ? outgoingPendingHandoverRequests.find((request) => request.sessionId === selectedSession.sessionId && request.role === "support")
     : undefined;
+  const showHostHandoverCard = Boolean(
+    canConfirmSelectedHost || selectedIncomingHostHandover || selectedOutgoingHostHandover
+  );
+  const showSupportHandoverCard = Boolean(
+    canConfirmSelectedSupport || selectedIncomingSupportHandover || selectedOutgoingSupportHandover
+  );
+  const hasIncomingSelectedHandover = Boolean(selectedIncomingHostHandover || selectedIncomingSupportHandover);
   const handoverHostCandidates = hosts.filter((host) => host.id.trim().toLowerCase() !== normalizedEmployeeId);
   const handoverSupportCandidates = supports.filter((support) => support.id.trim().toLowerCase() !== normalizedEmployeeId);
   const selectedHandoverRecipient = [...handoverHostCandidates, ...handoverSupportCandidates]
@@ -1007,6 +1014,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                       >
                         <strong>{request.fromEmployeeName} muốn nhường {request.role === "host" ? "Host" : "Support"}</strong>
                         <span>{request.dateLabel} · {request.slot}</span>
+                        <em>Nhấn để mở chi tiết và phản hồi</em>
                       </button>
                     ))}
                   </div>
@@ -1551,6 +1559,12 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
             {selectedSession.missingSupport ? <div className="drawerAlert danger"><Icon name="warning" />Ca Studio đang thiếu support.</div> : null}
             {!selectedSession.hostId ? <div className="drawerAlert danger"><Icon name="warning" />Ca đang mở vì chưa có Host đủ điều kiện.</div> : null}
             {selectedSession.isSupportOnly ? <div className="drawerAlert support"><Icon name="check" />Support-only: giữ ca để fill host sau.</div> : null}
+            {hasIncomingSelectedHandover ? (
+              <div className="drawerAlert handover">
+                <Icon name="users" />
+                Bạn đang có yêu cầu nhường ca chờ phản hồi. Kéo xuống phần `Nhường ca cho đồng nghiệp` để nhận hoặc từ chối.
+              </div>
+            ) : null}
 
             <dl className="drawerDetails">
               <div><dt>Host</dt><dd>{getPersonLabel(selectedSession.hostId, selectedSession.hostName, "Chưa có host")}</dd></div>
@@ -1565,7 +1579,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               {isAdmin && selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
             </dl>
 
-            {!isAdmin && selectedFutureSession && (canConfirmSelectedHost || canConfirmSelectedSupport || Boolean(selectedIncomingHostHandover) || Boolean(selectedIncomingSupportHandover)) ? (
+            {!isAdmin && selectedFutureSession && (showHostHandoverCard || showSupportHandoverCard) ? (
               <section className="handoverPanel">
                 <div className="confirmPanelTitle">
                   <div className="handoverTitleIcon"><Icon name="users" size={17} /></div>
@@ -1575,13 +1589,19 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                   </div>
                 </div>
                 {handoverError ? <p className="assignmentError">{handoverError}</p> : null}
-                {canConfirmSelectedHost ? (
+                {showHostHandoverCard ? (
                   <div className="handoverRoleCard">
                     <div className="handoverRoleHeader">
                       <span>Host</span>
                       <div>
-                        <strong>Chọn Host nhận ca</strong>
-                        <small>{selectedOutgoingHostHandover ? `Đã gửi cho ${selectedOutgoingHostHandover.toEmployeeName} · đang chờ xác nhận` : "Chỉ hiển thị nhân sự đúng vai trò Host."}</small>
+                        <strong>{selectedIncomingHostHandover ? "Yêu cầu nhường Host đang chờ bạn phản hồi" : "Chọn Host nhận ca"}</strong>
+                        <small>{
+                          selectedIncomingHostHandover
+                            ? `Từ ${selectedIncomingHostHandover.fromEmployeeName} · phản hồi sẽ cập nhật lịch ngay.`
+                            : selectedOutgoingHostHandover
+                              ? `Đã gửi cho ${selectedOutgoingHostHandover.toEmployeeName} · đang chờ xác nhận`
+                              : "Chỉ hiển thị nhân sự đúng vai trò Host."
+                        }</small>
                       </div>
                     </div>
                     {selectedIncomingHostHandover ? (
@@ -1609,7 +1629,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                         </div>
                       </div>
                     ) : null}
-                    {!selectedOutgoingHostHandover ? (
+                    {!selectedIncomingHostHandover && !selectedOutgoingHostHandover && canConfirmSelectedHost ? (
                       <>
                         <label className="handoverField">
                           <span>Người nhận</span>
@@ -1641,13 +1661,19 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                     ) : null}
                   </div>
                 ) : null}
-                {canConfirmSelectedSupport ? (
+                {showSupportHandoverCard ? (
                   <div className="handoverRoleCard">
                     <div className="handoverRoleHeader">
                       <span>Support</span>
                       <div>
-                        <strong>Chọn Support nhận ca</strong>
-                        <small>{selectedOutgoingSupportHandover ? `Đã gửi cho ${selectedOutgoingSupportHandover.toEmployeeName} · đang chờ xác nhận` : "Chỉ hiển thị nhân sự đúng vai trò Support."}</small>
+                        <strong>{selectedIncomingSupportHandover ? "Yêu cầu nhường Support đang chờ bạn phản hồi" : "Chọn Support nhận ca"}</strong>
+                        <small>{
+                          selectedIncomingSupportHandover
+                            ? `Từ ${selectedIncomingSupportHandover.fromEmployeeName} · phản hồi sẽ cập nhật lịch ngay.`
+                            : selectedOutgoingSupportHandover
+                              ? `Đã gửi cho ${selectedOutgoingSupportHandover.toEmployeeName} · đang chờ xác nhận`
+                              : "Chỉ hiển thị nhân sự đúng vai trò Support."
+                        }</small>
                       </div>
                     </div>
                     {selectedIncomingSupportHandover ? (
@@ -1675,7 +1701,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                         </div>
                       </div>
                     ) : null}
-                    {!selectedOutgoingSupportHandover ? (
+                    {!selectedIncomingSupportHandover && !selectedOutgoingSupportHandover && canConfirmSelectedSupport ? (
                       <>
                         <label className="handoverField">
                           <span>Người nhận</span>
