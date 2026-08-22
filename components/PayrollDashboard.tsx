@@ -601,15 +601,20 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
       {adjustmentModalOpen ? (
         <div className="payrollModalBackdrop" role="dialog" aria-modal="true" aria-label="Công bù payroll">
           <section className="payrollAdjustmentModal">
-            <div className="payrollPanelTitle">
+            <div className="payrollAdjustmentHeader">
+              <div className="payrollAdjustmentHeaderIcon"><Icon name="clock" /></div>
               <div>
                 <strong>Công bù theo ngày</strong>
-                <span>Áp dụng cho tuần đang chọn, lưu vào DB và tự regenerate payroll nếu tuần chưa khóa.</span>
+                <span>Ghi nhận số giờ phát sinh ngoài ca live cho một nhân sự.</span>
               </div>
-              <button className="payrollIconAction" disabled={Boolean(working)} onClick={() => setAdjustmentModalOpen(false)} type="button">×</button>
+              <button aria-label="Đóng" className="payrollIconAction" disabled={Boolean(working)} onClick={() => setAdjustmentModalOpen(false)} type="button">×</button>
             </div>
-            <div className="payrollAdjustmentGrid">
-              <label>
+            <div className="payrollAdjustmentNotice">
+              <Icon name="alert" />
+              <span>Lưu vào dữ liệu tuần chứa ngày đã chọn và tự tính lại payroll nếu tuần chưa khóa.</span>
+            </div>
+            <div className="payrollAdjustmentGrid payrollAdjustmentFormCard">
+              <label className="payrollEmployeeField">
                 <span>Vai trò</span>
                 <select value={adjustmentRole} onChange={(event) => setAdjustmentRole(event.target.value as "host" | "support")}>
                   <option value="support">Support</option>
@@ -681,7 +686,9 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
               </label>
             </div>
             <div className="payrollAdjustmentList">
-              <strong>Công bù hiện có trong tuần</strong>
+              <div className="payrollAdjustmentListHeader">
+                <div><strong>Công bù trong tuần</strong><span>{adjustments.length} khoản đã ghi nhận</span></div>
+              </div>
               {adjustments.length === 0 ? (
                 <div className="payrollEmpty compact">Chưa có công bù nào trong tuần này.</div>
               ) : adjustments.map((adjustment) => (
@@ -694,7 +701,7 @@ export default function PayrollDashboard({ username, initialWeekStartKey }: Payr
                 </article>
               ))}
             </div>
-            <div className="payrollRangeActions">
+            <div className="payrollAdjustmentActions">
               <button className="payrollActionButton subtle" disabled={Boolean(working)} onClick={() => setAdjustmentModalOpen(false)} type="button">Đóng</button>
               <button className="payrollActionButton" disabled={Boolean(working) || !adjustmentEmployeeId} onClick={() => void saveAdjustment()} type="button">
                 <Icon name="clock" />{working === "adjustment" ? "Đang lưu..." : "Lưu công bù"}

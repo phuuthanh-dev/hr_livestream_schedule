@@ -2758,6 +2758,10 @@ a:hover {
 .drawerDetails {
   display: grid;
   margin: 8px 0 24px;
+  padding: 4px 14px;
+  border: 1px solid #e7ecea;
+  border-radius: 18px;
+  background: #fafcfb;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
 }
@@ -2914,19 +2918,64 @@ a:hover {
 
 .handoverPanel {
   display: grid;
-  gap: 12px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  gap: 14px;
+}
+
+.handoverPanel > .confirmPanelTitle {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.handoverPanel > .confirmPanelTitle > div:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.handoverTitleIcon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  color: #08746f;
+  background: #e7f6f3;
+  flex: 0 0 auto;
+  place-items: center;
 }
 
 .handoverRoleCard {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid rgba(12, 112, 108, 0.14);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(240, 251, 250, 0.9) 0%, rgba(255, 255, 255, 0.98) 100%);
+  background: linear-gradient(145deg, #f0faf8 0%, #fbfdfc 100%);
 }
 
 .handoverRoleHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.handoverRoleHeader > span {
+  display: inline-flex;
+  min-width: 58px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #08746f;
+  background: #d9f1ec;
+  font-size: 0.61rem;
+  font-weight: 800;
+  align-items: center;
+  justify-content: center;
+}
+
+.handoverRoleHeader > div {
   display: grid;
   gap: 2px;
 }
@@ -2946,11 +2995,24 @@ a:hover {
 }
 
 .handoverField > span {
+  display: flex;
   color: #5f6368;
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.handoverField > span em {
+  color: #9aa0a6;
+  font-size: 0.56rem;
+  font-style: normal;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .handoverField select,
@@ -3001,6 +3063,31 @@ a:hover {
 .handoverRequestActions .confirmAction {
   width: auto;
   min-width: 160px;
+}
+
+.handoverSubmitButton {
+  min-height: 46px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, #0c7f78, #086b68);
+  box-shadow: 0 8px 18px rgba(8, 107, 104, 0.16);
+  font-size: 0.72rem;
+  font-weight: 800;
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+
+.handoverSubmitButton:not(:disabled):hover {
+  box-shadow: 0 10px 22px rgba(8, 107, 104, 0.22);
+  transform: translateY(-1px);
+}
+
+.handoverSubmitButton:disabled {
+  color: #929a99;
+  background: #e8edec;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .handoverSidebarCard {
@@ -4962,21 +5049,82 @@ a:hover {
 
 .payrollAdjustmentModal {
   display: grid;
-  width: min(720px, 100%);
+  width: min(760px, 100%);
   max-height: min(780px, calc(100vh - 48px));
-  padding: 22px;
+  padding: 24px;
   border: 1px solid var(--payroll-line);
   border-radius: 26px;
   background: rgba(255, 252, 247, 0.98);
   box-shadow: 0 24px 60px rgba(18, 39, 40, 0.16);
-  gap: 18px;
-  overflow: auto;
+  gap: 16px;
+  overflow: visible;
+}
+
+.payrollAdjustmentHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.payrollAdjustmentHeader > div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+
+.payrollAdjustmentHeader strong {
+  color: var(--payroll-ink);
+  font-size: 1rem;
+}
+
+.payrollAdjustmentHeader span {
+  color: var(--payroll-muted);
+  font-size: 0.72rem;
+}
+
+.payrollAdjustmentHeaderIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  color: var(--payroll-green);
+  background: #e4f4ef;
+  place-items: center;
+}
+
+.payrollAdjustmentHeaderIcon svg,
+.payrollAdjustmentNotice svg,
+.payrollEmployeePickerSearch svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.payrollAdjustmentNotice {
+  display: flex;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #d9ebe5;
+  border-radius: 13px;
+  color: #42645f;
+  background: #f1f8f5;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .payrollAdjustmentGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.payrollAdjustmentFormCard {
+  padding: 16px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 18px;
+  background: #fff;
 }
 
 .payrollAdjustmentGrid label {
@@ -5080,7 +5228,7 @@ a:hover {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  z-index: 8;
+  z-index: 90;
   display: grid;
   padding: 12px;
   border: 1px solid rgba(13, 112, 104, 0.12);
@@ -5120,8 +5268,10 @@ a:hover {
 
 .payrollEmployeePickerList {
   display: grid;
-  max-height: 220px;
+  max-height: 190px;
+  padding-right: 3px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .payrollEmployeePickerOption {
@@ -5161,12 +5311,41 @@ a:hover {
 
 .payrollAdjustmentList {
   display: grid;
+  min-height: 92px;
+  max-height: 190px;
+  padding: 14px 16px;
+  border: 1px solid var(--payroll-line);
+  border-radius: 18px;
+  background: #fbfcf9;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.payrollAdjustmentListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.payrollAdjustmentList > strong {
+.payrollAdjustmentListHeader > div {
+  display: grid;
+  gap: 2px;
+}
+
+.payrollAdjustmentListHeader strong {
   color: var(--payroll-ink);
   font-size: 0.88rem;
+}
+
+.payrollAdjustmentListHeader span {
+  color: var(--payroll-muted);
+  font-size: 0.68rem;
+}
+
+.payrollAdjustmentList .payrollEmpty.compact {
+  min-height: 74px;
+  padding: 16px;
 }
 
 .payrollAdjustmentItem {
@@ -5205,6 +5384,14 @@ a:hover {
   background: #fff5f2;
   font-size: 0.73rem;
   font-weight: 800;
+}
+
+.payrollAdjustmentActions {
+  display: flex;
+  padding-top: 2px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .payrollWeekControl,
@@ -13203,5 +13390,69 @@ a:hover {
 
   .supportTrainingFooter button {
     width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .payrollModalBackdrop {
+    padding: 12px;
+    align-items: end;
+  }
+
+  .payrollAdjustmentModal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 18px 18px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .payrollAdjustmentHeader {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .payrollAdjustmentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .payrollAdjustmentGrid label.wide {
+    grid-column: auto;
+  }
+
+  .payrollEmployeePickerPanel {
+    position: static;
+    margin-top: 8px;
+    box-shadow: 0 12px 30px rgba(18, 39, 40, 0.12);
+  }
+
+  .payrollEmployeePickerList {
+    max-height: 180px;
+  }
+
+  .payrollAdjustmentList {
+    max-height: 220px;
+  }
+
+  .payrollAdjustmentActions {
+    position: sticky;
+    bottom: calc(-18px - env(safe-area-inset-bottom));
+    margin: 0 -16px calc(-18px - env(safe-area-inset-bottom));
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--payroll-line);
+    background: rgba(255, 252, 247, 0.96);
+    backdrop-filter: blur(12px);
+  }
+
+  .payrollAdjustmentActions .payrollActionButton:last-child {
+    flex: 1;
+  }
+
+  .handoverRoleCard {
+    padding: 14px;
+  }
+
+  .handoverRoleHeader {
+    align-items: flex-start;
   }
 }

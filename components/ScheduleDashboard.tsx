@@ -432,6 +432,8 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     : undefined;
   const handoverHostCandidates = hosts.filter((host) => host.id.trim().toLowerCase() !== normalizedEmployeeId);
   const handoverSupportCandidates = supports.filter((support) => support.id.trim().toLowerCase() !== normalizedEmployeeId);
+  const selectedHandoverRecipient = [...handoverHostCandidates, ...handoverSupportCandidates]
+    .find((person) => person.id === handoverRecipientId);
   const miniMonth = buildMiniMonth(weekStartKey);
   const coverage = formatWeekRange(weekStartKey);
   const slotSet = new Set(DEFAULT_SLOTS);
@@ -1558,23 +1560,29 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <div><dt>Kịch bản</dt><dd>{isUrl(selectedSession.scriptUrl) ? <a href={selectedSession.scriptUrl} target="_blank" rel="noreferrer">Mở kịch bản ↗</a> : selectedSession.scriptUrl || "-"}</dd></div>
               <div><dt>Backup host</dt><dd>{getPersonLabel(selectedSession.backupHostId, selectedSession.backupHostName, "-")}</dd></div>
               <div><dt>Backup support</dt><dd>{getPersonLabel(selectedSession.backupSupportId, selectedSession.backupSupportName, "-")}</dd></div>
-              <div><dt>Session Code</dt><dd><code>{selectedSession.sessionCode || "-"}</code></dd></div>
-              <div><dt>Session Key</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div>
-              {selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
+              {isAdmin ? <div><dt>Session Code</dt><dd><code>{selectedSession.sessionCode || "-"}</code></dd></div> : null}
+              {isAdmin ? <div><dt>Session Key</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div> : null}
+              {isAdmin && selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
             </dl>
 
             {!isAdmin && selectedFutureSession && (canConfirmSelectedHost || canConfirmSelectedSupport || Boolean(selectedIncomingHostHandover) || Boolean(selectedIncomingSupportHandover)) ? (
               <section className="handoverPanel">
                 <div className="confirmPanelTitle">
-                  <strong>Nhường ca</strong>
-                  <span>Tự thỏa thuận qua Zalo, sau đó gửi request trên app để người nhận xác nhận.</span>
+                  <div className="handoverTitleIcon"><Icon name="users" size={17} /></div>
+                  <div>
+                    <strong>Nhường ca cho đồng nghiệp</strong>
+                    <span>Lịch chỉ đổi sau khi người nhận đồng ý.</span>
+                  </div>
                 </div>
                 {handoverError ? <p className="assignmentError">{handoverError}</p> : null}
                 {canConfirmSelectedHost ? (
                   <div className="handoverRoleCard">
                     <div className="handoverRoleHeader">
-                      <strong>Nhường vai trò Host</strong>
-                      <small>{selectedOutgoingHostHandover ? `Đang chờ ${selectedOutgoingHostHandover.toEmployeeName} xác nhận` : "Bắt buộc chọn 1 Host khác để nhận ca."}</small>
+                      <span>Host</span>
+                      <div>
+                        <strong>Chọn Host nhận ca</strong>
+                        <small>{selectedOutgoingHostHandover ? `Đã gửi cho ${selectedOutgoingHostHandover.toEmployeeName} · đang chờ xác nhận` : "Chỉ hiển thị nhân sự đúng vai trò Host."}</small>
+                      </div>
                     </div>
                     {selectedIncomingHostHandover ? (
                       <div className="handoverRequestCard">
@@ -1604,7 +1612,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                     {!selectedOutgoingHostHandover ? (
                       <>
                         <label className="handoverField">
-                          <span>Chọn Host nhận ca</span>
+                          <span>Người nhận</span>
                           <select value={handoverRecipientId} onChange={(event) => setHandoverRecipientId(event.target.value)}>
                             <option value="">Chọn 1 Host</option>
                             {handoverHostCandidates.map((host) => (
@@ -1613,7 +1621,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                           </select>
                         </label>
                         <label className="handoverField">
-                          <span>Ghi chú</span>
+                          <span>Lời nhắn <em>Không bắt buộc</em></span>
                           <input
                             maxLength={240}
                             onChange={(event) => setHandoverNote(event.target.value)}
@@ -1622,12 +1630,12 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                           />
                         </label>
                         <button
-                          className="confirmAction"
+                          className="handoverSubmitButton"
                           disabled={!handoverRecipientId || handoverBusy === `${selectedSession.sessionId}:host:create-handover`}
                           onClick={() => void createHandoverRequest("host")}
                           type="button"
                         >
-                          Gửi request nhường Host
+                          {selectedHandoverRecipient ? `Gửi yêu cầu cho ${selectedHandoverRecipient.name}` : "Chọn Host để tiếp tục"}
                         </button>
                       </>
                     ) : null}
@@ -1636,8 +1644,11 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                 {canConfirmSelectedSupport ? (
                   <div className="handoverRoleCard">
                     <div className="handoverRoleHeader">
-                      <strong>Nhường vai trò Support</strong>
-                      <small>{selectedOutgoingSupportHandover ? `Đang chờ ${selectedOutgoingSupportHandover.toEmployeeName} xác nhận` : "Bắt buộc chọn 1 Support khác để nhận ca."}</small>
+                      <span>Support</span>
+                      <div>
+                        <strong>Chọn Support nhận ca</strong>
+                        <small>{selectedOutgoingSupportHandover ? `Đã gửi cho ${selectedOutgoingSupportHandover.toEmployeeName} · đang chờ xác nhận` : "Chỉ hiển thị nhân sự đúng vai trò Support."}</small>
+                      </div>
                     </div>
                     {selectedIncomingSupportHandover ? (
                       <div className="handoverRequestCard">
@@ -1667,7 +1678,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                     {!selectedOutgoingSupportHandover ? (
                       <>
                         <label className="handoverField">
-                          <span>Chọn Support nhận ca</span>
+                          <span>Người nhận</span>
                           <select value={handoverRecipientId} onChange={(event) => setHandoverRecipientId(event.target.value)}>
                             <option value="">Chọn 1 Support</option>
                             {handoverSupportCandidates.map((support) => (
@@ -1676,7 +1687,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                           </select>
                         </label>
                         <label className="handoverField">
-                          <span>Ghi chú</span>
+                          <span>Lời nhắn <em>Không bắt buộc</em></span>
                           <input
                             maxLength={240}
                             onChange={(event) => setHandoverNote(event.target.value)}
@@ -1685,12 +1696,12 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
                           />
                         </label>
                         <button
-                          className="confirmAction"
+                          className="handoverSubmitButton"
                           disabled={!handoverRecipientId || handoverBusy === `${selectedSession.sessionId}:support:create-handover`}
                           onClick={() => void createHandoverRequest("support")}
                           type="button"
                         >
-                          Gửi request nhường Support
+                          {selectedHandoverRecipient ? `Gửi yêu cầu cho ${selectedHandoverRecipient.name}` : "Chọn Support để tiếp tục"}
                         </button>
                       </>
                     ) : null}
