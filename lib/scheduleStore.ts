@@ -14,6 +14,7 @@ import type {
   AvailabilityLocationPreference,
   ConfirmRole,
   EmployeeRole,
+  ScheduleHandoverRequest,
   SchedulePayload,
   ScheduleSession,
   ScheduleSummary
@@ -22,6 +23,7 @@ import type {
 const SESSIONS_COLLECTION = "schedule_sessions";
 const SYNC_RUNS_COLLECTION = "schedule_sync_runs";
 const CONFIRMATION_EVENTS_COLLECTION = "schedule_confirmation_events";
+const HANDOVER_REQUESTS_COLLECTION = "schedule_handover_requests";
 const DEFAULT_TIMEZONE = "Asia/Bangkok";
 
 type ScheduleSessionDocument = ScheduleSession & {
@@ -88,6 +90,29 @@ type ScheduleConfirmationEventDocument = {
   createdAt: Date;
 };
 
+type ScheduleHandoverRequestDocument = {
+  requestId: string;
+  sessionId: string;
+  sessionCode?: string;
+  dateKey: string;
+  dateLabel: string;
+  slot: string;
+  role: EmployeeRole;
+  fromEmployeeId: string;
+  fromEmployeeName: string;
+  fromPersonKey: string;
+  toEmployeeId: string;
+  toEmployeeName: string;
+  toPersonKey: string;
+  status: "pending" | "accepted" | "rejected" | "cancelled";
+  note?: string;
+  createdAt: Date;
+  respondedAt?: Date;
+  responseNote?: string;
+  createdBy: string;
+  respondedBy?: string;
+};
+
 type ScheduleRange = {
   from?: string;
   to?: string;
@@ -125,6 +150,27 @@ type ScheduleWriteResult = {
   syncedAt: string;
 };
 
+function toScheduleHandoverRequest(document: ScheduleHandoverRequestDocument): ScheduleHandoverRequest {
+  return {
+    requestId: document.requestId,
+    sessionId: document.sessionId,
+    sessionCode: document.sessionCode,
+    dateKey: document.dateKey,
+    dateLabel: document.dateLabel,
+    slot: document.slot,
+    role: document.role,
+    fromEmployeeId: document.fromEmployeeId,
+    fromEmployeeName: document.fromEmployeeName,
+    toEmployeeId: document.toEmployeeId,
+    toEmployeeName: document.toEmployeeName,
+    status: document.status,
+    note: cleanText(document.note) || undefined,
+    createdAt: document.createdAt.toISOString(),
+    respondedAt: document.respondedAt?.toISOString(),
+    responseNote: cleanText(document.responseNote) || undefined
+  };
+}
+
 export type UpdateScheduleAssignmentInput = {
   sessionId: string;
   hostId?: string;
@@ -161,6 +207,23 @@ export type CreateScheduleSessionInput = {
   slot: string;
   locationMode: AvailabilityLocationPreference;
   actorAccountKey: string;
+};
+
+export type CreateScheduleHandoverRequestInput = {
+  sessionId: string;
+  role: EmployeeRole;
+  fromEmployeeId: string;
+  toEmployeeId: string;
+  actorAccountKey: string;
+  note?: string;
+};
+
+export type RespondScheduleHandoverRequestInput = {
+  requestId: string;
+  actorAccountKey: string;
+  actorEmployeeId: string;
+  action: "accept" | "reject";
+  responseNote?: string;
 };
 
 let indexesPromise: Promise<void> | undefined;
@@ -355,6 +418,7 @@ async function ensureScheduleIndexes(): Promise<void> {
       const sessions = database.collection<ScheduleSessionDocument>(SESSIONS_COLLECTION);
       const syncRuns = database.collection<ScheduleSyncRunDocument>(SYNC_RUNS_COLLECTION);
       const events = database.collection<ScheduleConfirmationEventDocument>(CONFIRMATION_EVENTS_COLLECTION);
+      const handovers = database.collection<ScheduleHandoverRequestDocument>(HANDOVER_REQUESTS_COLLECTION);
       await Promise.all([
         sessions.createIndex({ sessionKey: 1 }, { unique: true }),
         sessions.createIndex({ active: 1, dateKey: 1, slotSortKey: 1 }),
@@ -364,7 +428,11 @@ async function ensureScheduleIndexes(): Promise<void> {
         syncRuns.createIndex({ syncType: 1, status: 1, completedAt: -1 }),
         events.createIndex({ eventId: 1 }, { unique: true }),
         events.createIndex({ sessionId: 1, createdAt: -1 }),
-        events.createIndex({ actorAccountKey: 1, createdAt: -1 })
+        events.createIndex({ actorAccountKey: 1, createdAt: -1 }),
+        handovers.createIndex({ requestId: 1 }, { unique: true }),
+        handovers.createIndex({ toPersonKey: 1, status: 1, dateKey: 1 }),
+        handovers.createIndex({ fromPersonKey: 1, status: 1, dateKey: 1 }),
+        handovers.createIndex({ sessionId: 1, role: 1, status: 1, createdAt: -1 })
       ]);
     })().catch((error) => {
       indexesPromise = undefined;
@@ -378,13 +446,15 @@ async function getCollections(): Promise<{
   sessions: Collection<ScheduleSessionDocument>;
   syncRuns: Collection<ScheduleSyncRunDocument>;
   events: Collection<ScheduleConfirmationEventDocument>;
+  handovers: Collection<ScheduleHandoverRequestDocument>;
 }> {
   await ensureScheduleIndexes();
   const database = await getMongoDatabase();
   return {
     sessions: database.collection<ScheduleSessionDocument>(SESSIONS_COLLECTION),
     syncRuns: database.collection<ScheduleSyncRunDocument>(SYNC_RUNS_COLLECTION),
-    events: database.collection<ScheduleConfirmationEventDocument>(CONFIRMATION_EVENTS_COLLECTION)
+    events: database.collection<ScheduleConfirmationEventDocument>(CONFIRMATION_EVENTS_COLLECTION),
+    handovers: database.collection<ScheduleHandoverRequestDocument>(HANDOVER_REQUESTS_COLLECTION)
   };
 }
 
@@ -569,6 +639,190 @@ export async function findScheduleSessionById(sessionId: string): Promise<Schedu
   const { sessions } = await getCollections();
   const document = await sessions.findOne({ sessionKey: cleanText(sessionId), active: true });
   return document ? toScheduleSession(document) : null;
+}
+
+export async function listScheduleHandoverRequestsForEmployee(input: {
+  employeeId: string;
+  from?: string;
+  to?: string;
+}): Promise<ScheduleHandoverRequest[]> {
+  const { handovers } = await getCollections();
+  const employeeId = cleanText(input.employeeId);
+  if (!employeeId) return [];
+  const dateFilter: Record<string, string> = {};
+  if (input.from) dateFilter.$gte = input.from;
+  if (input.to) dateFilter.$lte = input.to;
+  const documents = await handovers.find({
+    $or: [
+      { fromPersonKey: buildPersonKey("host", employeeId) },
+      { fromPersonKey: buildPersonKey("support", employeeId) },
+      { toPersonKey: buildPersonKey("host", employeeId) },
+      { toPersonKey: buildPersonKey("support", employeeId) }
+    ],
+    ...(Object.keys(dateFilter).length > 0 ? { dateKey: dateFilter } : {})
+  }).sort({ createdAt: -1 }).toArray();
+  return documents.map(toScheduleHandoverRequest);
+}
+
+export async function createScheduleHandoverRequest(
+  input: CreateScheduleHandoverRequestInput
+): Promise<ScheduleHandoverRequest> {
+  const { sessions, handovers } = await getCollections();
+  const sessionId = cleanText(input.sessionId);
+  const fromEmployeeId = cleanText(input.fromEmployeeId);
+  const toEmployeeId = cleanText(input.toEmployeeId);
+  if (!sessionId) throw new Error("Thiếu sessionId để nhường ca.");
+  if (!fromEmployeeId || !toEmployeeId) throw new Error("Cần chọn người nhường và người nhận ca.");
+  if (fromEmployeeId.toLowerCase() === toEmployeeId.toLowerCase()) {
+    throw new Error("Người nhận ca phải khác người đang giữ ca.");
+  }
+
+  const document = await sessions.findOne({ sessionKey: sessionId, active: true });
+  if (!document) throw new Error("Không tìm thấy ca trong lịch MongoDB.");
+  const current = toScheduleSession(document);
+  if (current.dateKey < getScheduleTodayKey()) {
+    throw new Error(`Chỉ được nhường ca tương lai. Ca ${current.slot} ngày ${current.dateLabel} đã qua.`);
+  }
+
+  const assignedEmployeeId = input.role === "host" ? current.hostId : current.supportId;
+  const assignedEmployeeName = input.role === "host" ? current.hostName : current.supportName;
+  if (cleanText(assignedEmployeeId).toLowerCase() !== fromEmployeeId.toLowerCase()) {
+    throw new Error("Ca đã đổi người trước khi yêu cầu nhường ca được tạo.");
+  }
+
+  const recipient = await findActiveSchedulePerson(input.role, toEmployeeId);
+  if (!recipient) {
+    throw new Error(`${input.role === "host" ? "Host" : "Support"} nhận ca không tồn tại hoặc đã tạm ngưng.`);
+  }
+
+  const existingPending = await handovers.findOne({
+    sessionId,
+    role: input.role,
+    status: "pending"
+  });
+  if (existingPending) {
+    throw new Error("Ca này đang có một yêu cầu nhường ca chờ xác nhận.");
+  }
+
+  await assertNoScheduleAssignmentConflict(sessions, {
+    excludeSessionId: current.sessionId,
+    dateKey: current.dateKey,
+    slot: current.slot,
+    lane: getScheduleSessionLane(current),
+    ...(input.role === "host" ? { hostId: recipient.id } : {}),
+    ...(input.role === "support" ? { supportId: recipient.id } : {})
+  });
+
+  const request: ScheduleHandoverRequestDocument = {
+    requestId: `handover-${randomUUID()}`,
+    sessionId: current.sessionId,
+    sessionCode: current.sessionCode || "",
+    dateKey: current.dateKey,
+    dateLabel: current.dateLabel,
+    slot: current.slot,
+    role: input.role,
+    fromEmployeeId,
+    fromEmployeeName: assignedEmployeeName || fromEmployeeId,
+    fromPersonKey: buildPersonKey(input.role, fromEmployeeId),
+    toEmployeeId: recipient.id,
+    toEmployeeName: recipient.name,
+    toPersonKey: buildPersonKey(input.role, recipient.id),
+    status: "pending",
+    note: cleanText(input.note) || undefined,
+    createdAt: new Date(),
+    createdBy: cleanText(input.actorAccountKey) || fromEmployeeId
+  };
+  await handovers.insertOne(request);
+  return toScheduleHandoverRequest(request);
+}
+
+export async function respondScheduleHandoverRequest(
+  input: RespondScheduleHandoverRequestInput
+): Promise<{ request: ScheduleHandoverRequest; session?: ScheduleSession }> {
+  const { handovers, sessions } = await getCollections();
+  const requestId = cleanText(input.requestId);
+  const actorEmployeeId = cleanText(input.actorEmployeeId);
+  if (!requestId || !actorEmployeeId) {
+    throw new Error("Thiếu requestId hoặc nhân sự phản hồi.");
+  }
+
+  const requestDocument = await handovers.findOne({ requestId });
+  if (!requestDocument) throw new Error("Không tìm thấy yêu cầu nhường ca.");
+  if (requestDocument.status !== "pending") throw new Error("Yêu cầu này không còn ở trạng thái chờ xác nhận.");
+  if (cleanText(requestDocument.toEmployeeId).toLowerCase() !== actorEmployeeId.toLowerCase()) {
+    throw new Error("Bạn không có quyền phản hồi yêu cầu nhường ca này.");
+  }
+
+  if (input.action === "reject") {
+    const rejectedAt = new Date();
+    await handovers.updateOne(
+      { requestId, status: "pending" },
+      {
+        $set: {
+          status: "rejected",
+          respondedAt: rejectedAt,
+          responseNote: cleanText(input.responseNote) || undefined,
+          respondedBy: cleanText(input.actorAccountKey) || actorEmployeeId
+        }
+      }
+    );
+    return {
+      request: toScheduleHandoverRequest({
+        ...requestDocument,
+        status: "rejected",
+        respondedAt: rejectedAt,
+        responseNote: cleanText(input.responseNote) || undefined,
+        respondedBy: cleanText(input.actorAccountKey) || actorEmployeeId
+      })
+    };
+  }
+
+  const currentDocument = await sessions.findOne({ sessionKey: requestDocument.sessionId, active: true });
+  if (!currentDocument) throw new Error("Ca này không còn tồn tại trên lịch chính.");
+  const current = toScheduleSession(currentDocument);
+  if (current.dateKey < getScheduleTodayKey()) {
+    throw new Error(`Ca ${current.slot} ngày ${current.dateLabel} đã qua nên không thể nhận nhường ca nữa.`);
+  }
+
+  const assignedEmployeeId = requestDocument.role === "host" ? current.hostId : current.supportId;
+  if (cleanText(assignedEmployeeId).toLowerCase() !== cleanText(requestDocument.fromEmployeeId).toLowerCase()) {
+    throw new Error("Ca đã đổi người trước khi yêu cầu nhường ca được xác nhận.");
+  }
+
+  const recipient = await findActiveSchedulePerson(requestDocument.role, requestDocument.toEmployeeId);
+  if (!recipient) {
+    throw new Error("Người nhận ca không còn active nên không thể hoàn tất nhường ca.");
+  }
+
+  const updatedSession = await updateScheduleSessionAssignment({
+    sessionId: current.sessionId,
+    ...(requestDocument.role === "host" ? { hostId: recipient.id } : {}),
+    ...(requestDocument.role === "support" ? { supportId: recipient.id } : {}),
+    actorAccountKey: input.actorAccountKey
+  });
+
+  const acceptedAt = new Date();
+  await handovers.updateOne(
+    { requestId, status: "pending" },
+    {
+      $set: {
+        status: "accepted",
+        respondedAt: acceptedAt,
+        responseNote: cleanText(input.responseNote) || undefined,
+        respondedBy: cleanText(input.actorAccountKey) || actorEmployeeId
+      }
+    }
+  );
+  return {
+    request: toScheduleHandoverRequest({
+      ...requestDocument,
+      status: "accepted",
+      respondedAt: acceptedAt,
+      responseNote: cleanText(input.responseNote) || undefined,
+      respondedBy: cleanText(input.actorAccountKey) || actorEmployeeId
+    }),
+    session: updatedSession
+  };
 }
 
 async function saveUpdatedScheduleSession(

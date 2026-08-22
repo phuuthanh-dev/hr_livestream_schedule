@@ -2912,6 +2912,155 @@ a:hover {
   line-height: 1.55;
 }
 
+.handoverPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.handoverRoleCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(12, 112, 108, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(240, 251, 250, 0.9) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.handoverRoleHeader {
+  display: grid;
+  gap: 2px;
+}
+
+.handoverRoleHeader strong {
+  font-size: 0.82rem;
+}
+
+.handoverRoleHeader small {
+  color: var(--muted);
+  font-size: 0.63rem;
+}
+
+.handoverField {
+  display: grid;
+  gap: 6px;
+}
+
+.handoverField > span {
+  color: #5f6368;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.handoverField select,
+.handoverField input {
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #d1e7e5;
+  border-radius: 14px;
+  font: inherit;
+  color: #1f2933;
+  background: #fff;
+}
+
+.handoverField select:focus,
+.handoverField input:focus {
+  outline: none;
+  border-color: rgba(12, 112, 108, 0.48);
+  box-shadow: 0 0 0 4px rgba(12, 112, 108, 0.12);
+}
+
+.handoverRequestCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid rgba(243, 196, 82, 0.36);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fffdf5 0%, #fff8e7 100%);
+}
+
+.handoverRequestCard strong {
+  font-size: 0.76rem;
+}
+
+.handoverRequestCard span,
+.handoverRequestCard em,
+.handoverSidebarEmpty {
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.handoverRequestActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.handoverRequestActions .confirmAction {
+  width: auto;
+  min-width: 160px;
+}
+
+.handoverSidebarCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(12, 112, 108, 0.12);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.handoverSidebarSummary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.handoverSidebarSummary strong {
+  font-size: 0.8rem;
+}
+
+.handoverSidebarSummary span {
+  color: #0c706c;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.handoverSidebarList {
+  display: grid;
+  gap: 8px;
+}
+
+.handoverSidebarItem {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #e0efee;
+  border-radius: 14px;
+  text-align: left;
+  background: #f8fffe;
+  transition: border 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.handoverSidebarItem:hover {
+  border-color: #aad9d6;
+  background: #f1fbfa;
+  transform: translateY(-1px);
+}
+
+.handoverSidebarItem strong {
+  font-size: 0.7rem;
+}
+
+.handoverSidebarItem span {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

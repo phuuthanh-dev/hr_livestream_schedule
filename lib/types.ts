@@ -151,6 +151,27 @@ export type ScheduleSession = {
   warnings: string[];
 };
 
+export type ScheduleHandoverRequestStatus = "pending" | "accepted" | "rejected" | "cancelled";
+
+export type ScheduleHandoverRequest = {
+  requestId: string;
+  sessionId: string;
+  sessionCode?: string;
+  dateKey: string;
+  dateLabel: string;
+  slot: string;
+  role: EmployeeRole;
+  fromEmployeeId: string;
+  fromEmployeeName: string;
+  toEmployeeId: string;
+  toEmployeeName: string;
+  status: ScheduleHandoverRequestStatus;
+  note?: string;
+  createdAt: string;
+  respondedAt?: string;
+  responseNote?: string;
+};
+
 export type ScheduleSummary = {
   total: number;
   openHost: number;
@@ -188,6 +209,7 @@ export type SchedulePayload = {
   updatedSessionId?: string;
   updatedRole?: ConfirmRole;
   confirmed?: boolean;
+  handoverRequests?: ScheduleHandoverRequest[];
   error?: string;
   message?: string;
 };

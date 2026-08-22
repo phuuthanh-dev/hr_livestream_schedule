@@ -10,6 +10,7 @@ import type {
   AvailabilityLocationPreference,
   ConfirmRole,
   PeoplePayload,
+  ScheduleHandoverRequest,
   SchedulePayload,
   SchedulePerson,
   ScheduleSession,
@@ -328,8 +329,13 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [hosts, setHosts] = useState<SchedulePerson[]>([]);
   const [supports, setSupports] = useState<SchedulePerson[]>([]);
-  const [peopleLoading, setPeopleLoading] = useState(isAdmin);
+  const [peopleLoading, setPeopleLoading] = useState(false);
   const [peopleError, setPeopleError] = useState("");
+  const [handoverRequests, setHandoverRequests] = useState<ScheduleHandoverRequest[]>([]);
+  const [handoverBusy, setHandoverBusy] = useState("");
+  const [handoverError, setHandoverError] = useState("");
+  const [handoverRecipientId, setHandoverRecipientId] = useState("");
+  const [handoverNote, setHandoverNote] = useState("");
   const [assignmentBusy, setAssignmentBusy] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
   const [hostPickerQuery, setHostPickerQuery] = useState("");
@@ -386,6 +392,7 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     ? selectedHostLocation !== "home"
     : !selectedSession?.hostId || selectedLocationMode === "studio";
   const selectedSessionIsPast = Boolean(selectedSession?.dateKey && selectedSession.dateKey < todayKey);
+  const selectedFutureSession = Boolean(selectedSession?.dateKey && selectedSession.dateKey >= todayKey);
   const canConfirmSelectedHost = Boolean(
     selectedSession && (
       isAdmin || (
@@ -404,6 +411,27 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
       )
     )
   );
+  const visibleHandoverRequests = handoverRequests.filter((request) => request.dateKey >= weekStartKey && request.dateKey <= weekEndKey);
+  const incomingPendingHandoverRequests = visibleHandoverRequests.filter((request) =>
+    request.status === "pending" && request.toEmployeeId.trim().toLowerCase() === normalizedEmployeeId
+  );
+  const outgoingPendingHandoverRequests = visibleHandoverRequests.filter((request) =>
+    request.status === "pending" && request.fromEmployeeId.trim().toLowerCase() === normalizedEmployeeId
+  );
+  const selectedIncomingHostHandover = selectedSession
+    ? incomingPendingHandoverRequests.find((request) => request.sessionId === selectedSession.sessionId && request.role === "host")
+    : undefined;
+  const selectedIncomingSupportHandover = selectedSession
+    ? incomingPendingHandoverRequests.find((request) => request.sessionId === selectedSession.sessionId && request.role === "support")
+    : undefined;
+  const selectedOutgoingHostHandover = selectedSession
+    ? outgoingPendingHandoverRequests.find((request) => request.sessionId === selectedSession.sessionId && request.role === "host")
+    : undefined;
+  const selectedOutgoingSupportHandover = selectedSession
+    ? outgoingPendingHandoverRequests.find((request) => request.sessionId === selectedSession.sessionId && request.role === "support")
+    : undefined;
+  const handoverHostCandidates = hosts.filter((host) => host.id.trim().toLowerCase() !== normalizedEmployeeId);
+  const handoverSupportCandidates = supports.filter((support) => support.id.trim().toLowerCase() !== normalizedEmployeeId);
   const miniMonth = buildMiniMonth(weekStartKey);
   const coverage = formatWeekRange(weekStartKey);
   const slotSet = new Set(DEFAULT_SLOTS);
@@ -417,9 +445,22 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     setSessions(nextRows);
     setGeneratedAt(payload.generatedAt || "");
     setTimezone(payload.timezone || "");
+    if (payload.handoverRequests) {
+      setHandoverRequests(payload.handoverRequests);
+    }
     if (selectedSessionId && !nextRows.some((session) => session.sessionId === selectedSessionId)) {
       setSelectedSessionId("");
     }
+  }
+
+  async function loadHandoverRequests(from: string, to: string) {
+    const query = new URLSearchParams({ from, to });
+    const response = await fetch(`/api/schedule/handover?${query.toString()}`, { cache: "no-store" });
+    const payload = (await response.json()) as SchedulePayload;
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || payload.error || "Không tải được yêu cầu nhường ca.");
+    }
+    setHandoverRequests(payload.handoverRequests || []);
   }
 
   async function confirmSession(session: ScheduleSession, role: ConfirmRole, confirmed: boolean) {
@@ -570,6 +611,74 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     }
   }
 
+  async function createHandoverRequest(role: "host" | "support") {
+    if (isAdmin || !selectedSession || !handoverRecipientId) return;
+    const busyKey = `${selectedSession.sessionId}:${role}:create-handover`;
+    setHandoverBusy(busyKey);
+    setHandoverError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/handover", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: selectedSession.sessionId,
+          role,
+          toEmployeeId: handoverRecipientId,
+          note: handoverNote,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không gửi được yêu cầu nhường ca.");
+      }
+      applyPayload(payload);
+      setHandoverRecipientId("");
+      setHandoverNote("");
+      setMessage(payload.message || "Đã gửi yêu cầu nhường ca.");
+    } catch (requestError) {
+      setHandoverError(requestError instanceof Error ? requestError.message : "Không gửi được yêu cầu nhường ca.");
+    } finally {
+      setHandoverBusy("");
+    }
+  }
+
+  async function respondToHandoverRequest(request: ScheduleHandoverRequest, action: "accept" | "reject") {
+    if (isAdmin) return;
+    const busyKey = `${request.requestId}:${action}`;
+    setHandoverBusy(busyKey);
+    setHandoverError("");
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/schedule/handover", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          requestId: request.requestId,
+          action,
+          from: weekStartKey,
+          to: weekEndKey
+        })
+      });
+      const payload = (await response.json()) as SchedulePayload;
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || payload.error || "Không phản hồi được yêu cầu nhường ca.");
+      }
+      applyPayload(payload);
+      setMessage(payload.message || (action === "accept" ? "Đã nhận ca." : "Đã từ chối yêu cầu nhường ca."));
+    } catch (respondError) {
+      setHandoverError(respondError instanceof Error ? respondError.message : "Không phản hồi được yêu cầu nhường ca.");
+    } finally {
+      setHandoverBusy("");
+    }
+  }
+
   async function createEmptySession() {
     if (!isAdmin || createSessionBusy) return;
     setCreateSessionBusy(true);
@@ -697,7 +806,6 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   }, [weekStartKey]);
 
   useEffect(() => {
-    if (!isAdmin) return;
     let active = true;
     setPeopleLoading(true);
     setPeopleError("");
@@ -721,7 +829,19 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
     return () => {
       active = false;
     };
-  }, [isAdmin]);
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin || !normalizedEmployeeId) return;
+    let active = true;
+    void loadHandoverRequests(weekStartKey, weekEndKey)
+      .catch((loadError) => {
+        if (active) setHandoverError(loadError instanceof Error ? loadError.message : "Không tải được yêu cầu nhường ca.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, normalizedEmployeeId, weekEndKey, weekStartKey]);
 
   useEffect(() => {
     setMobileDayKey((current) => {
@@ -740,6 +860,9 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
   useEffect(() => {
     if (!selectedSessionId) return;
     setAssignmentError("");
+    setHandoverError("");
+    setHandoverRecipientId("");
+    setHandoverNote("");
     setHostPickerQuery("");
     setSupportPickerQuery("");
     setAssignmentPickerOpen(null);
@@ -860,6 +983,35 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <span className="filterDot" /><span>Ca cần fill</span><strong>{openCount}</strong>
             </button>
           </section>
+
+          {!isAdmin ? (
+            <section className="sidebarSection handoverSidebarSection">
+              <p className="sidebarLabel">NHƯỜNG CA</p>
+              <div className="handoverSidebarCard">
+                <div className="handoverSidebarSummary">
+                  <strong>Yêu cầu chờ bạn xác nhận</strong>
+                  <span>{incomingPendingHandoverRequests.length} yêu cầu</span>
+                </div>
+                {incomingPendingHandoverRequests.length === 0 ? (
+                  <p className="handoverSidebarEmpty">Chưa có yêu cầu nhường ca nào trong tuần này.</p>
+                ) : (
+                  <div className="handoverSidebarList">
+                    {incomingPendingHandoverRequests.map((request) => (
+                      <button
+                        className="handoverSidebarItem"
+                        key={request.requestId}
+                        onClick={() => setSelectedSessionId(request.sessionId)}
+                        type="button"
+                      >
+                        <strong>{request.fromEmployeeName} muốn nhường {request.role === "host" ? "Host" : "Support"}</strong>
+                        <span>{request.dateLabel} · {request.slot}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
 
           {isAdmin ? (
             <section className="sidebarSection createSessionSection">
@@ -1410,6 +1562,142 @@ export default function ScheduleDashboard({ username, isAdmin, employeeRole, emp
               <div><dt>Session Key</dt><dd><code>{selectedSession.sessionId || "-"}</code></dd></div>
               {selectedSession.supportCandidatePool ? <div className="wideDetail"><dt>Support candidate pool</dt><dd>{selectedSession.supportCandidatePool}</dd></div> : null}
             </dl>
+
+            {!isAdmin && selectedFutureSession && (canConfirmSelectedHost || canConfirmSelectedSupport || Boolean(selectedIncomingHostHandover) || Boolean(selectedIncomingSupportHandover)) ? (
+              <section className="handoverPanel">
+                <div className="confirmPanelTitle">
+                  <strong>Nhường ca</strong>
+                  <span>Tự thỏa thuận qua Zalo, sau đó gửi request trên app để người nhận xác nhận.</span>
+                </div>
+                {handoverError ? <p className="assignmentError">{handoverError}</p> : null}
+                {canConfirmSelectedHost ? (
+                  <div className="handoverRoleCard">
+                    <div className="handoverRoleHeader">
+                      <strong>Nhường vai trò Host</strong>
+                      <small>{selectedOutgoingHostHandover ? `Đang chờ ${selectedOutgoingHostHandover.toEmployeeName} xác nhận` : "Bắt buộc chọn 1 Host khác để nhận ca."}</small>
+                    </div>
+                    {selectedIncomingHostHandover ? (
+                      <div className="handoverRequestCard">
+                        <strong>{selectedIncomingHostHandover.fromEmployeeName} muốn nhường Host cho bạn</strong>
+                        <span>{selectedIncomingHostHandover.dateLabel} · {selectedIncomingHostHandover.slot}</span>
+                        {selectedIncomingHostHandover.note ? <em>{selectedIncomingHostHandover.note}</em> : null}
+                        <div className="handoverRequestActions">
+                          <button
+                            className="confirmAction"
+                            disabled={handoverBusy === `${selectedIncomingHostHandover.requestId}:accept`}
+                            onClick={() => void respondToHandoverRequest(selectedIncomingHostHandover, "accept")}
+                            type="button"
+                          >
+                            Nhận ca Host
+                          </button>
+                          <button
+                            className="confirmAction danger"
+                            disabled={handoverBusy === `${selectedIncomingHostHandover.requestId}:reject`}
+                            onClick={() => void respondToHandoverRequest(selectedIncomingHostHandover, "reject")}
+                            type="button"
+                          >
+                            Từ chối
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {!selectedOutgoingHostHandover ? (
+                      <>
+                        <label className="handoverField">
+                          <span>Chọn Host nhận ca</span>
+                          <select value={handoverRecipientId} onChange={(event) => setHandoverRecipientId(event.target.value)}>
+                            <option value="">Chọn 1 Host</option>
+                            {handoverHostCandidates.map((host) => (
+                              <option key={host.id} value={host.id}>{host.name} · {host.id}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="handoverField">
+                          <span>Ghi chú</span>
+                          <input
+                            maxLength={240}
+                            onChange={(event) => setHandoverNote(event.target.value)}
+                            placeholder="Ví dụ: đã đồng ý đổi qua Zalo"
+                            value={handoverNote}
+                          />
+                        </label>
+                        <button
+                          className="confirmAction"
+                          disabled={!handoverRecipientId || handoverBusy === `${selectedSession.sessionId}:host:create-handover`}
+                          onClick={() => void createHandoverRequest("host")}
+                          type="button"
+                        >
+                          Gửi request nhường Host
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                {canConfirmSelectedSupport ? (
+                  <div className="handoverRoleCard">
+                    <div className="handoverRoleHeader">
+                      <strong>Nhường vai trò Support</strong>
+                      <small>{selectedOutgoingSupportHandover ? `Đang chờ ${selectedOutgoingSupportHandover.toEmployeeName} xác nhận` : "Bắt buộc chọn 1 Support khác để nhận ca."}</small>
+                    </div>
+                    {selectedIncomingSupportHandover ? (
+                      <div className="handoverRequestCard">
+                        <strong>{selectedIncomingSupportHandover.fromEmployeeName} muốn nhường Support cho bạn</strong>
+                        <span>{selectedIncomingSupportHandover.dateLabel} · {selectedIncomingSupportHandover.slot}</span>
+                        {selectedIncomingSupportHandover.note ? <em>{selectedIncomingSupportHandover.note}</em> : null}
+                        <div className="handoverRequestActions">
+                          <button
+                            className="confirmAction"
+                            disabled={handoverBusy === `${selectedIncomingSupportHandover.requestId}:accept`}
+                            onClick={() => void respondToHandoverRequest(selectedIncomingSupportHandover, "accept")}
+                            type="button"
+                          >
+                            Nhận ca Support
+                          </button>
+                          <button
+                            className="confirmAction danger"
+                            disabled={handoverBusy === `${selectedIncomingSupportHandover.requestId}:reject`}
+                            onClick={() => void respondToHandoverRequest(selectedIncomingSupportHandover, "reject")}
+                            type="button"
+                          >
+                            Từ chối
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    {!selectedOutgoingSupportHandover ? (
+                      <>
+                        <label className="handoverField">
+                          <span>Chọn Support nhận ca</span>
+                          <select value={handoverRecipientId} onChange={(event) => setHandoverRecipientId(event.target.value)}>
+                            <option value="">Chọn 1 Support</option>
+                            {handoverSupportCandidates.map((support) => (
+                              <option key={support.id} value={support.id}>{support.name} · {support.id}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="handoverField">
+                          <span>Ghi chú</span>
+                          <input
+                            maxLength={240}
+                            onChange={(event) => setHandoverNote(event.target.value)}
+                            placeholder="Ví dụ: đã đồng ý đổi qua Zalo"
+                            value={handoverNote}
+                          />
+                        </label>
+                        <button
+                          className="confirmAction"
+                          disabled={!handoverRecipientId || handoverBusy === `${selectedSession.sessionId}:support:create-handover`}
+                          onClick={() => void createHandoverRequest("support")}
+                          type="button"
+                        >
+                          Gửi request nhường Support
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <div className="confirmPanel">
               <div className="confirmPanelTitle">
