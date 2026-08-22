@@ -26,6 +26,11 @@ body {
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   color: var(--ink);
@@ -2845,6 +2850,7 @@ a:hover {
   border-radius: 14px;
   color: #3c4043;
   background: #fff;
+  font-family: inherit;
   align-items: center;
   gap: 11px;
   text-align: left;
@@ -3034,7 +3040,7 @@ a:hover {
   border: 1px solid #d1e7e5;
   border-radius: 14px;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 550;
   line-height: 1.35;
   letter-spacing: -0.01em;
@@ -3047,12 +3053,12 @@ a:hover {
 .handoverField input:focus {
   outline: none;
   border-color: rgba(12, 112, 108, 0.48);
-  box-shadow: 0 0 0 3px rgba(12, 112, 108, 0.1);
+  box-shadow: 0 0 0 2px rgba(12, 112, 108, 0.08);
 }
 
 .handoverField input::placeholder {
   color: #8b9897;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 500;
 }
 
@@ -3087,6 +3093,12 @@ a:hover {
 .handoverRequestActions .confirmAction {
   width: auto;
   min-width: 160px;
+  min-height: 48px;
+  padding: 0 18px;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .handoverSubmitButton {
@@ -5298,7 +5310,7 @@ a:hover {
 
 .payrollEmployeePickerSearch:focus-within {
   border-color: var(--payroll-green);
-  box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.08);
+  box-shadow: 0 0 0 2px rgba(13, 112, 104, 0.08);
 }
 
 .payrollEmployeePickerSearch input {
@@ -7201,6 +7213,17 @@ a:hover {
 
   .confirmAction {
     min-height: 58px;
+  }
+
+  .handoverField select,
+  .handoverField input,
+  .payrollEmployeePickerSearch input {
+    font-size: 16px;
+  }
+
+  .handoverRequestActions .confirmAction {
+    min-width: 0;
+    font-size: 0.76rem;
   }
 
   .loginShell {
