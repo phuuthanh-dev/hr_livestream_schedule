@@ -2283,6 +2283,7 @@ a:hover {
   box-shadow: -18px 0 55px rgba(32, 33, 36, 0.2);
   overflow-y: auto;
   animation: drawerIn 240ms cubic-bezier(0.2, 0, 0, 1) both;
+  font-family: var(--font-manrope), "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .drawerAccent {
@@ -2310,7 +2311,9 @@ a:hover {
 
 .drawerHeader h2 {
   margin: 0;
+  font-family: inherit;
   font-size: 1.5rem;
+  font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.04em;
 }
@@ -2953,6 +2956,7 @@ a:hover {
   border: 1px solid rgba(12, 112, 108, 0.14);
   border-radius: 18px;
   background: linear-gradient(145deg, #f0faf8 0%, #fbfdfc 100%);
+  font-family: inherit;
 }
 
 .handoverRoleHeader {
@@ -3022,15 +3026,24 @@ a:hover {
   border: 1px solid #d1e7e5;
   border-radius: 14px;
   font: inherit;
+  font-size: 0.97rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #1f2933;
   background: #fff;
+  box-shadow: none;
 }
 
 .handoverField select:focus,
 .handoverField input:focus {
   outline: none;
   border-color: rgba(12, 112, 108, 0.48);
-  box-shadow: 0 0 0 4px rgba(12, 112, 108, 0.12);
+  box-shadow: 0 0 0 3px rgba(12, 112, 108, 0.1);
+}
+
+.handoverField input::placeholder {
+  color: #8b9897;
+  font-weight: 500;
 }
 
 .handoverRequestCard {
@@ -5058,6 +5071,7 @@ a:hover {
   box-shadow: 0 24px 60px rgba(18, 39, 40, 0.16);
   gap: 16px;
   overflow: visible;
+  font-family: var(--font-manrope), "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .payrollAdjustmentHeader {
@@ -5144,8 +5158,8 @@ a:hover {
   text-transform: uppercase;
 }
 
-.payrollAdjustmentGrid input,
-.payrollAdjustmentGrid select {
+.payrollAdjustmentGrid > label > input,
+.payrollAdjustmentGrid > label > select {
   min-height: 48px;
   padding: 0 14px;
   border: 1px solid var(--payroll-line);
@@ -5155,8 +5169,8 @@ a:hover {
   font: inherit;
 }
 
-.payrollAdjustmentGrid input:focus,
-.payrollAdjustmentGrid select:focus {
+.payrollAdjustmentGrid > label > input:focus,
+.payrollAdjustmentGrid > label > select:focus {
   outline: none;
   border-color: var(--payroll-green);
   box-shadow: 0 0 0 3px rgba(13, 112, 104, 0.1);
@@ -5176,9 +5190,13 @@ a:hover {
   color: var(--payroll-ink);
   background: #fff;
   font: inherit;
+  font-size: 0.97rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   align-items: center;
   gap: 10px;
   text-align: left;
+  box-shadow: none;
 }
 
 .payrollEmployeePickerTrigger span {
@@ -5258,12 +5276,26 @@ a:hover {
 .payrollEmployeePickerSearch input {
   width: 100%;
   min-width: 0;
+  min-height: 0;
   padding: 0;
-  border: none;
+  border: 0;
+  border-radius: 0;
   outline: none;
   color: var(--payroll-ink);
+  box-shadow: none !important;
   background: transparent;
   font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.payrollEmployeePickerSearch input:focus {
+  outline: none;
+  box-shadow: none !important;
+}
+
+.payrollEmployeePickerSearch input::placeholder {
+  color: #98a6a4;
 }
 
 .payrollEmployeePickerList {
