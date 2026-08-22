@@ -30,8 +30,8 @@ type AvailabilityAdminDashboardProps = {
   initialRoleFilter?: "host" | "support";
 };
 
-type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "location" | "logout" | "refresh" | "users" | "warning";
-type AvailabilityConfirmAction = "refresh_unconfirmed" | "force_pull" | null;
+type IconName = "account" | "calendar" | "chart" | "chevronLeft" | "chevronRight" | "location" | "logout" | "refresh" | "users" | "warning" | "lock" | "unlock" | "chevronDown";
+type AvailabilityConfirmAction = "refresh_unconfirmed" | "force_pull" | "lock_week" | "unlock_week" | null;
 type AvailabilityDeleteIntent = {
   role: "host" | "support";
   employeeId: string;
@@ -65,6 +65,9 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   if (name === "refresh") return <svg {...common}><path d="M20 11a8 8 0 1 0-2.34 5.66" /><path d="M20 4v7h-7" /></svg>;
   if (name === "users") return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></svg>;
   if (name === "warning") return <svg {...common}><path d="M10.3 3.7 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.7a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg>;
+  if (name === "lock") return <svg {...common}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>;
+  if (name === "unlock") return <svg {...common}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M16 11V8a4 4 0 1 0-8 0" /></svg>;
+  if (name === "chevronDown") return <svg {...common}><path d="m6 9 6 6 6-6" /></svg>;
   return null;
 }
 
@@ -396,6 +399,40 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     }
   }
 
+  async function setAvailabilityWeekLock(locked: boolean, skipConfirm = false) {
+    if (!skipConfirm) {
+      setConfirmAction(locked ? "lock_week" : "unlock_week");
+      return;
+    }
+    setImportingSheet(true);
+    setError("");
+    setScheduleMessage("");
+
+    try {
+      const response = await fetch("/api/availability/lock", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          weekStartKey,
+          action: locked ? "lock" : "unlock"
+        })
+      });
+      const result = await response.json() as {
+        success?: boolean;
+        message?: string;
+      };
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Không cập nhật được trạng thái khóa tuần.");
+      }
+      setScheduleMessage(result.message || (locked ? "Đã khóa tuần lịch rảnh." : "Đã mở khóa tuần lịch rảnh."));
+      setReloadKey((current) => current + 1);
+    } catch (lockError) {
+      setError(lockError instanceof Error ? lockError.message : "Không cập nhật được trạng thái khóa tuần.");
+    } finally {
+      setImportingSheet(false);
+    }
+  }
+
   async function removeAvailabilityFromSlot(input: {
     role: "host" | "support";
     employeeId: string;
@@ -440,6 +477,16 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     if (confirmAction === "force_pull") {
       setConfirmAction(null);
       await importAvailabilityFromSheet(true, true);
+      return;
+    }
+    if (confirmAction === "lock_week") {
+      setConfirmAction(null);
+      await setAvailabilityWeekLock(true, true);
+      return;
+    }
+    if (confirmAction === "unlock_week") {
+      setConfirmAction(null);
+      await setAvailabilityWeekLock(false, true);
     }
   }
 
@@ -454,16 +501,28 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
     ? "Chạy lại ca đang trống"
     : confirmAction === "force_pull"
       ? "Force pull từ Sheet"
+      : confirmAction === "lock_week"
+        ? "Khóa tuần lịch rảnh"
+        : confirmAction === "unlock_week"
+          ? "Mở khóa tuần lịch rảnh"
       : "";
   const confirmDescription = confirmAction === "refresh_unconfirmed"
     ? `Làm sạch toàn bộ ca tương lai đang trống trong tuần ${formatWeekRange(weekStartKey)} rồi chạy lại. Ca đã có người và ngày quá khứ sẽ được giữ nguyên.`
     : confirmAction === "force_pull"
       ? `Kéo tuần ${formatWeekRange(weekStartKey)} từ Sheet về Website và cho phép sheet ghi đè dữ liệu lịch rảnh hiện có trên website.`
+      : confirmAction === "lock_week"
+        ? `Khóa toàn bộ lịch rảnh tuần ${formatWeekRange(weekStartKey)} để nhân viên không thể sửa hay gửi lại lịch rảnh.`
+        : confirmAction === "unlock_week"
+          ? `Mở khóa toàn bộ lịch rảnh tuần ${formatWeekRange(weekStartKey)} để cho phép nhân viên tiếp tục chỉnh và gửi lại các slot tương lai.`
       : "";
   const confirmActionLabel = confirmAction === "refresh_unconfirmed"
     ? "Chạy lại ca trống"
     : confirmAction === "force_pull"
       ? "Force pull"
+      : confirmAction === "lock_week"
+        ? "Khóa tuần"
+        : confirmAction === "unlock_week"
+          ? "Mở khóa tuần"
       : "Xác nhận";
 
   return (
@@ -537,67 +596,106 @@ export default function AvailabilityAdminDashboard({ username, initialWeekStartK
               <Icon name="refresh" size={18} />
               <span>{loading ? "Đang tải" : "Làm mới"}</span>
             </button>
-            <div className="availabilitySummarySyncGroup">
-              <div className="availabilitySummarySyncLegend">
-                <strong>Đồng bộ Sheet</strong>
-                <small>Pull an toàn chỉ nạp dữ liệu mới. Force pull cho phép sheet ghi đè dữ liệu web của tuần đang xem.</small>
+            <details className="availabilityActionDropdown">
+              <summary>
+                <span className="availabilityActionDropdownLabel">
+                  <strong>Đồng bộ Sheet</strong>
+                  <small>Pull, force pull, push sheet</small>
+                </span>
+                <Icon name="chevronDown" size={18} />
+              </summary>
+              <div className="availabilityActionDropdownPanel">
+                <p>Pull an toàn chỉ nạp dữ liệu mới. Force pull cho phép sheet ghi đè dữ liệu web của tuần đang xem.</p>
+                <div className="availabilityActionDropdownButtons">
+                  <button
+                    className="availabilitySummaryRefresh"
+                    disabled={loading || importingSheet}
+                    onClick={() => void importAvailabilityFromSheet()}
+                    type="button"
+                  >
+                    <Icon name="users" size={18} />
+                    <span>{importingSheet ? "Đang pull" : "Pull từ Sheet"}</span>
+                  </button>
+                  <button
+                    className="availabilitySummaryRefresh availabilitySummaryRefreshDanger"
+                    disabled={loading || importingSheet || syncingSheet}
+                    onClick={() => void importAvailabilityFromSheet(true)}
+                    type="button"
+                  >
+                    <Icon name="warning" size={18} />
+                    <span>{importingSheet ? "Đang force pull" : "Force pull ghi đè"}</span>
+                  </button>
+                  <button
+                    className="availabilitySummaryRefresh"
+                    disabled={loading || syncingSheet || importingSheet}
+                    onClick={syncAvailabilityToSheet}
+                    type="button"
+                  >
+                    <Icon name="refresh" size={18} />
+                    <span>{syncingSheet ? "Đang đẩy" : "Đẩy xuống Sheet"}</span>
+                  </button>
+                </div>
               </div>
-              <div className="availabilitySummarySyncButtons">
-                <button
-                  className="availabilitySummaryRefresh"
-                  disabled={loading || importingSheet}
-                  onClick={() => void importAvailabilityFromSheet()}
-                  type="button"
-                >
-                  <Icon name="users" size={18} />
-                  <span>{importingSheet ? "Đang pull" : "Pull từ Sheet"}</span>
-                </button>
-                <button
-                  className="availabilitySummaryRefresh availabilitySummaryRefreshDanger"
-                  disabled={loading || importingSheet || syncingSheet}
-                  onClick={() => void importAvailabilityFromSheet(true)}
-                  type="button"
-                >
-                  <Icon name="warning" size={18} />
-                  <span>{importingSheet ? "Đang force pull" : "Force pull ghi đè"}</span>
-                </button>
-                <button
-                  className="availabilitySummaryRefresh"
-                  disabled={loading || syncingSheet || importingSheet}
-                  onClick={syncAvailabilityToSheet}
-                  type="button"
-                >
-                  <Icon name="refresh" size={18} />
-                  <span>{syncingSheet ? "Đang đẩy" : "Đẩy xuống Sheet"}</span>
-                </button>
+            </details>
+            <details className="availabilityActionDropdown availabilityActionDropdownSchedule">
+              <summary>
+                <span className="availabilityActionDropdownLabel">
+                  <strong>Điều phối tuần</strong>
+                  <small>Chạy lịch, khóa hoặc mở khóa tuần</small>
+                </span>
+                <Icon name="chevronDown" size={18} />
+              </summary>
+              <div className="availabilityActionDropdownPanel">
+                <div className="availabilityActionDropdownButtons vertical">
+                  <button
+                    className="availabilitySummaryGenerate"
+                    disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
+                    onClick={() => void generateWeekSchedule("safe")}
+                    type="button"
+                  >
+                    <span className="availabilitySummaryGenerateIcon"><Icon name="calendar" size={20} /></span>
+                    <span>
+                      <strong>{generatingSchedule ? "Đang chạy lịch tuần..." : "Chạy lịch tuần"}</strong>
+                      <small>Xếp và cập nhật thẳng vào lịch chính</small>
+                    </span>
+                    <em>{formatWeekRange(weekStartKey)}</em>
+                  </button>
+                  <button
+                    className="availabilitySummaryGenerate availabilitySummaryGenerateSecondary"
+                    disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
+                    onClick={() => void generateWeekSchedule("refresh_unconfirmed")}
+                    type="button"
+                  >
+                    <span className="availabilitySummaryGenerateIcon"><Icon name="refresh" size={20} /></span>
+                    <span>
+                      <strong>{refreshingUnconfirmedSchedule ? "Đang chạy lại ca đang trống..." : "Chạy lại ca đang trống"}</strong>
+                      <small>Reset ca tương lai đang trống rồi chạy lại tuần</small>
+                    </span>
+                    <em>{formatWeekRange(weekStartKey)}</em>
+                  </button>
+                  <div className="availabilityActionDropdownButtons">
+                    <button
+                      className="availabilitySummaryRefresh availabilitySummaryRefreshDanger"
+                      disabled={loading || importingSheet || syncingSheet}
+                      onClick={() => void setAvailabilityWeekLock(true)}
+                      type="button"
+                    >
+                      <Icon name="lock" size={18} />
+                      <span>Khóa tuần</span>
+                    </button>
+                    <button
+                      className="availabilitySummaryRefresh"
+                      disabled={loading || importingSheet || syncingSheet}
+                      onClick={() => void setAvailabilityWeekLock(false)}
+                      type="button"
+                    >
+                      <Icon name="unlock" size={18} />
+                      <span>Mở khóa tuần</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <button
-              className="availabilitySummaryGenerate"
-              disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
-              onClick={() => void generateWeekSchedule("safe")}
-              type="button"
-            >
-              <span className="availabilitySummaryGenerateIcon"><Icon name="calendar" size={20} /></span>
-              <span>
-                <strong>{generatingSchedule ? "Đang chạy lịch tuần..." : "Chạy lịch tuần"}</strong>
-                <small>Xếp và cập nhật thẳng vào lịch chính</small>
-              </span>
-              <em>{formatWeekRange(weekStartKey)}</em>
-            </button>
-            <button
-              className="availabilitySummaryGenerate availabilitySummaryGenerateSecondary"
-              disabled={loading || generatingSchedule || refreshingUnconfirmedSchedule || importingSheet || syncingSheet}
-              onClick={() => void generateWeekSchedule("refresh_unconfirmed")}
-              type="button"
-            >
-              <span className="availabilitySummaryGenerateIcon"><Icon name="refresh" size={20} /></span>
-              <span>
-                <strong>{refreshingUnconfirmedSchedule ? "Đang chạy lại ca đang trống..." : "Chạy lại ca đang trống"}</strong>
-                <small>Reset ca tương lai đang trống rồi chạy lại tuần</small>
-              </span>
-              <em>{formatWeekRange(weekStartKey)}</em>
-            </button>
+            </details>
           </div>
         </div>
 

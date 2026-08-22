@@ -93,6 +93,13 @@ type GetAvailabilityAdminDashboardInput = {
   statusFilter?: AvailabilityAdminStatusFilter;
 };
 
+type SetAvailabilityWeekLockInput = {
+  weekStartKey: string;
+  locked: boolean;
+  actorAccountKey: string;
+  reason?: string;
+};
+
 let availabilityIndexesPromise: Promise<void> | null = null;
 
 function normalizeEmployeeId(employeeId: string) {
@@ -526,6 +533,72 @@ export async function removeAvailabilitySlot(
   );
 
   return getAvailabilityWeekForPerson(role, employeeId, weekStartKey);
+}
+
+export async function setAvailabilityWeekLock(input: SetAvailabilityWeekLockInput) {
+  const weekStartKey = normalizeWeekStartKey(input.weekStartKey);
+  const actorAccountKey = normalizeText(input.actorAccountKey) || "system";
+  const reason = normalizeText(input.reason)
+    || (input.locked ? "Admin khóa tuần để chốt lịch rảnh." : "");
+  const { weeks } = await getCollections();
+  const roster = await getSchedulePeopleFromMongo();
+  const people = [...(roster.hosts || []), ...(roster.supports || [])].filter((person) => person.active !== false);
+  const now = new Date();
+
+  if (people.length === 0) {
+    return {
+      success: true as const,
+      weekStartKey,
+      locked: input.locked,
+      affectedPeople: 0
+    };
+  }
+
+  const existingWeeks = await weeks
+    .find({ weekStartKey, personKey: { $in: people.map((person) => buildPersonKey(person.role, person.id)) } })
+    .toArray();
+  const existingWeekByPersonKey = new Map(existingWeeks.map((item) => [item.personKey, item] as const));
+
+  await weeks.bulkWrite(
+    people.map((person) => {
+      const personKey = buildPersonKey(person.role, person.id);
+      const existingWeek = existingWeekByPersonKey.get(personKey);
+      const nextStatus: AvailabilityWeekStatus = input.locked
+        ? "locked"
+        : existingWeek?.submittedAt
+          ? "submitted"
+          : "draft";
+
+      return {
+        updateOne: {
+          filter: { personKey, weekStartKey },
+          update: {
+            $set: {
+              personKey,
+              role: person.role,
+              employeeId: person.id,
+              normalizedEmployeeId: normalizeEmployeeId(person.id),
+              weekStartKey,
+              status: nextStatus,
+              submittedAt: existingWeek?.submittedAt || null,
+              lockedAt: input.locked ? now : null,
+              lockedReason: input.locked ? reason : "",
+              updatedAt: now,
+              updatedBy: actorAccountKey
+            }
+          },
+          upsert: true
+        }
+      };
+    })
+  );
+
+  return {
+    success: true as const,
+    weekStartKey,
+    locked: input.locked,
+    affectedPeople: people.length
+  };
 }
 
 export async function getAvailabilityWeekDates(weekStartKey?: string) {

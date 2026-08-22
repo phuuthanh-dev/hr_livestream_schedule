@@ -8209,6 +8209,87 @@ a:hover {
   gap: 10px;
 }
 
+.availabilityActionDropdown {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.availabilityActionDropdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.availabilityActionDropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.availabilityActionDropdown[open] > summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.availabilityActionDropdown > summary svg {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.availabilityActionDropdown[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.availabilityActionDropdownLabel {
+  display: grid;
+  gap: 3px;
+}
+
+.availabilityActionDropdownLabel strong {
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.availabilityActionDropdownLabel small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.availabilityActionDropdownPanel {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.availabilityActionDropdownPanel > p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.availabilityActionDropdownButtons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.availabilityActionDropdownButtons.vertical {
+  grid-template-columns: 1fr;
+}
+
+.availabilityActionDropdownButtons.vertical .availabilityActionDropdownButtons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .availabilitySummaryRefresh {
   display: inline-flex;
   min-height: 44px;
@@ -9140,6 +9221,11 @@ a:hover {
 
   .availabilitySummaryFilters {
     padding: 10px;
+    grid-template-columns: 1fr;
+  }
+
+  .availabilityActionDropdownButtons,
+  .availabilityActionDropdownButtons.vertical .availabilityActionDropdownButtons {
     grid-template-columns: 1fr;
   }
 
